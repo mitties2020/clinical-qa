@@ -2,110 +2,121 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Clinical Q&A Engine</title>
+  <title>Clinical Q&A Engine | EBM Nexus</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, sans-serif;
-      background: radial-gradient(circle at top left, #151821, #06080d 60%);
-      color: #f5f5f5;
-      min-height: 100vh;
-    }
-    main {
-      max-width: 1100px;
-      margin: 40px auto;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      padding: 0 20px;
-    }
-    section {
-      background: rgba(20, 25, 35, 0.95);
-      border-radius: 18px;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    }
-    h1 {
-      font-size: 2.4rem;
-      font-weight: 800;
-      margin-bottom: 10px;
-      color: #eaf2ff;
-    }
-    p { color: #9ca3af; font-size: 0.9rem; }
-    textarea {
-      width: 100%; height: 130px; margin-top: 10px;
-      padding: 12px; border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: rgba(5,7,12,0.95); color: #f5f5f5;
-      font-size: 0.95rem; resize: vertical;
-    }
-    .buttons { margin-top: 12px; display: flex; gap: 10px; }
-    button {
-      border: none; border-radius: 999px;
-      padding: 10px 18px; font-weight: 600;
-      cursor: pointer; font-size: 0.9rem;
-      transition: 0.2s ease;
-    }
-    .btn-main {
-      background: linear-gradient(135deg,#3a7bd5,#00d2ff);
-      color: #021024;
-    }
-    .btn-main:hover { transform: scale(1.05); }
-    .output {
-      background: rgba(10,12,18,0.95);
-      padding: 16px; border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.08);
-      font-size: 0.9rem; line-height: 1.6;
-      white-space: pre-wrap; min-height: 150px;
-    }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <main>
-    <section>
-      <h1>Clinical Q&A Engine</h1>
-      <p>Enter a focused question to generate a structured, high-yield summary.</p>
-      <textarea id="clinicalQuestion" placeholder="e.g. Management of new-onset atrial fibrillation in ED"></textarea>
-      <div class="buttons">
-        <button id="generateBtn" class="btn-main">⚡ Generate</button>
-      </div>
-    </section>
+  <div class="app-root">
+    <div class="shell">
+      <header class="header">
+        <h1 class="title">Clinical Q&amp;A Engine</h1>
+        <p class="subtitle">
+          Enter a clinical question to generate an evidence based answer.
+        </p>
+      </header>
 
-    <section>
-      <div id="answerBox" class="output">
-        Your structured answer will appear here.
-      </div>
-    </section>
-  </main>
+      <main class="grid">
+        <!-- Left: Input -->
+        <section class="card input-card">
+          <label class="label" for="question">Clinical question</label>
+          <textarea
+            id="question"
+            class="textarea"
+            rows="6"
+            placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
+          ></textarea>
+
+          <div class="actions">
+            <button id="generateBtn" class="btn">Generate</button>
+            <span class="hint">
+              Press <kbd>Enter</kbd> to generate • <kbd>Shift + Enter</kbd> for newline
+            </span>
+          </div>
+        </section>
+
+        <!-- Right: Output -->
+        <section class="card output-card">
+          <div class="output-header">
+            <h2 class="output-title">Answer</h2>
+            <button id="copyBtn" class="copy-btn" disabled>Copy</button>
+          </div>
+          <div class="output-body">
+            <pre id="answer" class="answer placeholder">
+Your structured, evidence-based response will appear here.
+            </pre>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
 
   <script>
-    const questionInput = document.getElementById("clinicalQuestion");
-    const answerBox = document.getElementById("answerBox");
+    const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
+    const answerEl = document.getElementById("answer");
+    const copyBtn = document.getElementById("copyBtn");
 
-    async function generateAnswer() {
-      const question = questionInput.value.trim();
-      if (!question) {
-        answerBox.textContent = "Please enter a clinical question first.";
-        return;
-      }
-      answerBox.textContent = "Generating...";
+    async function generate() {
+      const query = questionInput.value.trim();
+      if (!query) return;
+
+      generateBtn.disabled = true;
+      generateBtn.textContent = "Generating...";
+      answerEl.classList.remove("placeholder");
+      answerEl.textContent = "Thinking...";
+      copyBtn.disabled = true;
+
       try {
-        const res = await fetch("/api/clinical-qa", {
+        const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ query }),
         });
+
         const data = await res.json();
-        answerBox.textContent = data.answer || data.error || "No answer returned.";
-      } catch (e) {
-        answerBox.textContent = "Error connecting to backend.";
+
+        if (data.answer) {
+          answerEl.textContent = data.answer;
+        } else {
+          answerEl.textContent = data.error || "No response generated.";
+        }
+
+        copyBtn.disabled = !answerEl.textContent.trim();
+      } catch (err) {
+        console.error(err);
+        answerEl.textContent = "Error generating answer.";
+        copyBtn.disabled = true;
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Generate";
       }
     }
 
-    generateBtn.addEventListener("click", generateAnswer);
+    // Click button
+    generateBtn.addEventListener("click", generate);
+
+    // Enter = generate, Shift+Enter = newline
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
+      }
+    });
+
+    // Copy answer
+    copyBtn.addEventListener("click", async () => {
+      const text = answerEl.textContent.trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        const original = copyBtn.textContent;
+        copyBtn.textContent = "Copied";
+        setTimeout(() => (copyBtn.textContent = original), 1500);
+      } catch (err) {
+        console.error(err);
+      }
+    });
   </script>
 </body>
 </html>
-=
