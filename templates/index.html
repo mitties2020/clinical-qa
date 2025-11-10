@@ -29,8 +29,6 @@
 
           <div class="actions">
             <button id="generateBtn" class="btn">Generate</button>
-            <!-- Spinner shown while generating -->
-            <div id="loader" class="loader hidden"></div>
             <span class="hint">
               Press <kbd>Enter</kbd> to generate • <kbd>Shift + Enter</kbd> for newline
             </span>
@@ -43,6 +41,13 @@
             <h2 class="output-title">Answer</h2>
             <button id="copyBtn" class="copy-btn" disabled>Copy</button>
           </div>
+
+          <!-- Spinner overlay inside answer card -->
+          <div id="answerLoader" class="answer-loader hidden">
+            <div class="loader"></div>
+            <div class="loader-text">Generating answer…</div>
+          </div>
+
           <div class="output-body">
             <pre id="answer" class="answer placeholder">
 Your structured, evidence-based response will appear here.
@@ -58,7 +63,7 @@ Your structured, evidence-based response will appear here.
     const generateBtn = document.getElementById("generateBtn");
     const answerEl = document.getElementById("answer");
     const copyBtn = document.getElementById("copyBtn");
-    const loader = document.getElementById("loader");
+    const answerLoader = document.getElementById("answerLoader");
 
     async function generate() {
       const query = questionInput.value.trim();
@@ -67,8 +72,8 @@ Your structured, evidence-based response will appear here.
       generateBtn.disabled = true;
       copyBtn.disabled = true;
 
-      // show spinner, clear placeholder
-      if (loader) loader.classList.remove("hidden");
+      // show overlay spinner
+      if (answerLoader) answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.textContent = "";
 
@@ -94,7 +99,7 @@ Your structured, evidence-based response will appear here.
         copyBtn.disabled = true;
       } finally {
         generateBtn.disabled = false;
-        if (loader) loader.classList.add("hidden");
+        if (answerLoader) answerLoader.classList.add("hidden");
       }
     }
 
