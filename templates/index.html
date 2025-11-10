@@ -64,7 +64,7 @@
             <!-- RIGHT: OUTPUT -->
             <section class="card output-card">
               <div class="output-header">
-                <h2 class="output-title">Answer</h2>
+                <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
@@ -77,6 +77,22 @@
               <div class="output-body">
                 <div id="answer" class="answer placeholder">
                   Your structured, evidence-based response will appear here.
+                </div>
+              </div>
+
+              <!-- Persistent follow-up box -->
+              <div class="followup-container">
+                <label for="followupInput" class="followup-label">
+                  Ask a follow-up question about this answer
+                </label>
+                <div class="followup-row">
+                  <input
+                    id="followupInput"
+                    class="followup-input"
+                    type="text"
+                    placeholder="e.g. How does this change in pregnancy or CKD stage 4?"
+                  />
+                  <button id="followupBtn" class="followup-btn">Ask</button>
                 </div>
               </div>
             </section>
@@ -94,6 +110,8 @@
     const answerLoader = document.getElementById("answerLoader");
     const conversationListEl = document.getElementById("conversationList");
     const topicSearch = document.getElementById("topicSearch");
+    const followupInput = document.getElementById("followupInput");
+    const followupBtn = document.getElementById("followupBtn");
 
     let conversations = [];
     let activeId = null;
@@ -228,13 +246,13 @@
         return;
       }
 
-      // If no answer yet, reuse (still drafting first query)
+      // If no answer yet, reuse
       if (!current.answerHtml) return;
 
       // If question unchanged, reuse
       if (current.question && current.question.trim() === query.trim()) return;
 
-      // Otherwise, treat as new topic
+      // Otherwise create new topic
       activeId = "c_" + Date.now();
     }
 
@@ -353,7 +371,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // No headings: show as single Summary
+      // No headings: single Summary
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
@@ -378,7 +396,7 @@
         if (!bodyLines || bodyLines.join("").trim() === "") return;
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY section
+        // SUMMARY
         if (title === "Summary" && idx === 0) {
           html += `<div class="section">`;
           html += `
@@ -398,7 +416,7 @@
               html += `
                 <div class="answer-bullet">
                   <span class="bullet-dot"></span>
-                  <span>${escapeHtml(cleaned)}</span>
+                  <span class="bullet-text">• ${escapeHtml(cleaned)}</span>
                 </div>
               `;
             } else {
@@ -409,7 +427,7 @@
           return;
         }
 
-        // Other sections: collapsible
+        // OTHER SECTIONS
         html += `<div class="section">`;
         html += `
           <div class="collapsible-header">
@@ -435,7 +453,7 @@
               html += `
                 <div class="answer-bullet">
                   <span class="bullet-dot"></span>
-                  <span>${escapeHtml(cleaned)}</span>
+                  <span class="bullet-text">• ${escapeHtml(cleaned)}</span>
                 </div>
               `;
             } else {
@@ -492,7 +510,7 @@
             html += `
               <div class="answer-bullet">
                 <span class="bullet-dot"></span>
-                <span>${escapeHtml(cleaned)}</span>
+                <span class="bullet-text">• ${escapeHtml(cleaned)}</span>
               </div>
             `;
           }
@@ -516,7 +534,7 @@
       return html;
     }
 
-    /* ---------- Generate ---------- */
+    /* ---------- Generate main answer ---------- */
 
     async function generate() {
       const query = questionInput.value.trim();
@@ -526,6 +544,7 @@
 
       generateBtn.disabled = true;
       copyAllBtn.disabled = true;
+      followupBtn.disabled = true;
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.innerHTML = "";
@@ -554,7 +573,65 @@
         copyAllBtn.disabled = true;
       } finally {
         generateBtn.disabled = false;
+        followupBtn.disabled = false;
         answerLoader.classList.add("hidden");
+      }
+    }
+
+    /* ---------- Follow-up (persistent box) ---------- */
+
+    async function generateFollowup() {
+      const follow = followupInput.value.trim();
+      if (!follow) return;
+
+      const conv = conversations.find((c) => c.id === activeId);
+      if (!conv || !conv.answerHtml || !conv.question) {
+        return; // no base answer to follow up on
+      }
+
+      followupBtn.disabled = true;
+      generateBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+
+      const combinedQuery =
+        conv.question + "\n\nFollow-up question: " + follow;
+
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: combinedQuery }),
+        });
+
+        const data = await res.json();
+
+        if (data.answer) {
+          const structured = buildStructuredHtml(data.answer);
+          const block = `
+            <div class="followup-block">
+              <div class="followup-question">Follow-up: ${escapeHtml(follow)}</div>
+              ${structured}
+            </div>
+          `;
+          answerEl.classList.remove("placeholder");
+          answerEl.innerHTML += block;
+
+          // update stored HTML for this session
+          const updatedHtml = answerEl.innerHTML;
+          conv.answerHtml = updatedHtml;
+          conv.updatedAt = new Date().toISOString();
+          saveConversations();
+        }
+
+        followupInput.value = "";
+        copyAllBtn.disabled = !answerEl.textContent.trim();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        answerLoader.classList.add("hidden");
+        followupBtn.disabled = false;
+        generateBtn.disabled = false;
       }
     }
 
@@ -579,6 +656,16 @@
         console.error(err);
       }
     });
+
+    if (followupBtn && followupInput) {
+      followupBtn.addEventListener("click", generateFollowup);
+      followupInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          generateFollowup();
+        }
+      });
+    }
 
     document.addEventListener("click", async (e) => {
       // Sidebar: switch topic
