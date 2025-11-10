@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
   <div class="app-root">
     <div class="shell">
@@ -19,16 +20,9 @@
                 <div class="brand-title">EBM Sessions</div>
               </div>
             </div>
-            <input
-              id="topicSearch"
-              class="topic-search"
-              type="text"
-              placeholder="Search topics..."
-            />
+            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
           </div>
-
           <div id="conversationList" class="conversation-list"></div>
-
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
@@ -53,7 +47,6 @@
                 rows="6"
                 placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
               ></textarea>
-
               <div class="actions">
                 <button id="generateBtn" class="btn">Generate</button>
               </div>
@@ -103,16 +96,11 @@
     const followupBtn = document.getElementById("followupBtn");
 
     function escapeHtml(str) {
-      return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
-
     function hasNonEmptyContent(arr) {
       return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
     }
-
     function flashCopyLabel(btn) {
       const original = btn.textContent;
       btn.textContent = "Copied";
@@ -123,87 +111,47 @@
       }, 900);
     }
 
-    // ✅ FIXED + IMPROVED STRUCTURED HTML BUILDER
+    // ---------- BUILD STRUCTURED HTML ----------
     function buildStructuredHtml(raw) {
       if (!raw) return "";
-
-      let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "")
-        .replace(/\r/g, "");
-
+      let text = raw.replace(/\*\*(.*?)\*\*/g, "$1").replace(/#{1,6}\s*/g, "").replace(/\r/g, "");
       const lines = text.split("\n");
-
       const sectionOrder = [
-        "Summary",
-        "Overview",
-        "Assessment",
-        "Diagnosis",
-        "Investigations",
-        "Treatment",
-        "Management",
-        "Plan",
-        "Monitoring",
-        "Follow-up & Safety Netting",
-        "Follow-up",
-        "Red Flags",
-        "References"
+        "Summary","Overview","Assessment","Diagnosis","Investigations",
+        "Treatment","Management","Plan","Monitoring","Follow-up & Safety Netting",
+        "Follow-up","Red Flags","References"
       ];
-
       const sections = [];
       let current = { title: "Summary", content: [] };
       let seenExplicitHeading = false;
 
       const isHeadingLine = (line) => {
         const trimmed = line.trim().replace(/:$/, "");
-        const match = sectionOrder.find(
-          (h) => trimmed.toLowerCase() === h.toLowerCase()
-        );
+        const match = sectionOrder.find((h) => trimmed.toLowerCase() === h.toLowerCase());
         return match || null;
       };
 
       for (const rawLine of lines) {
         const line = rawLine.trim();
-        if (!line) {
-          current.content.push("");
-          continue;
-        }
-
+        if (!line) { current.content.push(""); continue; }
         const heading = isHeadingLine(line);
         if (heading) {
-          if (hasNonEmptyContent(current.content)) {
-            sections.push(current);
-          }
+          if (hasNonEmptyContent(current.content)) sections.push(current);
           current = { title: heading, content: [] };
-          seenExplicitHeading = true; // ✅ fixed (was True)
-        } else {
-          current.content.push(line);
-        }
+          seenExplicitHeading = true;
+        } else current.content.push(line);
       }
-
-      if (hasNonEmptyContent(current.content)) {
-        sections.push(current);
-      }
+      if (hasNonEmptyContent(current.content)) sections.push(current);
 
       let html = "";
       let sectionIndex = 0;
-
-      // If no explicit headings → single Summary section
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
         const id = `sec-${sectionIndex++}`;
-        html += `
-          <div class="section">
-            <div class="section-header static">
-              <span>Summary</span>
-              <button class="section-copy-btn" data-target="${id}">Copy</button>
-            </div>
-            <div class="section-body static-body" data-section="${id}">
-              <p>${escapeHtml(body)}</p>
-            </div>
-          </div>
-        `;
+        html += `<div class="section"><div class="section-header static"><span>Summary</span>
+        <button class="section-copy-btn" data-target="${id}">Copy</button></div>
+        <div class="section-body static-body" data-section="${id}"><p>${escapeHtml(body)}</p></div></div>`;
         return html;
       }
 
@@ -211,108 +159,48 @@
         const title = sec.title;
         const bodyLines = sec.content || [];
         if (!hasNonEmptyContent(bodyLines)) continue;
-
         const id = `sec-${sectionIndex++}`;
-
-        // SUMMARY
-        if (title === "Summary" || title === "Overview") {
-          html += `
-            <div class="section">
-              <div class="section-header static">
-                <span>${escapeHtml(title)}</span>
-                <button class="section-copy-btn" data-target="${id}">Copy</button>
-              </div>
-              <div class="section-body static-body" data-section="${id}">
-                ${bodyLines
-                  .map((ln) => {
-                    const t = ln.trim();
-                    if (!t) return "";
-                    if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-                      const cleaned = t
-                        .replace(/^[-•]\s+/, "")
-                        .replace(/^\d+[\.\)]\s+/, "");
-                      return `
-                        <div class="answer-bullet">
-                          <span class="bullet-dot"></span>
-                          <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                        </div>
-                      `;
-                    }
-                    return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-                  })
-                  .join("")}
-              </div>
-            </div>
-          `;
-          continue;
-        }
-
-        // OTHER SECTIONS
-        const innerHtml = bodyLines
-          .filter((ln) => ln.trim() !== "")
-          .map((ln) => {
-            const t = ln.trim();
-            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-              const cleaned = t
-                .replace(/^[-•]\s+/, "")
-                .replace(/^\d+[\.\)]\s+/, "");
-              return `
-                <div class="answer-bullet">
-                  <span class="bullet-dot"></span>
-                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                </div>
-              `;
-            }
-            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-          })
-          .join("");
-
+        const innerHtml = bodyLines.filter((ln)=>ln.trim()!=="").map((ln)=>{
+          const t=ln.trim();
+          if (/^[-•]\s+/.test(t)||/^\d+[\.\)]\s+/.test(t)){
+            const cleaned=t.replace(/^[-•]\s+/,"").replace(/^\d+[\.\)]\s+/,"");
+            return `<div class="answer-bullet"><span class="bullet-dot"></span><span class="bullet-text">${escapeHtml(cleaned)}</span></div>`;
+          }
+          return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+        }).join("");
         if (!innerHtml.trim()) continue;
-
-        html += `
-          <div class="section">
-            <div class="collapsible-header">
-              <button class="collapsible" data-target="${id}">${escapeHtml(title)}</button>
-              <button class="section-copy-btn" data-target="${id}">Copy</button>
-            </div>
-            <div class="collapsible-content" data-section="${id}">
-              ${innerHtml}
-            </div>
+        html += `<div class="section">
+          <div class="collapsible-header">
+            <button class="collapsible" data-target="${id}">${escapeHtml(title)}</button>
+            <button class="section-copy-btn" data-target="${id}">Copy</button>
           </div>
-        `;
+          <div class="collapsible-content" data-section="${id}">${innerHtml}</div>
+        </div>`;
       }
-
       return html || "No response generated.";
     }
 
-    // -------- GENERATE ANSWER ----------
+    // ---------- GENERATE ANSWER ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
-
       generateBtn.disabled = true;
       copyAllBtn.disabled = true;
       followupBtn.disabled = true;
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.innerHTML = "";
-
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
-
         const data = await res.json();
-
         if (data.answer) {
           const structured = buildStructuredHtml(data.answer);
           answerEl.innerHTML = structured;
-        } else {
-          answerEl.textContent = data.error || "No response generated.";
-        }
-
+        } else answerEl.textContent = data.error || "No response generated.";
         copyAllBtn.disabled = !answerEl.textContent.trim();
       } catch (err) {
         console.error(err);
@@ -326,23 +214,15 @@
     }
 
     generateBtn.addEventListener("click", generate);
-
     questionInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        generate();
-      }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generate(); }
     });
 
     copyAllBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
-      try {
-        await navigator.clipboard.writeText(text);
-        flashCopyLabel(copyAllBtn);
-      } catch (err) {
-        console.error(err);
-      }
+      await navigator.clipboard.writeText(text);
+      flashCopyLabel(copyAllBtn);
     });
 
     document.addEventListener("click", async (e) => {
@@ -352,12 +232,8 @@
         if (!section) return;
         const text = section.innerText.trim();
         if (!text) return;
-        try {
-          await navigator.clipboard.writeText(text);
-          flashCopyLabel(e.target);
-        } catch (err) {
-          console.error(err);
-        }
+        await navigator.clipboard.writeText(text);
+        flashCopyLabel(e.target);
       } else if (e.target.classList.contains("collapsible")) {
         const id = e.target.dataset.target;
         const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
@@ -365,6 +241,44 @@
         const isOpen = content.style.display === "block";
         e.target.classList.toggle("active", !isOpen);
         content.style.display = isOpen ? "none" : "block";
+      }
+    });
+
+    // ---------- FOLLOW-UP HANDLER ----------
+    followupBtn.addEventListener("click", async () => {
+      const followup = followupInput.value.trim();
+      if (!followup) return;
+      const currentAnswer = answerEl.textContent.trim();
+      const combinedQuery = currentAnswer
+        ? `${currentAnswer}\n\nFollow-up question: ${followup}`
+        : followup;
+      followupBtn.disabled = true;
+      generateBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: combinedQuery }),
+        });
+        const data = await res.json();
+        if (data.answer) {
+          const structured = buildStructuredHtml(data.answer);
+          const newBlock = document.createElement("div");
+          newBlock.classList.add("followup-block");
+          newBlock.innerHTML = `<h3 class="followup-heading">Follow-up Answer</h3>${structured}`;
+          answerEl.appendChild(newBlock);
+        } else alert("No response generated for follow-up.");
+        followupInput.value = "";
+      } catch (err) {
+        console.error(err);
+        alert("Error generating follow-up.");
+      } finally {
+        followupBtn.disabled = false;
+        generateBtn.disabled = false;
+        copyAllBtn.disabled = false;
+        answerLoader.classList.add("hidden");
       }
     });
   </script>
