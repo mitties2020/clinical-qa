@@ -29,7 +29,7 @@
           </div>
 
           <div id="conversationList" class="conversation-list">
-            <!-- Filled by JS -->
+            <!-- Populated by JS -->
           </div>
 
           <div class="sidebar-footer">
@@ -47,7 +47,7 @@
           </header>
 
           <main class="grid">
-            <!-- INPUT -->
+            <!-- INPUT CARD -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
               <textarea
@@ -61,7 +61,7 @@
               </div>
             </section>
 
-            <!-- OUTPUT -->
+            <!-- OUTPUT CARD -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
@@ -96,7 +96,8 @@
     const conversationListEl = document.getElementById("conversationList");
     const topicSearch = document.getElementById("topicSearch");
 
-    // ---------- UTIL ----------
+    // ---------- UTILITIES ----------
+
     function escapeHtml(str) {
       return str
         .replace(/&/g, "&amp;")
@@ -118,13 +119,14 @@
       }, 900);
     }
 
-    // ---------- BUILD STRUCTURED HTML (GREEN DOTS) ----------
+    // ---------- STRUCTURED HTML WITH GREEN BULLETS ----------
+
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
       let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")   // remove markdown bold
+        .replace(/#{1,6}\s*/g, "")         // remove markdown headings
         .replace(/\r/g, "");
 
       const lines = text.split("\n");
@@ -183,7 +185,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // Single summary-only response
+      // Case: only summary-like content
       if (
         !seenExplicitHeading &&
         sections.length === 1 &&
@@ -206,7 +208,6 @@
         return html;
       }
 
-      // Multi-section
       for (const sec of sections) {
         const title = sec.title;
         const bodyLines = sec.content || [];
@@ -218,11 +219,9 @@
           .filter((ln) => ln.trim() !== "")
           .map((ln) => {
             const t = ln.trim();
-            // turn plain bullets/numbers into green dot bullets
-            if (
-              /^[-•]\s+/.test(t) ||
-              /^\d+[\.\)]\s+/.test(t)
-            ) {
+
+            // Convert simple bullets/numbers into styled green bullets
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
               const cleaned = t
                 .replace(/^[-•]\s+/, "")
                 .replace(/^\d+[\.\)]\s+/, "");
@@ -233,13 +232,14 @@
                 </div>
               `;
             }
+
             return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
           })
           .join("");
 
         if (!innerHtml.trim()) continue;
 
-        // Summary/Overview fixed open; others collapsible
+        // Summary/Overview: fixed open
         if (title === "Summary" || title === "Overview") {
           html += `
             <div class="section">
@@ -253,6 +253,7 @@
             </div>
           `;
         } else {
+          // Other headings: collapsible
           html += `
             <div class="section">
               <div class="collapsible-header">
@@ -272,12 +273,13 @@
       return html || "No response generated.";
     }
 
-    // ---------- CONVERSATION STORAGE (LEFT TOPICS) ----------
+    // ---------- CONVERSATION STORAGE (LEFT COLUMN) ----------
+
     function loadConversations() {
       let data = [];
       try {
         data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
+      } catch (e) {
         data = [];
       }
 
@@ -293,42 +295,50 @@
         const div = document.createElement("div");
         div.className = "conversation-item";
         div.dataset.index = idx;
+
         div.innerHTML = `
-          <div class="conv-title">${escapeHtml(item.title || "Topic")}</div>
-          <div class="conv-sub">${escapeHtml(
-            (item.query || "").slice(0, 80)
-          )}</div>
+          <div class="conv-title">
+            ${escapeHtml(item.title || "Topic")}
+          </div>
+          <div class="conv-sub">
+            ${escapeHtml((item.query || "").slice(0, 90))}
+          </div>
         `;
+
         div.addEventListener("click", () => {
           questionInput.value = item.query || "";
           answerEl.innerHTML = item.answer || "";
-          answerEl.classList.toggle(
-            "placeholder",
-            !(item.answer && item.answer.trim())
-          );
-          copyAllBtn.disabled = !(item.answer && item.answer.trim());
+          const hasAnswer = !!(item.answer && item.answer.trim());
+          answerEl.classList.toggle("placeholder", !hasAnswer);
+          copyAllBtn.disabled = !hasAnswer;
         });
+
         conversationListEl.appendChild(div);
       });
     }
 
     function saveConversation(query, answerHtml) {
       if (!query || !answerHtml) return;
+
       let data = [];
       try {
         data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
+      } catch (e) {
         data = [];
       }
 
-      const title =
+      const cleanTitle =
         query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
 
-      data.push({ title, query, answer: answerHtml });
+      data.push({
+        title: cleanTitle || "Topic",
+        query,
+        answer: answerHtml,
+      });
 
-      // keep last 30 only
-      if (data.length > 30) {
-        data = data.slice(data.length - 30);
+      // Keep only the latest 40
+      if (data.length > 40) {
+        data = data.slice(data.length - 40);
       }
 
       localStorage.setItem("ebm_conversations", JSON.stringify(data));
@@ -339,19 +349,19 @@
       const term = (topicSearch.value || "").toLowerCase().trim();
       const items = conversationListEl.querySelectorAll(".conversation-item");
       if (!items.length) return;
+
       items.forEach((item) => {
-        const title = (
-          item.querySelector(".conv-title")?.textContent || ""
-        ).toLowerCase();
-        const sub = (
-          item.querySelector(".conv-sub")?.textContent || ""
-        ).toLowerCase();
+        const title = (item.querySelector(".conv-title")?.textContent || "")
+          .toLowerCase();
+        const sub = (item.querySelector(".conv-sub")?.textContent || "")
+          .toLowerCase();
         const match = !term || title.includes(term) || sub.includes(term);
         item.style.display = match ? "" : "none";
       });
     }
 
     // ---------- GENERATE ANSWER ----------
+
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -374,8 +384,11 @@
         if (data.answer) {
           const structured = buildStructuredHtml(data.answer);
           answerEl.innerHTML = structured;
-          copyAllBtn.disabled = !answerEl.textContent.trim();
-          saveConversation(query, structured);
+          const hasText = !!answerEl.textContent.trim();
+          copyAllBtn.disabled = !hasText;
+          if (hasText) {
+            saveConversation(query, structured);
+          }
         } else {
           answerEl.textContent = data.error || "No response generated.";
           copyAllBtn.disabled = true;
@@ -391,6 +404,7 @@
     }
 
     // ---------- EVENTS ----------
+
     generateBtn.addEventListener("click", generate);
 
     questionInput.addEventListener("keydown", (e) => {
