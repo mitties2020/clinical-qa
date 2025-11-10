@@ -29,6 +29,8 @@
 
           <div class="actions">
             <button id="generateBtn" class="btn">Generate</button>
+            <!-- Spinner shown while generating -->
+            <div id="loader" class="loader hidden"></div>
             <span class="hint">
               Press <kbd>Enter</kbd> to generate • <kbd>Shift + Enter</kbd> for newline
             </span>
@@ -56,16 +58,19 @@ Your structured, evidence-based response will appear here.
     const generateBtn = document.getElementById("generateBtn");
     const answerEl = document.getElementById("answer");
     const copyBtn = document.getElementById("copyBtn");
+    const loader = document.getElementById("loader");
 
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
 
       generateBtn.disabled = true;
-      generateBtn.textContent = "Generating...";
-      answerEl.classList.remove("placeholder");
-      answerEl.textContent = "Thinking...";
       copyBtn.disabled = true;
+
+      // show spinner, clear placeholder
+      if (loader) loader.classList.remove("hidden");
+      answerEl.classList.remove("placeholder");
+      answerEl.textContent = "";
 
       try {
         const res = await fetch("/api/generate", {
@@ -89,11 +94,11 @@ Your structured, evidence-based response will appear here.
         copyBtn.disabled = true;
       } finally {
         generateBtn.disabled = false;
-        generateBtn.textContent = "Generate";
+        if (loader) loader.classList.add("hidden");
       }
     }
 
-    // Click button
+    // Button click
     generateBtn.addEventListener("click", generate);
 
     // Enter = generate, Shift+Enter = newline
