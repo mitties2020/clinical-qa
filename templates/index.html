@@ -9,49 +9,74 @@
 <body>
   <div class="app-root">
     <div class="shell">
-      <header class="header">
-        <h1 class="title">Clinical Q&amp;A Engine</h1>
-        <p class="subtitle">
-          Enter a clinical question to generate an evidence based answer.
-        </p>
-      </header>
-
-      <main class="grid">
-        <!-- LEFT: INPUT -->
-        <section class="card input-card">
-          <label class="label" for="question">Clinical Question</label>
-          <textarea
-            id="question"
-            class="textarea"
-            rows="6"
-            placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
-          ></textarea>
-
-          <div class="actions">
-            <button id="generateBtn" class="btn">Generate</button>
-          </div>
-        </section>
-
-        <!-- RIGHT: OUTPUT -->
-        <section class="card output-card">
-          <div class="output-header">
-            <h2 class="output-title">Answer</h2>
-            <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
-          </div>
-
-          <!-- Loading overlay -->
-          <div id="answerLoader" class="answer-loader hidden">
-            <div class="loader"></div>
-            <div class="loader-text">Generating structured answer…</div>
-          </div>
-
-          <div class="output-body">
-            <div id="answer" class="answer placeholder">
-              Your structured, evidence-based response will appear here.
+      <div class="layout">
+        <!-- SIDEBAR: Conversation topics -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-brand">
+              <div class="brand-logo">EBM</div>
+              <div class="brand-text">
+                <div class="brand-title">EBM Nexus</div>
+                <div class="brand-sub">Sessions</div>
+              </div>
             </div>
+            <button id="newTopicBtn" class="new-topic-btn">+ New Topic</button>
           </div>
-        </section>
-      </main>
+          <div id="conversationList" class="conversation-list">
+            <!-- Filled by JS -->
+          </div>
+          <div class="sidebar-footer">
+            <span class="sidebar-hint">Locally stored • Per device</span>
+          </div>
+        </aside>
+
+        <!-- MAIN PANEL -->
+        <div class="main-region">
+          <header class="header">
+            <h1 class="title">Clinical Q&amp;A Engine</h1>
+            <p class="subtitle">
+              Enter a clinical question to generate an evidence based answer.
+            </p>
+          </header>
+
+          <main class="grid">
+            <!-- LEFT: INPUT -->
+            <section class="card input-card">
+              <label class="label" for="question">Clinical Question</label>
+              <textarea
+                id="question"
+                class="textarea"
+                rows="6"
+                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
+              ></textarea>
+
+              <div class="actions">
+                <button id="generateBtn" class="btn">Generate</button>
+              </div>
+            </section>
+
+            <!-- RIGHT: OUTPUT -->
+            <section class="card output-card">
+              <div class="output-header">
+                <h2 class="output-title">Answer</h2>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
+              </div>
+
+              <!-- Loading overlay -->
+              <div id="answerLoader" class="answer-loader hidden">
+                <div class="loader"></div>
+                <div class="loader-text">Generating structured answer…</div>
+              </div>
+
+              <div class="output-body">
+                <div id="answer" class="answer placeholder">
+                  Your structured, evidence-based response will appear here.
+                </div>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -61,6 +86,12 @@
     const answerEl = document.getElementById("answer");
     const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
+    const newTopicBtn = document.getElementById("newTopicBtn");
+    const conversationListEl = document.getElementById("conversationList");
+
+    // ---- Conversation state (localStorage) ----
+    let conversations = [];
+    let activeId = null;
 
     function escapeHtml(str) {
       return str
@@ -69,12 +100,143 @@
         .replace(/>/g, "&gt;");
     }
 
+    function loadConversations() {
+      try {
+        const raw = localStorage.getItem("ebm_conversations");
+        const active = localStorage.getItem("ebm_active");
+        conversations = raw ? JSON.parse(raw) : [];
+        activeId = active || (conversations[0] && conversations[0].id) || null;
+      } catch {
+        conversations = [];
+        activeId = null;
+      }
+      renderConversationList();
+      restoreActiveConversation();
+    }
+
+    function saveConversations() {
+      try {
+        localStorage.setItem(
+          "ebm_conversations",
+          JSON.stringify(conversations.slice(0, 40))
+        );
+        if (activeId) {
+          localStorage.setItem("ebm_active", activeId);
+        }
+      } catch (e) {
+        console.warn("Unable to save conversations", e);
+      }
+    }
+
+    function renderConversationList() {
+      conversationListEl.innerHTML = "";
+      if (!conversations.length) {
+        conversationListEl.innerHTML =
+          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
+        return;
+      }
+      conversations.forEach((c) => {
+        const div = document.createElement("div");
+        div.className =
+          "conv-item" + (c.id === activeId ? " active" : "");
+        div.dataset.id = c.id;
+        const title =
+          (c.title || "Untitled topic").slice(0, 60);
+        const preview =
+          (c.question || "").slice(0, 42) ||
+          (c.updatedAt || "").slice(0, 10);
+        div.innerHTML = `
+          <div class="conv-title">${escapeHtml(title)}</div>
+          <div class="conv-sub">${escapeHtml(preview || "")}</div>
+        `;
+        conversationListEl.appendChild(div);
+      });
+    }
+
+    function restoreActiveConversation() {
+      if (!activeId) {
+        answerEl.innerHTML =
+          "Your structured, evidence-based response will appear here.";
+        answerEl.classList.add("placeholder");
+        copyAllBtn.disabled = true;
+        questionInput.value = "";
+        return;
+      }
+      const conv = conversations.find((c) => c.id === activeId);
+      if (!conv) {
+        activeId = null;
+        renderConversationList();
+        restoreActiveConversation();
+        return;
+      }
+      questionInput.value = conv.question || "";
+      if (conv.answerHtml) {
+        answerEl.innerHTML = conv.answerHtml;
+        answerEl.classList.remove("placeholder");
+        copyAllBtn.disabled = false;
+      } else {
+        answerEl.innerHTML =
+          "Your structured, evidence-based response will appear here.";
+        answerEl.classList.add("placeholder");
+        copyAllBtn.disabled = true;
+      }
+    }
+
+    function setActiveConversation(id) {
+      activeId = id;
+      saveConversations();
+      renderConversationList();
+      restoreActiveConversation();
+    }
+
+    function startNewTopic() {
+      // Just switch context; actual conversation is created on first generate
+      activeId = "c_" + Date.now();
+      saveConversations();
+      questionInput.value = "";
+      answerEl.innerHTML =
+        "Your structured, evidence-based response will appear here.";
+      answerEl.classList.add("placeholder");
+      copyAllBtn.disabled = true;
+      renderConversationList();
+    }
+
+    function saveActiveConversation(question, answerHtml) {
+      if (!activeId) {
+        activeId = "c_" + Date.now();
+      }
+      const title = (question || "Untitled topic").trim() || "Untitled topic";
+      const now = new Date().toISOString();
+
+      const existingIndex = conversations.findIndex(
+        (c) => c.id === activeId
+      );
+      const conv = {
+        id: activeId,
+        title: title.slice(0, 80),
+        question,
+        answerHtml,
+        updatedAt: now,
+      };
+
+      if (existingIndex >= 0) {
+        conversations[existingIndex] = conv;
+      } else {
+        conversations.unshift(conv);
+      }
+
+      saveConversations();
+      renderConversationList();
+    }
+
+    // ---- Answer formatting ----
+
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
       let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1") // remove markdown bold
-        .replace(/#{1,6}\s*/g, "")      // remove markdown headings
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "")
         .replace(/\r/g, "");
 
       const lines = text.split("\n");
@@ -110,7 +272,6 @@
           current.content.push("");
           continue;
         }
-
         const heading = isHeadingLine(line);
         if (heading) {
           if (current.content.length > 0 || sections.length > 0) {
@@ -129,7 +290,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // If no headings, treat all as one Summary block
+      // If no headings, single summary block
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
@@ -148,15 +309,13 @@
         return html;
       }
 
-      // Build each structured section
       sections.forEach((sec, idx) => {
         const title = sec.title;
         const bodyLines = sec.content;
         if (!bodyLines || bodyLines.join("").trim() === "") return;
-
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY block (expanded, static)
+        // SUMMARY block always expanded at top
         if (title === "Summary" && idx === 0) {
           html += `<div class="section">`;
           html += `
@@ -294,6 +453,8 @@
       return html;
     }
 
+    // ---- Generate handler ----
+
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -316,6 +477,7 @@
         if (data.answer) {
           const structured = buildStructuredHtml(data.answer);
           answerEl.innerHTML = structured;
+          saveActiveConversation(query, structured);
         } else {
           answerEl.textContent = data.error || "No response generated.";
         }
@@ -331,10 +493,10 @@
       }
     }
 
-    // Generate on button click
+    // ---- Event wiring ----
+
     generateBtn.addEventListener("click", generate);
 
-    // Enter = generate (no on-screen hint)
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -342,7 +504,6 @@
       }
     });
 
-    // Copy ALL sections
     copyAllBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
@@ -354,8 +515,19 @@
       }
     });
 
-    // Delegate clicks: section copy + collapsibles
+    newTopicBtn.addEventListener("click", () => {
+      startNewTopic();
+    });
+
+    // Global click handler (sidebar selection, copies, toggles)
     document.addEventListener("click", async (e) => {
+      const convItem = e.target.closest(".conv-item");
+      if (convItem) {
+        const id = convItem.dataset.id;
+        if (id) setActiveConversation(id);
+        return;
+      }
+
       // Section copy buttons
       if (e.target.classList.contains("section-copy-btn")) {
         const id = e.target.dataset.target;
@@ -376,7 +548,9 @@
       // Top-level collapsible
       if (e.target.classList.contains("collapsible")) {
         const id = e.target.dataset.target;
-        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+        const content = document.querySelector(
+          `.collapsible-content[data-section="${id}"]`
+        );
         if (!content) return;
         const isOpen = content.style.display === "block";
         e.target.classList.toggle("active", !isOpen);
@@ -384,7 +558,7 @@
         return;
       }
 
-      // Nested treatment toggles
+      // Nested treatment toggle
       if (e.target.classList.contains("nested-toggle")) {
         const content = e.target.nextElementSibling;
         if (!content) return;
@@ -404,6 +578,9 @@
         btn.classList.remove("copied");
       }, 900);
     }
+
+    // Init
+    loadConversations();
   </script>
 </body>
 </html>
