@@ -5,15 +5,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
-if not API_KEY:
-    raise RuntimeError("Missing DEEPSEEK_API_KEY. Set it in your environment or .env file.")
+if not DEEPSEEK_API_KEY:
+    raise RuntimeError("Missing DEEPSEEK_API_KEY environment variable.")
 
-session = requests.Session()
 app = Flask(__name__, template_folder="templates", static_folder="static")
+session = requests.Session()
 
 
 @app.route("/")
@@ -40,15 +40,15 @@ def generate():
         "Follow-up & Safety Netting\n"
         "Red Flags\n"
         "References\n"
-        "Only include headings that are clinically relevant for the query.\n"
-        "Under each heading, use short, direct points (one per line), prioritising the most important actions first.\n"
+        "Only include headings that are clinically relevant for the question.\n"
+        "Under each heading, use short, direct bullet-style lines (one key point per line), "
+        "prioritising the most important actions first.\n"
         "Include practical details (drug choices, doses, thresholds, timeframes) when appropriate, "
         "but avoid long narrative paragraphs.\n"
-        "DO NOT use markdown formatting symbols like **, bullets, or #; just plain text headings and lines. "
-        "The UI will format it."
+        "Do NOT use markdown symbols like **, -, •, or #. Use plain text headings and lines only."
     )
 
-    body = {
+    payload = {
         "model": MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -56,43 +56,36 @@ def generate():
         ],
         "temperature": 0.25,
         "top_p": 0.9,
-        # Slightly higher for more depth but still safe for speed
         "max_tokens": 1100,
         "stream": False,
     }
 
     headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}",
     }
 
     try:
-        resp = session.post(DEEPSEEK_URL, headers=headers, json=body, timeout=30)
+        resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
+        print("DeepSeek status:", resp.status_code)
+        # Useful if something goes wrong:
+        # print(resp.text[:600])
         resp.raise_for_status()
-        payload = resp.json()
-
+        data = resp.json()
         answer = (
-            payload.get("choices", [{}])[0]
+            (data.get("choices") or [{}])[0]
             .get("message", {})
             .get("content", "")
             .strip()
         )
-
         if not answer:
-            return jsonify({"error": "No response from model."}), 502
-
+            return jsonify({"error": "Empty response from model."}), 502
         return jsonify({"answer": answer})
-
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "Upstream model timed out. Please try again."}), 504
-    except requests.exceptions.RequestException as e:
-        print("DeepSeek API error:", repr(e))
-        return jsonify({"error": "Error contacting model API."}), 502
     except Exception as e:
-        print("Server error:", repr(e))
-        return jsonify({"error": "Internal server error."}), 500
+        print("DeepSeek API error:", repr(e))
+        return jsonify({"error": "Error contacting DeepSeek API."}), 502
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=True)
