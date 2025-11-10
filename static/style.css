@@ -1,29 +1,13 @@
+/* =========================
+   Theme
+   ========================= */
+
 :root {
-  .loader {
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  border-top-color: var(--accent);
-  border-right-color: var(--accent);
-  animation: spin 0.7s linear infinite;
-  margin-left: 10px;
-}
-
-.loader.hidden {
-  display: none;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
   --bg: #040610;
   --bg-elevated: #0c1428;
   --accent: #29c9ff;
   --accent-soft: rgba(41, 201, 255, 0.22);
-  --accent-glow: 0 0 12px rgba(41, 201, 255, 0.4);
+  --accent-glow: 0 0 16px rgba(41, 201, 255, 0.45);
   --accent-text: #ecfaff;
   --border-subtle: rgba(255, 255, 255, 0.08);
   --text-main: #ffffff;
@@ -34,6 +18,14 @@
     "Segoe UI", sans-serif;
 }
 
+/* =========================
+   Global
+   ========================= */
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -42,7 +34,77 @@ body {
   font-family: var(--font-sans);
 }
 
-/* ---- Main Components ---- */
+/* =========================
+   Layout
+   ========================= */
+
+.app-root {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.shell {
+  width: 100%;
+  max-width: 1280px;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 15px;
+  color: var(--text-soft);
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
+  gap: 22px;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================
+   Cards
+   ========================= */
+
+.card {
+  background: radial-gradient(circle at top left, #141b2f 0, #050816 55%);
+  border-radius: var(--radius-xl);
+  padding: 18px 18px 16px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5),
+              0 0 25px rgba(41, 201, 255, 0.05);
+  backdrop-filter: blur(18px);
+}
+
+/* =========================
+   Input side
+   ========================= */
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+}
 
 .textarea {
   width: 100%;
@@ -71,7 +133,14 @@ body {
   transform: translateY(-1px);
 }
 
-/* ---- Buttons ---- */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+/* Generate button */
 
 .btn {
   padding: 10px 22px;
@@ -103,7 +172,46 @@ body {
   cursor: default;
 }
 
-/* ---- Copy Button ---- */
+/* Hint */
+
+.hint {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.hint kbd {
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(148, 163, 253, 0.35);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent-text);
+}
+
+/* =========================
+   Output side
+   ========================= */
+
+.output-card {
+  position: relative; /* for loader overlay */
+}
+
+.output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.output-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin: 0;
+}
+
+/* Copy button */
 
 .copy-btn {
   padding: 5px 12px;
@@ -128,16 +236,36 @@ body {
   box-shadow: none;
 }
 
-/* ---- Answer Panel ---- */
+.output-body {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(3, 7, 18, 0.96);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  max-height: 68vh;
+  overflow-y: auto;
+}
+
+/* Scrollbar (subtle) */
+.output-body::-webkit-scrollbar {
+  width: 6px;
+}
+.output-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 253, 0.35);
+  border-radius: 999px;
+}
+
+/* Answer text */
 
 .answer {
   white-space: pre-wrap;
   word-wrap: break-word;
   font-size: 15px;
   line-height: 1.7;
-  color: #fff;
+  color: #ffffff;
   font-family: var(--font-sans);
   text-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
+  margin: 0;
 }
 
 .placeholder {
@@ -145,11 +273,50 @@ body {
   text-shadow: none;
 }
 
-/* ---- Card Borders ---- */
+/* =========================
+   Loader overlay
+   ========================= */
 
-.card {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5),
-              0 0 25px rgba(41, 201, 255, 0.05);
-  backdrop-filter: blur(18px);
+.answer-loader {
+  position: absolute;
+  inset: 40px 14px 12px 14px; /* below header, inside card */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(4, 6, 16, 0.9);
+  border-radius: 18px;
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+.answer-loader.hidden {
+  display: none;
+}
+
+.loader {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+
+.loader-text {
+  font-size: 12px;
+  color: var(--text-soft);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
