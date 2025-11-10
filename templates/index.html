@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Clinical Q&A Engine | EBM Nexus</title>
+  <title>Clinical Q&A Engine | EBM Sessions</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -16,11 +16,15 @@
             <div class="sidebar-brand">
               <div class="brand-logo">EBM</div>
               <div class="brand-text">
-                <div class="brand-title">EBM Nexus</div>
-                <div class="brand-sub">Sessions</div>
+                <div class="brand-title">EBM Sessions</div>
               </div>
             </div>
-            <button id="newTopicBtn" class="new-topic-btn">+ New Topic</button>
+            <input
+              id="topicSearch"
+              class="topic-search"
+              type="text"
+              placeholder="Search topics..."
+            />
           </div>
 
           <div id="conversationList" class="conversation-list">
@@ -88,13 +92,13 @@
     const answerEl = document.getElementById("answer");
     const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
-    const newTopicBtn = document.getElementById("newTopicBtn");
     const conversationListEl = document.getElementById("conversationList");
+    const topicSearch = document.getElementById("topicSearch");
 
     let conversations = [];
     let activeId = null;
 
-    /* ---------- Util ---------- */
+    /* ---------- Utils ---------- */
 
     function escapeHtml(str) {
       return str
@@ -127,6 +131,7 @@
       }
       renderConversationList();
       restoreActiveConversation();
+      filterTopics();
     }
 
     function saveConversations() {
@@ -151,13 +156,17 @@
         return;
       }
       conversations.forEach((c) => {
+        const title = (c.title || "Untitled topic").slice(0, 80);
+        const preview =
+          (c.question || "").slice(0, 90) ||
+          (c.updatedAt || "").slice(0, 10);
+
         const div = document.createElement("div");
         div.className = "conv-item" + (c.id === activeId ? " active" : "");
         div.dataset.id = c.id;
-        const title = (c.title || "Untitled topic").slice(0, 80);
-        const preview =
-          (c.question || "").slice(0, 60) ||
-          (c.updatedAt || "").slice(0, 10);
+        div.dataset.title = title;
+        div.dataset.question = c.question || "";
+
         div.innerHTML = `
           <div class="conv-title">${escapeHtml(title)}</div>
           <div class="conv-sub">${escapeHtml(preview || "")}</div>
@@ -200,20 +209,10 @@
       saveConversations();
       renderConversationList();
       restoreActiveConversation();
+      filterTopics();
     }
 
-    function startNewTopic() {
-      // Clear UI; next Generate will allocate a fresh conversation ID
-      activeId = null;
-      questionInput.value = "";
-      answerEl.innerHTML =
-        "Your structured, evidence-based response will appear here.";
-      answerEl.classList.add("placeholder");
-      copyAllBtn.disabled = true;
-      renderConversationList();
-    }
-
-    // Important: ensure a new conversation slot when needed
+    // Decide if we need a new topic for this query
     function ensureConversationSlotForQuery(query) {
       if (!query) return;
 
@@ -224,19 +223,18 @@
 
       const current = conversations.find((c) => c.id === activeId);
 
-      // If somehow missing, create fresh
       if (!current) {
         activeId = "c_" + Date.now();
         return;
       }
 
-      // If current has no answer yet, keep using it
+      // If no answer yet, reuse (still drafting first query)
       if (!current.answerHtml) return;
 
-      // If question is unchanged, treat as updating same topic
+      // If question unchanged, reuse
       if (current.question && current.question.trim() === query.trim()) return;
 
-      // Otherwise, this is clearly a new topic → new ID
+      // Otherwise, treat as new topic
       activeId = "c_" + Date.now();
     }
 
@@ -265,6 +263,32 @@
 
       saveConversations();
       renderConversationList();
+      filterTopics();
+    }
+
+    /* ---------- Topic search filter ---------- */
+
+    function filterTopics() {
+      if (!topicSearch) return;
+      const term = topicSearch.value.trim().toLowerCase();
+      const items = conversationListEl.querySelectorAll(".conv-item");
+      if (!items.length) return;
+
+      items.forEach((item) => {
+        if (!term) {
+          item.style.display = "";
+          return;
+        }
+        const title = (item.dataset.title || "").toLowerCase();
+        const question = (item.dataset.question || "").toLowerCase();
+        const match =
+          title.includes(term) || question.includes(term);
+        item.style.display = match ? "" : "none";
+      });
+    }
+
+    if (topicSearch) {
+      topicSearch.addEventListener("input", filterTopics);
     }
 
     /* ---------- Answer formatting ---------- */
@@ -329,7 +353,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // No headings → single Summary block
+      // No headings: show as single Summary
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
@@ -348,14 +372,13 @@
         return html;
       }
 
-      // Structured sections
       sections.forEach((sec, idx) => {
         const title = sec.title;
         const bodyLines = sec.content;
         if (!bodyLines || bodyLines.join("").trim() === "") return;
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY (always open)
+        // SUMMARY section
         if (title === "Summary" && idx === 0) {
           html += `<div class="section">`;
           html += `
@@ -499,7 +522,6 @@
       const query = questionInput.value.trim();
       if (!query) return;
 
-      // Decide whether this should be a new topic
       ensureConversationSlotForQuery(query);
 
       generateBtn.disabled = true;
@@ -556,10 +578,6 @@
       } catch (err) {
         console.error(err);
       }
-    });
-
-    newTopicBtn.addEventListener("click", () => {
-      startNewTopic();
     });
 
     document.addEventListener("click", async (e) => {
