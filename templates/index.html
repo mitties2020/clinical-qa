@@ -19,7 +19,7 @@
       <main class="grid">
         <!-- LEFT: INPUT -->
         <section class="card input-card">
-          <label class="label" for="question">Clinical question</label>
+          <label class="label" for="question">Clinical Question</label>
           <textarea
             id="question"
             class="textarea"
@@ -29,9 +29,6 @@
 
           <div class="actions">
             <button id="generateBtn" class="btn">Generate</button>
-            <span class="hint">
-              Enter = generate • Shift+Enter = newline
-            </span>
           </div>
         </section>
 
@@ -76,7 +73,7 @@
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
-      // Clean markdown-style noise
+      // Strip markdown noise
       let text = raw
         .replace(/\*\*(.*?)\*\*/g, "$1")
         .replace(/#{1,6}\s*/g, "")
@@ -89,7 +86,7 @@
         "Assessment",
         "Investigations",
         "Treatment",
-        "Management", // fallback if model uses "Management"
+        "Management",
         "Monitoring",
         "Follow-up & Safety Netting",
         "Follow-up",
@@ -127,31 +124,33 @@
           current.content.push(line);
         }
       }
+
       if (current.content.length > 0) {
         sections.push(current);
       }
 
-      // If no explicit headings were found, treat everything as Summary
+      // If no headings at all, treat everything as a summary paragraph
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
-        return (
-          `<div class="section">` +
-          `<div class="section-header static">Summary</div>` +
-          `<div class="section-body static-body">` +
-          `<p>${escapeHtml(sections[0].content.join(" ").trim())}</p>` +
-          `</div></div>`
-        );
+        const content = sections[0].content.join(" ").trim();
+        if (!content) return "No response generated.";
+        return `
+          <div class="section">
+            <div class="section-header static">Summary</div>
+            <div class="section-body static-body">
+              <p>${escapeHtml(content)}</p>
+            </div>
+          </div>
+        `;
       }
 
-      // Build HTML with collapsibles
       let html = "";
 
       sections.forEach((sec, index) => {
         const title = sec.title;
         const bodyLines = sec.content;
-
         if (!bodyLines || bodyLines.join("").trim() === "") return;
 
-        // Summary always expanded at top
+        // SUMMARY: always expanded block at the top
         if (title === "Summary" && index === 0) {
           html += `<div class="section">`;
           html += `<div class="section-header static">Summary</div>`;
@@ -165,15 +164,12 @@
           return;
         }
 
-        // Collapsible sections for the rest
+        // COLLAPSIBLE SECTIONS
         html += `<div class="section">`;
         html += `<button class="collapsible">${escapeHtml(title)}</button>`;
         html += `<div class="collapsible-content">`;
 
-        if (
-          title === "Treatment" ||
-          title === "Management"
-        ) {
+        if (title === "Treatment" || title === "Management") {
           html += buildTreatmentContent(bodyLines);
         } else {
           bodyLines.forEach((ln) => {
@@ -183,11 +179,12 @@
               return;
             }
 
-            // Simple bullets
-            if (/^[-•]\s+/.test(t)) {
-              html += `<div class="answer-bullet">• ${escapeHtml(t.replace(/^[-•]\s+/, ""))}</div>`;
-            } else if (/^\d+[\.\)]\s+/.test(t)) {
-              html += `<div class="answer-bullet">• ${escapeHtml(t.replace(/^\d+[\.\)]\s+/, ""))}</div>`;
+            // bullet-style, but render with clean dot, not hyphen
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              html += `<div class="answer-bullet"><span class="bullet-dot"></span><span>${escapeHtml(cleaned)}</span></div>`;
             } else {
               html += `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
             }
@@ -206,7 +203,7 @@
       let currentOption = null;
 
       const flushOption = () => {
-        if (currentOption) {
+        if (currentOption && currentOption.details.length) {
           const label = escapeHtml(currentOption.label);
           const content = escapeHtml(currentOption.details.join(" ").trim());
           html += `
@@ -218,13 +215,13 @@
             </div>
           `;
         }
+        currentOption = null;
       };
 
       lines.forEach((raw) => {
         const line = raw.trim();
         if (!line) return;
 
-        // Detect "Option: ..." lines
         if (/^Option:\s*/i.test(line)) {
           flushOption();
           const label = line.replace(/^Option:\s*/i, "").trim() || "Option";
@@ -236,18 +233,15 @@
           }
           if (text) currentOption.details.push(text);
         } else if (/^[-•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line)) {
-          // Bullet under treatment
           const cleaned = line
             .replace(/^[-•]\s+/, "")
             .replace(/^\d+[\.\)]\s+/, "");
-          if (!currentOption) {
-            // treat as general treatment bullet
-            html += `<div class="answer-bullet">• ${escapeHtml(cleaned)}</div>`;
-          } else {
+          if (currentOption) {
             currentOption.details.push(cleaned);
+          } else {
+            html += `<div class="answer-bullet"><span class="bullet-dot"></span><span>${escapeHtml(cleaned)}</span></div>`;
           }
         } else {
-          // Plain text: attach to current option or as paragraph
           if (currentOption) {
             currentOption.details.push(line);
           } else {
@@ -259,7 +253,6 @@
       flushOption();
 
       if (!html.trim()) {
-        // fallback: if parsing failed, dump raw
         html = lines
           .map((l) => `<p class="answer-paragraph">${escapeHtml(l)}</p>`)
           .join("");
@@ -308,7 +301,7 @@
     // Click generate
     generateBtn.addEventListener("click", generate);
 
-    // Enter = generate, Shift+Enter = newline
+    // Enter = generate (kept for power users, no hint shown)
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -316,7 +309,7 @@
       }
     });
 
-    // Copy plain text
+    // Copy full plain text
     copyBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
@@ -330,7 +323,7 @@
       }
     });
 
-    // Collapsible behavior (top-level + nested)
+    // Collapsible behaviors
     document.addEventListener("click", (e) => {
       if (e.target.classList.contains("collapsible")) {
         e.target.classList.toggle("active");
