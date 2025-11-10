@@ -3,11 +3,11 @@
    ========================= */
 
 :root {
-  --bg: #0c1024;              /* slightly lighter, deep navy */
+  --bg: #0c1024;
   --bg-elevated: #141a32;
   --accent: #2fc4ff;
-  --accent-soft: rgba(47, 196, 255, 0.22);
-  --accent-glow: 0 0 16px rgba(47, 196, 255, 0.45);
+  --accent-soft: rgba(47, 196, 255, 0.2);
+  --accent-glow: 0 0 16px rgba(47, 196, 255, 0.4);
   --accent-text: #ecfaff;
   --border-subtle: rgba(255, 255, 255, 0.08);
   --text-main: #f8f9fb;
@@ -93,7 +93,7 @@ body {
   padding: 18px 18px 16px;
   border: 1px solid var(--border-subtle);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6),
-              0 0 25px rgba(47, 196, 255, 0.05);
+              0 0 25px rgba(47, 196, 255, 0.06);
   backdrop-filter: blur(18px);
 }
 
@@ -145,8 +145,6 @@ body {
   margin-top: 12px;
 }
 
-/* Generate button */
-
 .btn {
   padding: 10px 22px;
   border-radius: 999px;
@@ -176,8 +174,6 @@ body {
   box-shadow: none;
   cursor: default;
 }
-
-/* Hint */
 
 .hint {
   font-size: 11px;
@@ -217,8 +213,6 @@ body {
   letter-spacing: 0.16em;
 }
 
-/* Copy button */
-
 .copy-btn {
   padding: 5px 12px;
   font-size: 12px;
@@ -253,8 +247,6 @@ body {
   box-shadow: 0 0 14px rgba(15, 23, 42, 0.8);
 }
 
-/* Scrollbar */
-
 .output-body::-webkit-scrollbar {
   width: 6px;
 }
@@ -279,29 +271,128 @@ body {
   margin: 0 0 6px;
 }
 
-.answer-bullet,
-.answer-bullet-num {
+.answer-bullet {
   margin: 0 0 4px 4px;
   padding-left: 10px;
 }
 
-.answer-bullet::before,
-.answer-bullet-num::before {
-  content: "";
+/* =========================
+   Sections (top-level)
+   ========================= */
+
+.section {
+  margin-bottom: 8px;
 }
 
-.answer-heading {
-  margin-top: 14px;
-  margin-bottom: 4px;
+.section-header.static {
   font-size: 16px;
   font-weight: 700;
   color: #2fc4ff;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
-/* Placeholder text */
-.placeholder {
+.static-body {
+  padding: 8px 10px;
+  background: rgba(9, 15, 32, 0.98);
+  border-radius: 14px;
+  border: 1px solid rgba(47, 196, 255, 0.22);
+}
+
+.collapsible {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(47, 196, 255, 0.35);
+  background: rgba(10, 18, 36, 0.98);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.collapsible::after {
+  content: "▾";
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.collapsible.active::after {
+  content: "▴";
+}
+
+.collapsible:hover {
+  background: rgba(20, 32, 60, 1);
+  box-shadow: 0 0 14px rgba(47, 196, 255, 0.22);
+}
+
+.collapsible-content {
+  display: none;
+  padding: 8px 10px 6px;
+  margin-top: 4px;
+  border-radius: 10px;
+  background: rgba(6, 10, 24, 0.98);
+  border-left: 2px solid rgba(47, 196, 255, 0.35);
+  font-size: 14px;
+}
+
+/* =========================
+   Nested treatment options
+   ========================= */
+
+.nested-block {
+  margin-bottom: 6px;
+}
+
+.nested-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  margin-top: 4px;
+  border-radius: 9px;
+  border: 1px solid rgba(47, 196, 255, 0.3);
+  background: rgba(18, 30, 56, 0.98);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.nested-toggle::after {
+  content: "+";
+  font-size: 11px;
+}
+
+.nested-toggle.active::after {
+  content: "−";
+}
+
+.nested-toggle:hover {
+  background: rgba(26, 42, 72, 1);
+  box-shadow: 0 0 10px rgba(47, 196, 255, 0.2);
+}
+
+.nested-content {
+  display: none;
+  padding: 6px 10px 6px;
+  margin-top: 2px;
+  border-radius: 8px;
+  background: rgba(5, 9, 20, 0.98);
+  font-size: 12.5px;
+  line-height: 1.7;
   color: var(--text-soft);
 }
 
@@ -317,7 +408,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(5, 8, 20, 0.94);
+  background: rgba(5, 8, 20, 0.96);
   border-radius: 18px;
   backdrop-filter: blur(8px);
   z-index: 10;
@@ -331,7 +422,7 @@ body {
   width: 26px;
   height: 26px;
   border-radius: 999px;
-  border: 3px solid rgba(255, 255, 255, 0.18);
+  border: 3px solid rgba(255, 255, 255, 0.16);
   border-top-color: var(--accent);
   border-right-color: var(--accent);
   animation: spin 0.7s linear infinite;
