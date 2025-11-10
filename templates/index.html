@@ -20,9 +20,18 @@
                 <div class="brand-title">EBM Sessions</div>
               </div>
             </div>
-            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
+            <input
+              id="topicSearch"
+              class="topic-search"
+              type="text"
+              placeholder="Search topics..."
+            />
           </div>
-          <div id="conversationList" class="conversation-list"></div>
+
+          <div id="conversationList" class="conversation-list">
+            <!-- Filled by JS -->
+          </div>
+
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
@@ -56,7 +65,9 @@
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
-                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>
+                  Copy All
+                </button>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
@@ -82,9 +93,15 @@
     const answerEl = document.getElementById("answer");
     const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
+    const conversationListEl = document.getElementById("conversationList");
+    const topicSearch = document.getElementById("topicSearch");
 
+    // ---------- UTIL ----------
     function escapeHtml(str) {
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
     }
 
     function hasNonEmptyContent(arr) {
@@ -101,117 +118,297 @@
       }, 900);
     }
 
-    // ---------- BUILD STRUCTURED HTML ----------
+    // ---------- BUILD STRUCTURED HTML (GREEN DOTS) ----------
     function buildStructuredHtml(raw) {
       if (!raw) return "";
-      let text = raw.replace(/\*\*(.*?)\*\*/g, "$1").replace(/#{1,6}\s*/g, "").replace(/\r/g, "");
+
+      let text = raw
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "")
+        .replace(/\r/g, "");
+
       const lines = text.split("\n");
+
       const sectionOrder = [
-        "Summary","Overview","Assessment","Diagnosis","Investigations",
-        "Treatment","Management","Plan","Monitoring","Follow-up & Safety Netting",
-        "Follow-up","Red Flags","References"
+        "Summary",
+        "Overview",
+        "Assessment",
+        "Diagnosis",
+        "Investigations",
+        "Treatment",
+        "Management",
+        "Plan",
+        "Monitoring",
+        "Follow-up & Safety Netting",
+        "Follow-up",
+        "Red Flags",
+        "References",
       ];
+
       const sections = [];
       let current = { title: "Summary", content: [] };
       let seenExplicitHeading = false;
 
       const isHeadingLine = (line) => {
         const trimmed = line.trim().replace(/:$/, "");
-        const match = sectionOrder.find((h) => trimmed.toLowerCase() === h.toLowerCase());
+        const match = sectionOrder.find(
+          (h) => trimmed.toLowerCase() === h.toLowerCase()
+        );
         return match || null;
       };
 
       for (const rawLine of lines) {
         const line = rawLine.trim();
-        if (!line) { current.content.push(""); continue; }
+        if (!line) {
+          current.content.push("");
+          continue;
+        }
+
         const heading = isHeadingLine(line);
         if (heading) {
-          if (hasNonEmptyContent(current.content)) sections.push(current);
+          if (hasNonEmptyContent(current.content)) {
+            sections.push(current);
+          }
           current = { title: heading, content: [] };
           seenExplicitHeading = true;
-        } else current.content.push(line);
+        } else {
+          current.content.push(line);
+        }
       }
-      if (hasNonEmptyContent(current.content)) sections.push(current);
+
+      if (hasNonEmptyContent(current.content)) {
+        sections.push(current);
+      }
 
       let html = "";
       let sectionIndex = 0;
 
-      if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
+      // Single summary-only response
+      if (
+        !seenExplicitHeading &&
+        sections.length === 1 &&
+        sections[0].title === "Summary"
+      ) {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
         const id = `sec-${sectionIndex++}`;
-        html += `<div class="section"><div class="section-header static"><span>Summary</span>
-        <button class="section-copy-btn" data-target="${id}">Copy</button></div>
-        <div class="section-body static-body" data-section="${id}"><p>${escapeHtml(body)}</p></div></div>`;
+        html += `
+          <div class="section">
+            <div class="section-header static">
+              <span>Summary</span>
+              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            </div>
+            <div class="section-body static-body" data-section="${id}">
+              <p>${escapeHtml(body)}</p>
+            </div>
+          </div>
+        `;
         return html;
       }
 
+      // Multi-section
       for (const sec of sections) {
         const title = sec.title;
         const bodyLines = sec.content || [];
         if (!hasNonEmptyContent(bodyLines)) continue;
+
         const id = `sec-${sectionIndex++}`;
-        const innerHtml = bodyLines.filter((ln)=>ln.trim()!=="").map((ln)=>{
-          const t=ln.trim();
-          if (/^[-•]\s+/.test(t)||/^\d+[\.\)]\s+/.test(t)){
-            const cleaned=t.replace(/^[-•]\s+/,"").replace(/^\d+[\.\)]\s+/,"");
-            return `<div class="answer-bullet"><span class="bullet-dot"></span><span class="bullet-text">${escapeHtml(cleaned)}</span></div>`;
-          }
-          return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-        }).join("");
+
+        const innerHtml = bodyLines
+          .filter((ln) => ln.trim() !== "")
+          .map((ln) => {
+            const t = ln.trim();
+            // turn plain bullets/numbers into green dot bullets
+            if (
+              /^[-•]\s+/.test(t) ||
+              /^\d+[\.\)]\s+/.test(t)
+            ) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              return `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                </div>
+              `;
+            }
+            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+          })
+          .join("");
+
         if (!innerHtml.trim()) continue;
-        html += `<div class="section">
-          <div class="collapsible-header">
-            <button class="collapsible" data-target="${id}">${escapeHtml(title)}</button>
-            <button class="section-copy-btn" data-target="${id}">Copy</button>
-          </div>
-          <div class="collapsible-content" data-section="${id}">${innerHtml}</div>
-        </div>`;
+
+        // Summary/Overview fixed open; others collapsible
+        if (title === "Summary" || title === "Overview") {
+          html += `
+            <div class="section">
+              <div class="section-header static">
+                <span>${escapeHtml(title)}</span>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="section-body static-body" data-section="${id}">
+                ${innerHtml}
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="section">
+              <div class="collapsible-header">
+                <button class="collapsible" data-target="${id}">
+                  ${escapeHtml(title)}
+                </button>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="collapsible-content" data-section="${id}">
+                ${innerHtml}
+              </div>
+            </div>
+          `;
+        }
       }
+
       return html || "No response generated.";
+    }
+
+    // ---------- CONVERSATION STORAGE (LEFT TOPICS) ----------
+    function loadConversations() {
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+
+      conversationListEl.innerHTML = "";
+
+      if (!data.length) {
+        conversationListEl.innerHTML =
+          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
+        return;
+      }
+
+      data.forEach((item, idx) => {
+        const div = document.createElement("div");
+        div.className = "conversation-item";
+        div.dataset.index = idx;
+        div.innerHTML = `
+          <div class="conv-title">${escapeHtml(item.title || "Topic")}</div>
+          <div class="conv-sub">${escapeHtml(
+            (item.query || "").slice(0, 80)
+          )}</div>
+        `;
+        div.addEventListener("click", () => {
+          questionInput.value = item.query || "";
+          answerEl.innerHTML = item.answer || "";
+          answerEl.classList.toggle(
+            "placeholder",
+            !(item.answer && item.answer.trim())
+          );
+          copyAllBtn.disabled = !(item.answer && item.answer.trim());
+        });
+        conversationListEl.appendChild(div);
+      });
+    }
+
+    function saveConversation(query, answerHtml) {
+      if (!query || !answerHtml) return;
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+
+      const title =
+        query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
+
+      data.push({ title, query, answer: answerHtml });
+
+      // keep last 30 only
+      if (data.length > 30) {
+        data = data.slice(data.length - 30);
+      }
+
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
+    }
+
+    function filterTopics() {
+      const term = (topicSearch.value || "").toLowerCase().trim();
+      const items = conversationListEl.querySelectorAll(".conversation-item");
+      if (!items.length) return;
+      items.forEach((item) => {
+        const title = (
+          item.querySelector(".conv-title")?.textContent || ""
+        ).toLowerCase();
+        const sub = (
+          item.querySelector(".conv-sub")?.textContent || ""
+        ).toLowerCase();
+        const match = !term || title.includes(term) || sub.includes(term);
+        item.style.display = match ? "" : "none";
+      });
     }
 
     // ---------- GENERATE ANSWER ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
+
       generateBtn.disabled = true;
       copyAllBtn.disabled = true;
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.innerHTML = "";
+
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
+
         const data = await res.json();
+
         if (data.answer) {
           const structured = buildStructuredHtml(data.answer);
           answerEl.innerHTML = structured;
-        } else answerEl.textContent = data.error || "No response generated.";
-        copyAllBtn.disabled = !answerEl.textContent.trim();
+          copyAllBtn.disabled = !answerEl.textContent.trim();
+          saveConversation(query, structured);
+        } else {
+          answerEl.textContent = data.error || "No response generated.";
+          copyAllBtn.disabled = true;
+        }
       } catch (err) {
         console.error(err);
         answerEl.textContent = "Error generating answer.";
         copyAllBtn.disabled = true;
       } finally {
-        generateBtn.disabled = false;
         answerLoader.classList.add("hidden");
+        generateBtn.disabled = false;
       }
     }
 
+    // ---------- EVENTS ----------
     generateBtn.addEventListener("click", generate);
+
     questionInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generate(); }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
+      }
     });
 
     copyAllBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
-      await navigator.clipboard.writeText(text);
-      flashCopyLabel(copyAllBtn);
+      try {
+        await navigator.clipboard.writeText(text);
+        flashCopyLabel(copyAllBtn);
+      } catch (err) {
+        console.error(err);
+      }
     });
 
     document.addEventListener("click", async (e) => {
@@ -221,17 +418,30 @@
         if (!section) return;
         const text = section.innerText.trim();
         if (!text) return;
-        await navigator.clipboard.writeText(text);
-        flashCopyLabel(e.target);
+        try {
+          await navigator.clipboard.writeText(text);
+          flashCopyLabel(e.target);
+        } catch (err) {
+          console.error(err);
+        }
       } else if (e.target.classList.contains("collapsible")) {
         const id = e.target.dataset.target;
-        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+        const content = document.querySelector(
+          `.collapsible-content[data-section="${id}"]`
+        );
         if (!content) return;
         const isOpen = content.style.display === "block";
         e.target.classList.toggle("active", !isOpen);
         content.style.display = isOpen ? "none" : "block";
       }
     });
+
+    if (topicSearch) {
+      topicSearch.addEventListener("input", filterTopics);
+    }
+
+    // ---------- INIT ----------
+    window.addEventListener("DOMContentLoaded", loadConversations);
   </script>
 </body>
 </html>
