@@ -1,14 +1,6 @@
 import os
-import json
 import requests
-from flask import (
-    Flask,
-    request,
-    jsonify,
-    render_template,
-    Response,
-    stream_with_context,
-)
+from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,32 +10,11 @@ MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
 if not API_KEY:
-    raise RuntimeError("Missing DEEPSEEK_API_KEY in .env")
+    raise RuntimeError("Missing DEEPSEEK_API_KEY in environment. "
+                       "Set DEEPSEEK_API_KEY in a .env file or your hosting env.")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
-# -------- Simple persistent cache --------
-CACHE_PATH = "cache.json"
-
-if os.path.exists(CACHE_PATH):
-    try:
-        with open(CACHE_PATH, "r") as f:
-            cache = json.load(f)
-    except Exception:
-        cache = {}
-else:
-    cache = {}
-
-
-def save_cache():
-    try:
-        with open(CACHE_PATH, "w") as f:
-            json.dump(cache, f)
-    except Exception as e:
-        print("Cache save error:", e)
-
-
-# -------- Routes --------
 
 @app.route("/")
 def index():
@@ -52,20 +23,13 @@ def index():
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
-    """Generate an answer using DeepSeek with streaming + caching."""
     data = request.get_json(force=True)
     query = (data.get("query") or "").strip()
 
     if not query:
         return jsonify({"error": "No query provided."}), 400
 
-    key = query.lower()
-
-    # ✅ Cache hit: return instantly as plain text
-    if key in cache:
-        return Response(cache[key], mimetype="text/plain")
-
-    def stream():
+    try:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {API_KEY}",
@@ -79,73 +43,45 @@ def generate():
                     "content": (
                         "You are a clinical decision support assistant for doctors. "
                         "Provide concise, high-yield, evidence-based answers with clear structure. "
-                        "Use headings such as Summary, Assessment, Investigations, Treatment, "
-                        "Monitoring, Follow-up & Safety Netting, Red Flags, and References "
-                        "when relevant. Use professional wording and avoid markdown symbols like ** or bullet markers; "
-                        "plain text lists are fine."
+                        "Where relevant, organise under headings such as Summary, Assessment, "
+                        "Investigations, Treatment, Monitoring, Follow-up & Safety Netting, "
+                        "Red Flags, and References. "
+                        "Use professional wording. Avoid markdown syntax like ** or bullet symbols; "
+                        "write plain text lists and clear paragraphs so the frontend can format."
                     ),
                 },
                 {"role": "user", "content": query},
             ],
             "temperature": 0.3,
             "max_tokens": 1600,
-            "stream": True,
+            "stream": False,
         }
 
-        collected = []
+        resp = requests.post(DEEPSEEK_URL, headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
 
-        try:
-            with requests.post(
-                DEEPSEEK_URL,
-                headers=headers,
-                json=body,
-                stream=True,
-                timeout=70,
-            ) as r:
-                r.raise_for_status()
+        # Extract answer text safely
+        answer = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
 
-                for line in r.iter_lines(decode_unicode=True):
-                    if not line:
-                        continue
+        if not answer:
+            return jsonify({"error": "No response from model."}), 500
 
-                    # DeepSeek uses OpenAI-style streaming: "data: {...}"
-                    if line.startswith("data: "):
-                        chunk_str = line[len("data: "):].strip()
-                    else:
-                        chunk_str = line.strip()
+        return jsonify({"answer": answer})
 
-                    if not chunk_str or chunk_str == "[DONE]":
-                        if chunk_str == "[DONE]":
-                            break
-                        continue
-
-                    try:
-                        payload = json.loads(chunk_str)
-                    except json.JSONDecodeError:
-                        continue
-
-                    choice = payload.get("choices", [{}])[0]
-                    delta = choice.get("delta", {})
-                    content = delta.get("content")
-                    if content:
-                        collected.append(content)
-                        # stream raw text out to the client
-                        yield content
-
-        except Exception as e:
-            print("DeepSeek stream error:", e)
-            yield f"\n[Error contacting model: {e}]"
-
-        # After streaming, store full answer in cache
-        full = "".join(collected).strip()
-        if full:
-            cache[key] = full
-            save_cache()
-
-    # Stream plain text back to the browser
-    return Response(stream_with_context(stream()), mimetype="text/plain")
+    except requests.exceptions.RequestException as e:
+        print("DeepSeek API error:", e)
+        return jsonify({"error": "Error contacting model API."}), 500
+    except Exception as e:
+        print("Server error:", e)
+        return jsonify({"error": "Internal server error."}), 500
 
 
 if __name__ == "__main__":
-    # For local testing; in production Render/Gunicorn will run this differently
+    # Local dev
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
