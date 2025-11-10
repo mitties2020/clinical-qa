@@ -28,7 +28,7 @@
           </div>
 
           <div id="conversationList" class="conversation-list">
-            <!-- Filled in by JS -->
+            <!-- Filled by JS -->
           </div>
 
           <div class="sidebar-footer">
@@ -46,7 +46,7 @@
           </header>
 
           <main class="grid">
-            <!-- CLINICAL QUESTION -->
+            <!-- LEFT: INPUT -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
               <textarea
@@ -61,14 +61,14 @@
               </div>
             </section>
 
-            <!-- ANSWERS -->
+            <!-- RIGHT: OUTPUT -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
-              <!-- LOADER OVERLAY -->
+              <!-- LOADER -->
               <div id="answerLoader" class="answer-loader hidden">
                 <div class="loader"></div>
                 <div class="loader-text">Generating structured answer…</div>
@@ -80,7 +80,7 @@
                 </div>
               </div>
 
-              <!-- FOLLOW UP -->
+              <!-- FOLLOW-UP -->
               <div class="followup-container">
                 <label for="followupInput" class="followup-label">
                   Ask a follow-up question about this answer
@@ -116,7 +116,7 @@
     let conversations = [];
     let activeId = null;
 
-    /* ---------- UTILITIES ---------- */
+    /* ---------- UTILS ---------- */
 
     function escapeHtml(str) {
       return str
@@ -139,7 +139,7 @@
       return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
     }
 
-    /* ---------- CONVERSATIONS (LOCAL STORAGE) ---------- */
+    /* ---------- CONVERSATIONS (LOCAL) ---------- */
 
     function loadConversations() {
       try {
@@ -351,7 +351,7 @@
             sections.push(current);
           }
           current = { title: heading, content: [] };
-          seenExplicitHeading = true;
+          seenExplicitHeading = True;
         } else {
           current.content.push(line);
         }
@@ -364,7 +364,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // No explicit headings → treat as single Summary
+      // No headings → single Summary
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -387,12 +387,12 @@
         const title = sec.title;
         const bodyLines = sec.content || [];
 
-        // 💡 Skip empty sections completely (fixes blank boxes)
+        // Skip empty sections
         if (!hasNonEmptyContent(bodyLines)) continue;
 
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY (fixed block)
+        // SUMMARY
         if (title === "Summary") {
           html += `
             <div class="section">
@@ -425,7 +425,7 @@
           continue;
         }
 
-        // OTHER SECTIONS → collapsible
+        // OTHER SECTIONS
         const innerHtml =
           (title === "Treatment" || title === "Management")
             ? buildTreatmentContent(bodyLines)
@@ -448,7 +448,7 @@
                 })
                 .join("");
 
-        if (!innerHtml.trim()) continue; // again skip if nothing
+        if (!innerHtml.trim()) continue;
 
         html += `
           <div class="section">
@@ -533,7 +533,7 @@
       return html;
     }
 
-    /* ---------- GENERATE (STREAMING) ---------- */
+    /* ---------- GENERATE MAIN ANSWER ---------- */
 
     async function generate() {
       const query = questionInput.value.trim();
@@ -549,33 +549,20 @@
       answerEl.innerHTML = "";
 
       try {
-        const response = await fetch("/api/generate", {
+        const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
 
-        if (!response.body) {
-          const text = await response.text();
-          answerEl.textContent = text || "No response generated.";
-        } else {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder("utf-8");
-          let text = "";
+        const data = await res.json();
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            if (chunk) {
-              text += chunk;
-              answerEl.textContent = text; // live preview of raw text
-            }
-          }
-
-          const structured = buildStructuredHtml(text);
+        if (data.answer) {
+          const structured = buildStructuredHtml(data.answer);
           answerEl.innerHTML = structured;
           saveActiveConversation(query, structured);
+        } else {
+          answerEl.textContent = data.error || "No response generated.";
         }
 
         copyAllBtn.disabled = !answerEl.textContent.trim();
@@ -590,7 +577,7 @@
       }
     }
 
-    /* ---------- FOLLOW-UP (STREAMING) ---------- */
+    /* ---------- FOLLOW-UP ---------- */
 
     async function generateFollowup() {
       const follow = followupInput.value.trim();
@@ -608,33 +595,16 @@
         conv.question + "\n\nFollow-up question: " + follow;
 
       try {
-        const response = await fetch("/api/generate", {
+        const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: combinedQuery }),
         });
 
-        let text = "";
+        const data = await res.json();
 
-        if (!response.body) {
-          text = await response.text();
-        } else {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder("utf-8");
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            if (chunk) {
-              text += chunk;
-              // don't overwrite main; this is just building up
-            }
-          }
-        }
-
-        if (text.trim()) {
-          const structured = buildStructuredHtml(text);
+        if (data.answer) {
+          const structured = buildStructuredHtml(data.answer);
           const block = `
             <div class="followup-block">
               <div class="followup-question">Follow-up: ${escapeHtml(follow)}</div>
