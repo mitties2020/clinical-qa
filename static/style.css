@@ -34,7 +34,7 @@ body {
   background:
     radial-gradient(circle at top left, rgba(0, 198, 167, 0.08), transparent 55%),
     radial-gradient(circle at top right, rgba(0, 198, 167, 0.04), transparent 55%),
-    radial-gradient(circle at bottom, rgba(10, 30, 80, 0.6), #050812 90%);
+    radial-gradient(circle at bottom, rgba(12, 26, 64, 0.8), #050812 90%);
   color: var(--text-main);
   font-family: var(--body-font);
   -webkit-font-smoothing: antialiased;
@@ -95,7 +95,7 @@ body {
 
 .card {
   background:
-    radial-gradient(circle at top left, rgba(0, 198, 167, 0.12), transparent 85%),
+    radial-gradient(circle at top left, rgba(0, 198, 167, 0.10), transparent 85%),
     linear-gradient(180deg, #141c2e 0%, #080d19 100%);
   border-radius: var(--radius-xl);
   padding: 18px 18px 16px;
@@ -185,7 +185,7 @@ body {
 }
 
 /* =========================
-   Output side
+   Output side & copy buttons
    ========================= */
 
 .output-card {
@@ -221,15 +221,51 @@ body {
 
 .copy-btn:hover {
   transform: translateY(-1px);
-  background: rgba(0, 198, 167, 0.22);
+  background: rgba(0, 198, 167, 0.26);
   box-shadow: var(--accent-glow);
 }
 
 .copy-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.25;
   cursor: default;
   box-shadow: none;
 }
+
+.copy-btn.copied {
+  background: rgba(0, 198, 167, 0.35);
+  color: #041010;
+}
+
+.main-copy-btn {
+  font-weight: 600;
+}
+
+/* Per-section copy */
+.section-copy-btn {
+  padding: 4px 9px;
+  font-size: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 198, 167, 0.65);
+  background: rgba(0, 198, 167, 0.16);
+  color: var(--accent-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.section-copy-btn:hover {
+  background: rgba(0, 198, 167, 0.3);
+  box-shadow: 0 0 12px rgba(0, 198, 167, 0.6);
+  transform: translateY(-1px);
+}
+
+.section-copy-btn.copied {
+  background: rgba(0, 198, 167, 0.5);
+  color: #020a06;
+}
+
+/* =========================
+   Output body
+   ========================= */
 
 .output-body {
   margin-top: 4px;
@@ -266,7 +302,6 @@ body {
   color: var(--text-soft);
 }
 
-/* Paragraphs */
 .answer-paragraph {
   margin: 0 0 6px;
 }
@@ -280,7 +315,11 @@ body {
 }
 
 .section-header.static {
-  font-size: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.16em;
@@ -297,8 +336,15 @@ body {
 
 /* Collapsible headers */
 
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .collapsible {
-  width: 100%;
+  flex: 1;
   padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid rgba(0, 198, 167, 0.4);
@@ -307,7 +353,6 @@ body {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  margin-top: 6px;
   display: flex;
   justify-content: space-between;
   align-items: center;
