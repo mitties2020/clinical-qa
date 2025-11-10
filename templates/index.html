@@ -30,7 +30,7 @@
           </div>
         </aside>
 
-        <!-- MAIN -->
+        <!-- MAIN REGION -->
         <div class="main-region">
           <header class="header">
             <h1 class="title">Clinical Q&amp;A Engine</h1>
@@ -38,17 +38,21 @@
           </header>
 
           <main class="grid">
-            <!-- INPUT -->
+            <!-- INPUT CARD -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
-              <textarea id="question" class="textarea" rows="6"
-                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"></textarea>
+              <textarea
+                id="question"
+                class="textarea"
+                rows="6"
+                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
+              ></textarea>
               <div class="actions">
                 <button id="generateBtn" class="btn">Generate</button>
               </div>
             </section>
 
-            <!-- OUTPUT -->
+            <!-- OUTPUT CARD -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
@@ -85,137 +89,312 @@
     function escapeHtml(str) {
       return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
-    function hasNonEmpty(arr){return Array.isArray(arr)&&arr.some(l=>l.trim()!=="");}
-    function flashCopy(btn){
-      const t=btn.textContent;btn.textContent="Copied";btn.classList.add("copied");
-      setTimeout(()=>{btn.textContent=t;btn.classList.remove("copied");},900);
+    function hasNonEmpty(arr) {
+      return Array.isArray(arr) && arr.some(l => l.trim() !== "");
+    }
+    function flashCopy(btn) {
+      const t = btn.textContent;
+      btn.textContent = "Copied";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = t;
+        btn.classList.remove("copied");
+      }, 900);
     }
 
-    /* ---------- STRUCTURED HTML WITH GREEN BULLETS ---------- */
-    function buildStructuredHtml(raw){
-      if(!raw)return"";
-      let text=raw.replace(/\*\*(.*?)\*\*/g,"$1").replace(/#{1,6}\s*/g,"").replace(/\r/g,"");
-      const lines=text.split("\n");
-      const order=["Summary","Overview","Assessment","Diagnosis","Investigations","Treatment","Management","Plan","Monitoring","Follow-up & Safety Netting","Follow-up","Red Flags","References"];
-      const sections=[];let cur={title:"Summary",content:[]};let seen=false;
-      const isHead=l=>{const t=l.trim().replace(/:$/,"");return order.find(h=>t.toLowerCase()===h.toLowerCase())||null;};
-      for(const r of lines){const l=r.trim();if(!l){cur.content.push("");continue;}
-        const h=isHead(l);if(h){if(hasNonEmpty(cur.content))sections.push(cur);cur={title:h,content:[]};seen=true;}
-        else cur.content.push(l);}
-      if(hasNonEmpty(cur.content))sections.push(cur);
-      let html="";let i=0;
-      if(!seen&&sections.length===1&&sections[0].title==="Summary"){
-        const body=sections[0].content.join(" ").trim();if(!body)return"No response generated.";
-        const id=`sec-${i++}`;
-        return `<div class="section"><div class="section-header static"><span>Summary</span>
-        <button class="section-copy-btn" data-target="${id}">Copy</button></div>
-        <div class="section-body static-body" data-section="${id}"><p>${escapeHtml(body)}</p></div></div>`;
-      }
-      for(const s of sections){
-        const t=s.title,b=s.content||[];if(!hasNonEmpty(b))continue;const id=`sec-${i++}`;
-        const inner=b.filter(l=>l.trim()!=="").map(l=>{
-          const ln=l.trim();
-          if(/^[-•]\s+/.test(ln)||/^\d+[\.\)]\s+/.test(ln)){
-            const c=ln.replace(/^[-•]\s+/,"").replace(/^\d+[\.\)]\s+/,"");
-            return `<div class="answer-bullet"><span class="bullet-dot"></span><span class="bullet-text">${escapeHtml(c)}</span></div>`;
-          }
-          return `<p class="answer-paragraph">${escapeHtml(ln)}</p>`;
-        }).join("");
-        if(!inner.trim())continue;
-        if(t==="Summary"||t==="Overview"){
-          html+=`<div class="section"><div class="section-header static"><span>${escapeHtml(t)}</span>
-          <button class="section-copy-btn" data-target="${id}">Copy</button></div>
-          <div class="section-body static-body" data-section="${id}">${inner}</div></div>`;
-        }else{
-          html+=`<div class="section"><div class="collapsible-header">
-          <button class="collapsible" data-target="${id}">${escapeHtml(t)}</button>
-          <button class="section-copy-btn" data-target="${id}">Copy</button></div>
-          <div class="collapsible-content" data-section="${id}">${inner}</div></div>`;
+    /* ---------- BUILD STRUCTURED HTML (GREEN BULLETS) ---------- */
+    function buildStructuredHtml(raw) {
+      if (!raw) return "";
+      let text = raw
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "")
+        .replace(/\r/g, "");
+
+      const lines = text.split("\n");
+      const sectionOrder = [
+        "Summary","Overview","Assessment","Diagnosis","Investigations",
+        "Treatment","Management","Plan","Monitoring",
+        "Follow-up & Safety Netting","Follow-up","Red Flags","References"
+      ];
+
+      const sections = [];
+      let current = { title: "Summary", content: [] };
+      let seenExplicit = false;
+
+      const isHeading = (line) => {
+        const trimmed = line.trim().replace(/:$/, "");
+        return sectionOrder.find(
+          h => trimmed.toLowerCase() === h.toLowerCase()
+        ) || null;
+      };
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          current.content.push("");
+          continue;
+        }
+        const heading = isHeading(line);
+        if (heading) {
+          if (hasNonEmpty(current.content)) sections.push(current);
+          current = { title: heading, content: [] };
+          seenExplicit = True;
+        } else {
+          current.content.push(line);
         }
       }
-      return html||"No response generated.";
+
+      if (hasNonEmpty(current.content)) sections.push(current);
+
+      let html = "";
+      let idx = 0;
+
+      // Simple single-summary case
+      if (!seenExplicit && sections.length === 1 && sections[0].title === "Summary") {
+        const body = sections[0].content.join(" ").trim();
+        if (!body) return "No response generated.";
+        const id = `sec-${idx++}`;
+        html += `
+          <div class="section">
+            <div class="section-header static">
+              <span>Summary</span>
+              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            </div>
+            <div class="section-body static-body" data-section="${id}">
+              <p>${escapeHtml(body)}</p>
+            </div>
+          </div>`;
+        return html;
+      }
+
+      for (const sec of sections) {
+        const title = sec.title;
+        const bodyLines = sec.content || [];
+        if (!hasNonEmpty(bodyLines)) continue;
+        const id = `sec-${idx++}`;
+
+        const inner = bodyLines
+          .filter(l => l.trim() !== "")
+          .map(l => {
+            const t = l.trim();
+            // convert lines that look like bullets into styled bullets
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              return `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                </div>`;
+            }
+            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+          })
+          .join("");
+
+        if (!inner.trim()) continue;
+
+        if (title === "Summary" || title === "Overview") {
+          html += `
+            <div class="section">
+              <div class="section-header static">
+                <span>${escapeHtml(title)}</span>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="section-body static-body" data-section="${id}">
+                ${inner}
+              </div>
+            </div>`;
+        } else {
+          html += `
+            <div class="section">
+              <div class="collapsible-header">
+                <button class="collapsible" data-target="${id}">
+                  ${escapeHtml(title)}
+                </button>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="collapsible-content" data-section="${id}">
+                ${inner}
+              </div>
+            </div>`;
+        }
+      }
+
+      return html || "No response generated.";
     }
 
-    /* ---------- CONVERSATION STORAGE (with delete) ---------- */
-    function loadConversations(){
-      let d=[];try{d=JSON.parse(localStorage.getItem("ebm_conversations")||"[]");}catch{d=[];}
-      conversationListEl.innerHTML="";
-      if(!d.length){conversationListEl.innerHTML='<div class="conv-empty">No topics yet.</div>';return;}
-      d.forEach((it,idx)=>{
-        const item=document.createElement("div");item.className="conversation-item";
-        item.innerHTML=`<div class="conv-main">
-            <div class="conv-title">${escapeHtml(it.title||"Topic")}</div>
-            <div class="conv-sub">${escapeHtml((it.query||"").slice(0,90))}</div>
-          </div>
-          <button class="conv-delete" data-index="${idx}" title="Delete">✕</button>`;
-        item.querySelector(".conv-main").addEventListener("click",()=>{
-          questionInput.value=it.query||"";answerEl.innerHTML=it.answer||"";
-          const has=!!(it.answer&&it.answer.trim());
-          answerEl.classList.toggle("placeholder",!has);copyAllBtn.disabled=!has;});
-        item.querySelector(".conv-delete").addEventListener("click",e=>{
-          e.stopPropagation();deleteConversation(idx);});
-        conversationListEl.appendChild(item);
+    /* ---------- CONVERSATION STORAGE (ONE TITLE + DISCREET DELETE) ---------- */
+    function loadConversations() {
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+
+      conversationListEl.innerHTML = "";
+
+      if (!data.length) {
+        conversationListEl.innerHTML =
+          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
+        return;
+      }
+
+      data.forEach((item, index) => {
+        const el = document.createElement("div");
+        el.className = "conversation-item";
+
+        const main = document.createElement("div");
+        main.className = "conv-main";
+        main.innerHTML = `
+          <div class="conv-title">${escapeHtml(item.title || "Topic")}</div>
+        `;
+
+        const del = document.createElement("button");
+        del.className = "conv-delete";
+        del.dataset.index = index;
+        del.textContent = "✕";
+        del.title = "Remove";
+
+        main.addEventListener("click", () => {
+          questionInput.value = item.query || "";
+          answerEl.innerHTML = item.answer || "";
+          const has = !!(item.answer && item.answer.trim());
+          answerEl.classList.toggle("placeholder", !has);
+          copyAllBtn.disabled = !has;
+        });
+
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteConversation(index);
+        });
+
+        el.appendChild(main);
+        el.appendChild(del);
+        conversationListEl.appendChild(el);
       });
     }
 
-    function saveConversation(q,a){
-      if(!q||!a)return;let d=[];try{d=JSON.parse(localStorage.getItem("ebm_conversations")||"[]");}catch{d=[];}
-      const t=q.length>80?q.slice(0,80).trim()+"…":q.trim();
-      d.push({title:t,query:q,answer:a});if(d.length>40)d=d.slice(d.length-40);
-      localStorage.setItem("ebm_conversations",JSON.stringify(d));loadConversations();
+    function saveConversation(query, answerHtml) {
+      if (!query || !answerHtml) return;
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+
+      const title =
+        query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
+
+      data.push({ title: title || "Topic", query, answer: answerHtml });
+      if (data.length > 40) data = data.slice(data.length - 40);
+
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
     }
-    function deleteConversation(i){
-      let d=[];try{d=JSON.parse(localStorage.getItem("ebm_conversations")||"[]");}catch{d=[];}
-      d.splice(i,1);localStorage.setItem("ebm_conversations",JSON.stringify(d));loadConversations();
+
+    function deleteConversation(index) {
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+      data.splice(index, 1);
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
     }
-    function filterTopics(){
-      const term=(topicSearch.value||"").toLowerCase().trim();
-      const items=conversationListEl.querySelectorAll(".conversation-item");
-      items.forEach(it=>{
-        const t=(it.querySelector(".conv-title")?.textContent||"").toLowerCase();
-        const s=(it.querySelector(".conv-sub")?.textContent||"").toLowerCase();
-        it.style.display=!term||t.includes(term)||s.includes(term)?"":"none";
+
+    function filterTopics() {
+      const term = (topicSearch.value || "").toLowerCase().trim();
+      const items = conversationListEl.querySelectorAll(".conversation-item");
+      items.forEach((item) => {
+        const title = (item.querySelector(".conv-title")?.textContent || "")
+          .toLowerCase();
+        item.style.display = !term || title.includes(term) ? "" : "none";
       });
     }
 
-    /* ---------- GENERATE ANSWER ---------- */
-    async function generate(){
-      const q=questionInput.value.trim();if(!q)return;
-      generateBtn.disabled=true;copyAllBtn.disabled=true;
-      answerLoader.classList.remove("hidden");answerEl.classList.remove("placeholder");answerEl.innerHTML="";
-      try{
-        const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});
-        const data=await r.json();
-        if(data.answer){
-          const html=buildStructuredHtml(data.answer);
-          answerEl.innerHTML=html;const has=!!answerEl.textContent.trim();
-          copyAllBtn.disabled=!has;if(has)saveConversation(q,html);
-        }else{answerEl.textContent=data.error||"No response generated.";copyAllBtn.disabled=true;}
-      }catch(e){console.error(e);answerEl.textContent="Error generating answer.";copyAllBtn.disabled=true;}
-      finally{answerLoader.classList.add("hidden");generateBtn.disabled=false;}
+    /* ---------- GENERATE ---------- */
+    async function generate() {
+      const query = questionInput.value.trim();
+      if (!query) return;
+
+      generateBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+      answerEl.classList.remove("placeholder");
+      answerEl.innerHTML = "";
+
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const data = await res.json();
+
+        if (data.answer) {
+          const html = buildStructuredHtml(data.answer);
+          answerEl.innerHTML = html;
+          const has = !!answerEl.textContent.trim();
+          copyAllBtn.disabled = !has;
+          if (has) saveConversation(query, html);
+        } else {
+          answerEl.textContent = data.error || "No response generated.";
+          copyAllBtn.disabled = true;
+        }
+      } catch (err) {
+        console.error(err);
+        answerEl.textContent = "Error generating answer.";
+        copyAllBtn.disabled = true;
+      } finally {
+        answerLoader.classList.add("hidden");
+        generateBtn.disabled = false;
+      }
     }
 
     /* ---------- EVENTS ---------- */
-    generateBtn.addEventListener("click",generate);
-    questionInput.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();generate();}});
-    copyAllBtn.addEventListener("click",async()=>{
-      const t=answerEl.textContent.trim();if(!t)return;
-      await navigator.clipboard.writeText(t);flashCopy(copyAllBtn);
-    });
-    document.addEventListener("click",async e=>{
-      if(e.target.classList.contains("section-copy-btn")){
-        const id=e.target.dataset.target;
-        const sec=document.querySelector(`[data-section="${id}"]`);
-        if(!sec)return;await navigator.clipboard.writeText(sec.innerText.trim());flashCopy(e.target);
-      }else if(e.target.classList.contains("collapsible")){
-        const id=e.target.dataset.target;
-        const c=document.querySelector(`.collapsible-content[data-section="${id}"]`);
-        if(!c)return;const open=c.style.display==="block";
-        e.target.classList.toggle("active",!open);c.style.display=open?"none":"block";
+    generateBtn.addEventListener("click", generate);
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
       }
     });
-    topicSearch.addEventListener("input",filterTopics);
-    window.addEventListener("DOMContentLoaded",loadConversations);
+
+    copyAllBtn.addEventListener("click", async () => {
+      const text = answerEl.textContent.trim();
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+      flashCopy(copyAllBtn);
+    });
+
+    document.addEventListener("click", async (e) => {
+      if (e.target.classList.contains("section-copy-btn")) {
+        const id = e.target.dataset.target;
+        const section = document.querySelector(`[data-section="${id}"]`);
+        if (!section) return;
+        const text = section.innerText.trim();
+        if (!text) return;
+        await navigator.clipboard.writeText(text);
+        flashCopy(e.target);
+      } else if (e.target.classList.contains("collapsible")) {
+        const id = e.target.dataset.target;
+        const content = document.querySelector(
+          `.collapsible-content[data-section="${id}"]`
+        );
+        if (!content) return;
+        const open = content.style.display === "block";
+        e.target.classList.toggle("active", !open);
+        content.style.display = open ? "none" : "block";
+      }
+    });
+
+    topicSearch.addEventListener("input", filterTopics);
+    window.addEventListener("DOMContentLoaded", loadConversations);
   </script>
 </body>
 </html>
