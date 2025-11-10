@@ -22,9 +22,11 @@
             </div>
             <button id="newTopicBtn" class="new-topic-btn">+ New Topic</button>
           </div>
+
           <div id="conversationList" class="conversation-list">
             <!-- Filled by JS -->
           </div>
+
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
@@ -89,9 +91,10 @@
     const newTopicBtn = document.getElementById("newTopicBtn");
     const conversationListEl = document.getElementById("conversationList");
 
-    // ---- Conversation state (localStorage) ----
     let conversations = [];
     let activeId = null;
+
+    /* ---------- Util ---------- */
 
     function escapeHtml(str) {
       return str
@@ -99,6 +102,18 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
     }
+
+    function flashCopyLabel(btn) {
+      const original = btn.textContent;
+      btn.textContent = "Copied";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove("copied");
+      }, 900);
+    }
+
+    /* ---------- Conversations (localStorage) ---------- */
 
     function loadConversations() {
       try {
@@ -118,7 +133,7 @@
       try {
         localStorage.setItem(
           "ebm_conversations",
-          JSON.stringify(conversations.slice(0, 40))
+          JSON.stringify(conversations.slice(0, 80))
         );
         if (activeId) {
           localStorage.setItem("ebm_active", activeId);
@@ -137,13 +152,11 @@
       }
       conversations.forEach((c) => {
         const div = document.createElement("div");
-        div.className =
-          "conv-item" + (c.id === activeId ? " active" : "");
+        div.className = "conv-item" + (c.id === activeId ? " active" : "");
         div.dataset.id = c.id;
-        const title =
-          (c.title || "Untitled topic").slice(0, 60);
+        const title = (c.title || "Untitled topic").slice(0, 80);
         const preview =
-          (c.question || "").slice(0, 42) ||
+          (c.question || "").slice(0, 60) ||
           (c.updatedAt || "").slice(0, 10);
         div.innerHTML = `
           <div class="conv-title">${escapeHtml(title)}</div>
@@ -155,11 +168,11 @@
 
     function restoreActiveConversation() {
       if (!activeId) {
+        questionInput.value = "";
         answerEl.innerHTML =
           "Your structured, evidence-based response will appear here.";
         answerEl.classList.add("placeholder");
         copyAllBtn.disabled = true;
-        questionInput.value = "";
         return;
       }
       const conv = conversations.find((c) => c.id === activeId);
@@ -190,9 +203,8 @@
     }
 
     function startNewTopic() {
-      // Just switch context; actual conversation is created on first generate
-      activeId = "c_" + Date.now();
-      saveConversations();
+      // Clear UI; next Generate will allocate a fresh conversation ID
+      activeId = null;
       questionInput.value = "";
       answerEl.innerHTML =
         "Your structured, evidence-based response will appear here.";
@@ -201,19 +213,45 @@
       renderConversationList();
     }
 
+    // Important: ensure a new conversation slot when needed
+    function ensureConversationSlotForQuery(query) {
+      if (!query) return;
+
+      if (!activeId || !conversations.length) {
+        activeId = "c_" + Date.now();
+        return;
+      }
+
+      const current = conversations.find((c) => c.id === activeId);
+
+      // If somehow missing, create fresh
+      if (!current) {
+        activeId = "c_" + Date.now();
+        return;
+      }
+
+      // If current has no answer yet, keep using it
+      if (!current.answerHtml) return;
+
+      // If question is unchanged, treat as updating same topic
+      if (current.question && current.question.trim() === query.trim()) return;
+
+      // Otherwise, this is clearly a new topic → new ID
+      activeId = "c_" + Date.now();
+    }
+
     function saveActiveConversation(question, answerHtml) {
       if (!activeId) {
         activeId = "c_" + Date.now();
       }
-      const title = (question || "Untitled topic").trim() || "Untitled topic";
+
+      const cleanTitle = (question || "Untitled topic").trim() || "Untitled topic";
       const now = new Date().toISOString();
 
-      const existingIndex = conversations.findIndex(
-        (c) => c.id === activeId
-      );
+      const existingIndex = conversations.findIndex((c) => c.id === activeId);
       const conv = {
         id: activeId,
-        title: title.slice(0, 80),
+        title: cleanTitle.slice(0, 80),
         question,
         answerHtml,
         updatedAt: now,
@@ -229,7 +267,7 @@
       renderConversationList();
     }
 
-    // ---- Answer formatting ----
+    /* ---------- Answer formatting ---------- */
 
     function buildStructuredHtml(raw) {
       if (!raw) return "";
@@ -272,6 +310,7 @@
           current.content.push("");
           continue;
         }
+
         const heading = isHeadingLine(line);
         if (heading) {
           if (current.content.length > 0 || sections.length > 0) {
@@ -290,7 +329,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // If no headings, single summary block
+      // No headings → single Summary block
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
@@ -309,13 +348,14 @@
         return html;
       }
 
+      // Structured sections
       sections.forEach((sec, idx) => {
         const title = sec.title;
         const bodyLines = sec.content;
         if (!bodyLines || bodyLines.join("").trim() === "") return;
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY block always expanded at top
+        // SUMMARY (always open)
         if (title === "Summary" && idx === 0) {
           html += `<div class="section">`;
           html += `
@@ -346,7 +386,7 @@
           return;
         }
 
-        // Other sections: collapsible with per-section copy
+        // Other sections: collapsible
         html += `<div class="section">`;
         html += `
           <div class="collapsible-header">
@@ -453,11 +493,14 @@
       return html;
     }
 
-    // ---- Generate handler ----
+    /* ---------- Generate ---------- */
 
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
+
+      // Decide whether this should be a new topic
+      ensureConversationSlotForQuery(query);
 
       generateBtn.disabled = true;
       copyAllBtn.disabled = true;
@@ -493,7 +536,7 @@
       }
     }
 
-    // ---- Event wiring ----
+    /* ---------- Events ---------- */
 
     generateBtn.addEventListener("click", generate);
 
@@ -519,8 +562,8 @@
       startNewTopic();
     });
 
-    // Global click handler (sidebar selection, copies, toggles)
     document.addEventListener("click", async (e) => {
+      // Sidebar: switch topic
       const convItem = e.target.closest(".conv-item");
       if (convItem) {
         const id = convItem.dataset.id;
@@ -528,7 +571,7 @@
         return;
       }
 
-      // Section copy buttons
+      // Section copy
       if (e.target.classList.contains("section-copy-btn")) {
         const id = e.target.dataset.target;
         if (!id) return;
@@ -545,7 +588,7 @@
         return;
       }
 
-      // Top-level collapsible
+      // Collapsibles
       if (e.target.classList.contains("collapsible")) {
         const id = e.target.dataset.target;
         const content = document.querySelector(
@@ -558,7 +601,7 @@
         return;
       }
 
-      // Nested treatment toggle
+      // Nested treatment toggles
       if (e.target.classList.contains("nested-toggle")) {
         const content = e.target.nextElementSibling;
         if (!content) return;
@@ -569,17 +612,7 @@
       }
     });
 
-    function flashCopyLabel(btn) {
-      const original = btn.textContent;
-      btn.textContent = "Copied";
-      btn.classList.add("copied");
-      setTimeout(() => {
-        btn.textContent = original;
-        btn.classList.remove("copied");
-      }, 900);
-    }
-
-    // Init
+    /* ---------- Init ---------- */
     loadConversations();
   </script>
 </body>
