@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Core model config
 API_KEY = os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
 MODEL = os.getenv("OPENAI_MODEL", "deepseek-chat")
 
@@ -14,11 +15,12 @@ if not API_KEY:
 
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")  # optional for web search
+# Optional: Serper for guideline search (if you have it)
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
-# -------- Optional: preload local guideline/protocol files from /data --------
+# -------- Local documents (/data) --------
 
 DOCS = []
 if os.path.isdir("data"):
@@ -30,15 +32,14 @@ if os.path.isdir("data"):
             print(f"Error loading {path}: {e}")
 
 
-def fetch_local_context(query: str, max_chars: int = 1800) -> str:
-    """Very simple keyword-based retrieval over local txt docs."""
+def fetch_local_context(query: str, max_chars: int = 2400) -> str:
+    """Very simple keyword-based retrieval over local text docs."""
     if not DOCS:
         return ""
     q = query.lower()
     hits = []
     for name, content in DOCS:
         cl = content.lower()
-        # crude relevance: any query word present
         if any(w and w in cl for w in q.split()):
             snippet = content[:max_chars]
             hits.append(f"From {name}:\n{snippet}")
@@ -47,10 +48,10 @@ def fetch_local_context(query: str, max_chars: int = 1800) -> str:
     return "Local clinical documents:\n" + "\n\n".join(hits[:3])
 
 
-# -------- PubMed retrieval --------
+# -------- PubMed (evidence context) --------
 
 def fetch_pubmed_summaries(query: str, max_results: int = 5) -> str:
-    """Fetch top PubMed records (titles, journals, years, PMIDs)."""
+    """Fetch concise PubMed references for context."""
     try:
         params = {
             "db": "pubmed",
@@ -69,11 +70,7 @@ def fetch_pubmed_summaries(query: str, max_results: int = 5) -> str:
         if not ids:
             return ""
 
-        summary_params = {
-            "db": "pubmed",
-            "id": ",".join(ids),
-            "retmode": "json",
-        }
+        summary_params = {"db": "pubmed", "id": ",".join(ids), "retmode": "json"}
         s = requests.get(
             "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
             params=summary_params,
@@ -89,51 +86,56 @@ def fetch_pubmed_summaries(query: str, max_results: int = 5) -> str:
             journal = item.get("fulljournalname") or item.get("source")
             year = (item.get("pubdate") or "").split(" ")[0]
             if title:
-                pieces = [title]
+                parts = [title]
                 if journal:
-                    pieces.append(f"{journal}")
+                    parts.append(journal)
                 if year:
-                    pieces.append(year)
-                line = " - " + " | ".join(pieces) + f" | PMID:{pid}"
-                lines.append(line)
+                    parts.append(year)
+                lines.append(" - " + " | ".join(parts) + f" | PMID:{pid}")
 
         if not lines:
             return ""
-
         return "Relevant PubMed records:\n" + "\n".join(lines)
+
     except Exception as e:
         print("PubMed fetch error:", e)
         return ""
 
 
-# -------- Optional: Serper-based medical web search --------
+# -------- Optional: guideline web search via Serper --------
 
 def search_web_medical(query: str, max_results: int = 5) -> str:
-    """Use Serper.dev to pull reputable web sources. Safe if key missing."""
+    """Search selected trusted domains if SERPER_API_KEY is set."""
     if not SERPER_API_KEY:
         return ""
     try:
         payload = {
-            "q": query
-            + " site:who.int OR site:nice.org.uk OR site:ema.europa.eu OR site:nih.gov OR site:gov.au",
+            "q": (
+                query
+                + " site:who.int OR site:nice.org.uk OR site:ema.europa.eu "
+                  "OR site:nih.gov OR site:gov.au OR site:idsociety.org"
+            ),
             "num": max_results,
         }
         headers = {
             "X-API-KEY": SERPER_API_KEY,
             "Content-Type": "application/json",
         }
-        r = requests.post("https://google.serper.dev/search", json=payload, headers=headers, timeout=10)
+        r = requests.post(
+            "https://google.serper.dev/search",
+            json=payload,
+            headers=headers,
+            timeout=10,
+        )
         r.raise_for_status()
         data = r.json()
         items = (data.get("organic") or [])[:max_results]
-
         lines = []
         for item in items:
             title = item.get("title")
             url = item.get("link")
             if title and url:
                 lines.append(f"- {title} ({url})")
-
         if not lines:
             return ""
         return "Relevant web sources:\n" + "\n".join(lines)
@@ -157,30 +159,45 @@ def generate():
     if not question:
         return jsonify({"error": "Please enter a clinical question."}), 400
 
-    # Retrieve external context (lightweight RAG)
+    # External context: local docs + PubMed + optional web
+    local_context = fetch_local_context(question)
     pubmed_context = fetch_pubmed_summaries(question)
     web_context = search_web_medical(question)
-    local_context = fetch_local_context(question)
 
     context_blocks = "\n\n".join(
-        b for b in [pubmed_context, web_context, local_context] if b
+        b for b in [local_context, pubmed_context, web_context] if b
     )
 
-    # Build messages for the model
+    # System message enforces depth + structure for collapsible UI
     messages = [
         {
             "role": "system",
             "content": (
-                "You are an evidence-based clinical Q&A assistant for doctors.\n"
-                "Use ONLY reliable medical sources (guidelines, major trials, PubMed, reputable agencies) "
-                "including the provided context when available.\n"
-                "Very important: Present the answer so that the most clinically useful information appears FIRST.\n"
-                "Answer format (do NOT add headings unless they help clarity):\n"
-                "1) Start with a concise, high-yield summary for clinicians (3–8 bullet points or short lines) "
-                "covering diagnosis, initial management, red flags, and key numbers.\n"
-                "2) Then provide a brief, structured explanation with rationale.\n"
-                "3) Finish with a short list of key references or guideline names (e.g. 'NICE AF 2021', 'PMID 12345678').\n"
-                "If evidence is uncertain or evolving, say so explicitly. Do not invent citations."
+                "You are an evidence-based clinical Q&A assistant for doctors in acute and outpatient care.\n"
+                "You MUST answer in a structured, hierarchical format using the following sections "
+                "in this exact order where relevant:\n"
+                "Summary:\n"
+                "Assessment:\n"
+                "Investigations:\n"
+                "Treatment:\n"
+                "Monitoring:\n"
+                "Follow-up & Safety Netting:\n"
+                "Red Flags:\n"
+                "References:\n\n"
+                "Formatting rules (very important):\n"
+                "- Do NOT use Markdown bold (**like this**) or decorative asterisks.\n"
+                "- Each section name MUST end with a colon on its own line (e.g. 'Treatment:').\n"
+                "- Under each section, use short bullet or numbered lines with rich clinical detail "
+                "(doses, durations, thresholds, criteria) suitable for registrars/consultants.\n"
+                "- In the Treatment section, where specific options are recommended, use the pattern:\n"
+                "  'Option: <name>' on one line, followed by one or more lines starting with 'Detail:' "
+                "to explain indications, dosing, adjustments, cautions.\n"
+                "  Example:\n"
+                "    Option: Apixaban\n"
+                "    Detail: Standard dose 5 mg BD; reduce to 2.5 mg BD if ...\n"
+                "- References section: include 3–8 key items (guidelines, societies, PMIDs) in plain text.\n"
+                "- Be comprehensive but clinically concise. Do not invent citations or data.\n"
+                "- If uncertain or evidence-limited, explicitly state the uncertainty.\n"
             ),
         },
     ]
@@ -190,24 +207,19 @@ def generate():
             {
                 "role": "system",
                 "content": (
-                    "External context (PubMed/web/local docs) for this query:\n"
+                    "Use the following external context (local documents, PubMed, guidelines) to inform your answer:\n"
                     f"{context_blocks}"
                 ),
             }
         )
 
-    messages.append(
-        {
-            "role": "user",
-            "content": question,
-        }
-    )
+    messages.append({"role": "user", "content": question})
 
     payload = {
         "model": MODEL,
         "messages": messages,
-        "temperature": 0.25,
-        "max_tokens": 900,
+        "temperature": 0.22,
+        "max_tokens": 1400,  # allow deeper detail
     }
 
     try:
@@ -215,8 +227,7 @@ def generate():
             "Authorization": f"Bearer {API_KEY}",
             "Content-Type": "application/json",
         }
-
-        resp = requests.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=70)
+        resp = requests.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=80)
         resp.raise_for_status()
         res_data = resp.json()
 
