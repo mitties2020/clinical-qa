@@ -76,6 +76,11 @@
     </div>
   </div>
 
+  <!-- Subtle corner brand image -->
+  <img src="{{ url_for('static', filename='Screenshot_20251111_061339_ChatGPT-1.png') }}"
+       alt="EBM Mark"
+       class="brand-mark">
+
   <script>
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
@@ -85,7 +90,6 @@
     const conversationListEl = document.getElementById("conversationList");
     const topicSearch = document.getElementById("topicSearch");
 
-    /* ---------- HELPERS ---------- */
     function escapeHtml(str) {
       return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
@@ -102,7 +106,7 @@
       }, 900);
     }
 
-    /* ---------- BUILD STRUCTURED HTML (GREEN BULLETS) ---------- */
+    // ---------- BUILD STRUCTURED HTML ----------
     function buildStructuredHtml(raw) {
       if (!raw) return "";
       let text = raw
@@ -138,7 +142,7 @@
         if (heading) {
           if (hasNonEmpty(current.content)) sections.push(current);
           current = { title: heading, content: [] };
-          seenExplicit = True;
+          seenExplicit = true; // <-- FIX: proper JS boolean
         } else {
           current.content.push(line);
         }
@@ -149,7 +153,7 @@
       let html = "";
       let idx = 0;
 
-      // Simple single-summary case
+      // Only summary case
       if (!seenExplicit && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -177,7 +181,6 @@
           .filter(l => l.trim() !== "")
           .map(l => {
             const t = l.trim();
-            // convert lines that look like bullets into styled bullets
             if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
               const cleaned = t
                 .replace(/^[-•]\s+/, "")
@@ -224,14 +227,12 @@
       return html || "No response generated.";
     }
 
-    /* ---------- CONVERSATION STORAGE (ONE TITLE + DISCREET DELETE) ---------- */
+    // ---------- CONVERSATION STORAGE ----------
     function loadConversations() {
       let data = [];
       try {
         data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
+      } catch { data = []; }
 
       conversationListEl.innerHTML = "";
 
@@ -247,9 +248,8 @@
 
         const main = document.createElement("div");
         main.className = "conv-main";
-        main.innerHTML = `
-          <div class="conv-title">${escapeHtml(item.title || "Topic")}</div>
-        `;
+        main.innerHTML =
+          `<div class="conv-title">${escapeHtml(item.title || "Topic")}</div>`;
 
         const del = document.createElement("button");
         del.className = "conv-delete";
@@ -281,9 +281,7 @@
       let data = [];
       try {
         data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
+      } catch { data = []; }
 
       const title =
         query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
@@ -299,9 +297,7 @@
       let data = [];
       try {
         data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
+      } catch { data = []; }
       data.splice(index, 1);
       localStorage.setItem("ebm_conversations", JSON.stringify(data));
       loadConversations();
@@ -317,7 +313,7 @@
       });
     }
 
-    /* ---------- GENERATE ---------- */
+    // ---------- GENERATE ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -335,7 +331,6 @@
           body: JSON.stringify({ query }),
         });
         const data = await res.json();
-
         if (data.answer) {
           const html = buildStructuredHtml(data.answer);
           answerEl.innerHTML = html;
@@ -356,7 +351,7 @@
       }
     }
 
-    /* ---------- EVENTS ---------- */
+    // ---------- EVENTS ----------
     generateBtn.addEventListener("click", generate);
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -364,14 +359,12 @@
         generate();
       }
     });
-
     copyAllBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
       await navigator.clipboard.writeText(text);
       flashCopy(copyAllBtn);
     });
-
     document.addEventListener("click", async (e) => {
       if (e.target.classList.contains("section-copy-btn")) {
         const id = e.target.dataset.target;
@@ -392,7 +385,6 @@
         content.style.display = open ? "none" : "block";
       }
     });
-
     topicSearch.addEventListener("input", filterTopics);
     window.addEventListener("DOMContentLoaded", loadConversations);
   </script>
