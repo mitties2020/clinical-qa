@@ -47,7 +47,7 @@ body {
 .app-root {
   min-height: 100vh;
   display: flex;
-  justify-content: flex-start; /* align to left */
+  justify-content: flex-start;
   padding: 24px 12px;
 }
 
@@ -56,10 +56,10 @@ body {
   max-width: 1440px;
 }
 
-/* main layout: sidebar + main */
+/* Sidebar + main */
 .layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr); /* wider sidebar */
+  grid-template-columns: 320px minmax(0, 1fr); /* wider sidebar */
   gap: 18px;
 }
 
@@ -78,7 +78,7 @@ body {
     radial-gradient(circle at top, rgba(0, 198, 167, 0.14), transparent 80%),
     linear-gradient(180deg, #0c141f 0%, #050910 100%);
   border-radius: 22px;
-  padding: 14px 12px 10px;
+  padding: 16px 12px 10px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.85),
@@ -86,6 +86,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: calc(100vh - 48px); /* extend down page */
 }
 
 .sidebar-header {
@@ -97,18 +98,18 @@ body {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 10px;
   background: radial-gradient(circle at 30% 0, #34e4c9, #00c6a7);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: #02080a;
 }
@@ -119,47 +120,51 @@ body {
 }
 
 .brand-title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 18px;          /* big bold EBM Sessions */
+  font-weight: 800;
   color: #f8faff;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.brand-sub {
-  font-size: 11px;
-  color: var(--text-soft);
-}
+/* Topic search */
 
-.new-topic-btn {
-  padding: 8px 11px;
+.topic-search {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 10px;
   border-radius: 999px;
-  border: none;
-  background: linear-gradient(90deg, #00c6a7, #34e4c9);
-  color: #020815;
+  border: 1px solid rgba(0, 198, 167, 0.45);
+  background: rgba(3, 7, 14, 0.98);
+  color: var(--text-main);
   font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 14px rgba(0, 198, 167, 0.9);
+  outline: none;
   transition: all var(--transition-fast);
 }
 
-.new-topic-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 0 20px rgba(0, 198, 167, 1);
+.topic-search::placeholder {
+  color: var(--text-soft);
+  opacity: 0.78;
 }
+
+.topic-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(0, 198, 167, 0.7);
+}
+
+/* Conversation list */
 
 .conversation-list {
   flex: 1;
   overflow-y: auto;
+  margin-top: 4px;
   padding: 4px 2px 4px;
   border-radius: 14px;
   background: rgba(3, 7, 14, 0.98);
 }
 
 .conversation-list::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
 }
 
 .conversation-list::-webkit-scrollbar-thumb {
@@ -174,7 +179,7 @@ body {
 }
 
 .conv-item {
-  padding: 8px 8px 6px;
+  padding: 9px 9px 7px;
   border-radius: 10px;
   margin-bottom: 4px;
   cursor: pointer;
@@ -195,7 +200,7 @@ body {
 }
 
 .conv-title {
-  font-size: 13px;         /* bigger */
+  font-size: 14px;          /* larger */
   font-weight: 600;
   color: #f9fafb;
   white-space: nowrap;
@@ -204,15 +209,17 @@ body {
 }
 
 .conv-sub {
-  font-size: 11px;         /* bigger */
+  font-size: 11px;
   color: var(--text-soft);
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
 }
 
+/* Sidebar footer */
+
 .sidebar-footer {
-  padding-top: 2px;
+  padding-top: 4px;
   font-size: 9px;
   color: var(--text-soft);
   opacity: 0.8;
@@ -248,7 +255,7 @@ body {
   color: var(--text-soft);
 }
 
-/* Main grid: input + output */
+/* Input/Output grid */
 
 .grid {
   display: grid;
@@ -414,6 +421,7 @@ body {
 }
 
 /* Per-section copy */
+
 .section-copy-btn {
   padding: 4px 9px;
   font-size: 10px;
@@ -628,7 +636,7 @@ body {
 }
 
 /* =========================
-   Loader overlay
+   Loader
    ========================= */
 
 .answer-loader {
