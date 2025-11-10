@@ -230,7 +230,6 @@
       filterTopics();
     }
 
-    // Decide if we need a new topic for this query
     function ensureConversationSlotForQuery(query) {
       if (!query) return;
 
@@ -240,19 +239,15 @@
       }
 
       const current = conversations.find((c) => c.id === activeId);
-
       if (!current) {
         activeId = "c_" + Date.now();
         return;
       }
 
-      // If no answer yet, reuse
       if (!current.answerHtml) return;
 
-      // If question unchanged, reuse
       if (current.question && current.question.trim() === query.trim()) return;
 
-      // Otherwise create new topic
       activeId = "c_" + Date.now();
     }
 
@@ -371,7 +366,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // No headings: single Summary
+      // No headings: single summary
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
@@ -586,7 +581,7 @@
 
       const conv = conversations.find((c) => c.id === activeId);
       if (!conv || !conv.answerHtml || !conv.question) {
-        return; // no base answer to follow up on
+        return;
       }
 
       followupBtn.disabled = true;
@@ -617,9 +612,7 @@
           answerEl.classList.remove("placeholder");
           answerEl.innerHTML += block;
 
-          // update stored HTML for this session
-          const updatedHtml = answerEl.innerHTML;
-          conv.answerHtml = updatedHtml;
+          conv.answerHtml = answerEl.innerHTML;
           conv.updatedAt = new Date().toISOString();
           saveConversations();
         }
@@ -668,7 +661,6 @@
     }
 
     document.addEventListener("click", async (e) => {
-      // Sidebar: switch topic
       const convItem = e.target.closest(".conv-item");
       if (convItem) {
         const id = convItem.dataset.id;
@@ -676,7 +668,6 @@
         return;
       }
 
-      // Section copy
       if (e.target.classList.contains("section-copy-btn")) {
         const id = e.target.dataset.target;
         if (!id) return;
@@ -693,7 +684,6 @@
         return;
       }
 
-      // Collapsibles
       if (e.target.classList.contains("collapsible")) {
         const id = e.target.dataset.target;
         const content = document.querySelector(
@@ -706,7 +696,6 @@
         return;
       }
 
-      // Nested treatment toggles
       if (e.target.classList.contains("nested-toggle")) {
         const content = e.target.nextElementSibling;
         if (!content) return;
