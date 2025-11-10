@@ -208,7 +208,7 @@ body {
   opacity: 0.8;
 }
 
-/* Main region header */
+/* Main header */
 
 .main-region {
   display: flex;
@@ -217,7 +217,7 @@ body {
 
 .header {
   margin-bottom: 20px;
-  text-align: center; /* center heading & subtitle */
+  text-align: center;
 }
 
 .title {
@@ -343,7 +343,7 @@ body {
   cursor: default;
 }
 
-/* Output header & copy all */
+/* Output header & Copy All */
 
 .output-card {
   position: relative;
@@ -352,7 +352,7 @@ body {
 .output-header {
   position: relative;
   display: flex;
-  justify-content: center; /* center Answers heading */
+  justify-content: center;
   align-items: center;
   margin-bottom: 8px;
 }
