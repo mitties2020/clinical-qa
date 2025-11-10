@@ -90,7 +90,7 @@
                     id="followupInput"
                     class="followup-input"
                     type="text"
-                    placeholder="e.g. How does this change in pregnancy or CKD stage 4?"
+                    placeholder=""
                   />
                   <button id="followupBtn" class="followup-btn">Ask</button>
                 </div>
@@ -133,6 +133,11 @@
         btn.textContent = original;
         btn.classList.remove("copied");
       }, 900);
+    }
+
+    function hasNonEmptyContent(arr) {
+      if (!arr) return false;
+      return arr.some((l) => l.trim() !== "");
     }
 
     /* ---------- Conversations (localStorage) ---------- */
@@ -350,7 +355,8 @@
 
         const heading = isHeadingLine(line);
         if (heading) {
-          if (current.content.length > 0 || sections.length > 0) {
+          // push previous section ONLY if it has real content
+          if (hasNonEmptyContent(current.content)) {
             sections.push(current);
           }
           current = { title: heading, content: [] };
@@ -359,14 +365,15 @@
           current.content.push(line);
         }
       }
-      if (current.content.length > 0) {
+
+      if (hasNonEmptyContent(current.content)) {
         sections.push(current);
       }
 
       let html = "";
       let sectionIndex = 0;
 
-      // No headings: single summary
+      // If no explicit headings, treat as a single Summary block
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
@@ -387,11 +394,13 @@
 
       sections.forEach((sec, idx) => {
         const title = sec.title;
-        const bodyLines = sec.content;
-        if (!bodyLines || bodyLines.join("").trim() === "") return;
+        const bodyLines = sec.content || [];
+        if (!hasNonEmptyContent(bodyLines)) {
+          return; // skip empty sections entirely
+        }
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY
+        // SUMMARY (first, static)
         if (title === "Summary" && idx === 0) {
           html += `<div class="section">`;
           html += `
@@ -411,7 +420,7 @@
               html += `
                 <div class="answer-bullet">
                   <span class="bullet-dot"></span>
-                  <span class="bullet-text">• ${escapeHtml(cleaned)}</span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
                 </div>
               `;
             } else {
@@ -422,7 +431,7 @@
           return;
         }
 
-        // OTHER SECTIONS
+        // OTHER SECTIONS -> collapsible
         html += `<div class="section">`;
         html += `
           <div class="collapsible-header">
@@ -448,7 +457,7 @@
               html += `
                 <div class="answer-bullet">
                   <span class="bullet-dot"></span>
-                  <span class="bullet-text">• ${escapeHtml(cleaned)}</span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
                 </div>
               `;
             } else {
@@ -468,7 +477,7 @@
       let currentOption = null;
 
       const flushOption = () => {
-        if (currentOption && currentOption.details.length) {
+        if (currentOption && hasNonEmptyContent(currentOption.details)) {
           const label = escapeHtml(currentOption.label);
           const content = escapeHtml(currentOption.details.join(" ").trim());
           html += `
@@ -505,7 +514,7 @@
             html += `
               <div class="answer-bullet">
                 <span class="bullet-dot"></span>
-                <span class="bullet-text">• ${escapeHtml(cleaned)}</span>
+                <span class="bullet-text">${escapeHtml(cleaned)}</span>
               </div>
             `;
           }
@@ -522,7 +531,8 @@
 
       if (!html.trim()) {
         html = lines
-          .map((l) => `<p class="answer-paragraph">${escapeHtml(l)}</p>`)
+          .filter((l) => l.trim() !== "")
+          .map((l) => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
           .join("");
       }
 
