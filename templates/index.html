@@ -27,9 +27,7 @@
             />
           </div>
 
-          <div id="conversationList" class="conversation-list">
-            <!-- Filled by JS -->
-          </div>
+          <div id="conversationList" class="conversation-list"></div>
 
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
@@ -46,7 +44,7 @@
           </header>
 
           <main class="grid">
-            <!-- LEFT: INPUT -->
+            <!-- INPUT -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
               <textarea
@@ -61,14 +59,13 @@
               </div>
             </section>
 
-            <!-- RIGHT: OUTPUT -->
+            <!-- OUTPUT -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
-              <!-- LOADER -->
               <div id="answerLoader" class="answer-loader hidden">
                 <div class="loader"></div>
                 <div class="loader-text">Generating structured answer…</div>
@@ -80,18 +77,12 @@
                 </div>
               </div>
 
-              <!-- FOLLOW-UP -->
               <div class="followup-container">
                 <label for="followupInput" class="followup-label">
                   Ask a follow-up question about this answer
                 </label>
                 <div class="followup-row">
-                  <input
-                    id="followupInput"
-                    class="followup-input"
-                    type="text"
-                    placeholder=""
-                  />
+                  <input id="followupInput" class="followup-input" type="text" placeholder="" />
                   <button id="followupBtn" class="followup-btn">Ask</button>
                 </div>
               </div>
@@ -108,21 +99,18 @@
     const answerEl = document.getElementById("answer");
     const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
-    const conversationListEl = document.getElementById("conversationList");
-    const topicSearch = document.getElementById("topicSearch");
     const followupInput = document.getElementById("followupInput");
     const followupBtn = document.getElementById("followupBtn");
-
-    let conversations = [];
-    let activeId = null;
-
-    /* ---------- UTILS ---------- */
 
     function escapeHtml(str) {
       return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+    }
+
+    function hasNonEmptyContent(arr) {
+      return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
     }
 
     function flashCopyLabel(btn) {
@@ -135,174 +123,7 @@
       }, 900);
     }
 
-    function hasNonEmptyContent(arr) {
-      return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
-    }
-
-    /* ---------- CONVERSATIONS (LOCAL) ---------- */
-
-    function loadConversations() {
-      try {
-        const raw = localStorage.getItem("ebm_conversations");
-        const active = localStorage.getItem("ebm_active");
-        conversations = raw ? JSON.parse(raw) : [];
-        activeId = active || (conversations[0] && conversations[0].id) || null;
-      } catch {
-        conversations = [];
-        activeId = null;
-      }
-      renderConversationList();
-      restoreActiveConversation();
-      filterTopics();
-    }
-
-    function saveConversations() {
-      try {
-        localStorage.setItem(
-          "ebm_conversations",
-          JSON.stringify(conversations.slice(0, 80))
-        );
-        if (activeId) localStorage.setItem("ebm_active", activeId);
-      } catch (e) {
-        console.warn("Unable to save conversations", e);
-      }
-    }
-
-    function renderConversationList() {
-      conversationListEl.innerHTML = "";
-      if (!conversations.length) {
-        conversationListEl.innerHTML =
-          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
-        return;
-      }
-      conversations.forEach((c) => {
-        const title = (c.title || "Untitled topic").slice(0, 80);
-        const preview =
-          (c.question || "").slice(0, 90) ||
-          (c.updatedAt || "").slice(0, 10);
-
-        const div = document.createElement("div");
-        div.className = "conv-item" + (c.id === activeId ? " active" : "");
-        div.dataset.id = c.id;
-        div.dataset.title = title;
-        div.dataset.question = c.question || "";
-        div.innerHTML = `
-          <div class="conv-title">${escapeHtml(title)}</div>
-          <div class="conv-sub">${escapeHtml(preview || "")}</div>
-        `;
-        conversationListEl.appendChild(div);
-      });
-    }
-
-    function restoreActiveConversation() {
-      if (!activeId) {
-        questionInput.value = "";
-        answerEl.innerHTML =
-          "Your structured, evidence-based response will appear here.";
-        answerEl.classList.add("placeholder");
-        copyAllBtn.disabled = true;
-        return;
-      }
-      const conv = conversations.find((c) => c.id === activeId);
-      if (!conv) {
-        activeId = null;
-        renderConversationList();
-        restoreActiveConversation();
-        return;
-      }
-      questionInput.value = conv.question || "";
-      if (conv.answerHtml) {
-        answerEl.innerHTML = conv.answerHtml;
-        answerEl.classList.remove("placeholder");
-        copyAllBtn.disabled = false;
-      } else {
-        answerEl.innerHTML =
-          "Your structured, evidence-based response will appear here.";
-        answerEl.classList.add("placeholder");
-        copyAllBtn.disabled = true;
-      }
-    }
-
-    function setActiveConversation(id) {
-      activeId = id;
-      saveConversations();
-      renderConversationList();
-      restoreActiveConversation();
-      filterTopics();
-    }
-
-    function ensureConversationSlotForQuery(query) {
-      if (!query) return;
-
-      if (!activeId || !conversations.length) {
-        activeId = "c_" + Date.now();
-        return;
-      }
-
-      const current = conversations.find((c) => c.id === activeId);
-      if (!current) {
-        activeId = "c_" + Date.now();
-        return;
-      }
-
-      if (!current.answerHtml) return;
-      if (current.question && current.question.trim() === query.trim()) return;
-
-      activeId = "c_" + Date.now();
-    }
-
-    function saveActiveConversation(question, answerHtml) {
-      if (!activeId) activeId = "c_" + Date.now();
-
-      const title = (question || "Untitled topic").trim() || "Untitled topic";
-      const now = new Date().toISOString();
-
-      const idx = conversations.findIndex((c) => c.id === activeId);
-      const conv = {
-        id: activeId,
-        title: title.slice(0, 80),
-        question,
-        answerHtml,
-        updatedAt: now,
-      };
-
-      if (idx >= 0) {
-        conversations[idx] = conv;
-      } else {
-        conversations.unshift(conv);
-      }
-
-      saveConversations();
-      renderConversationList();
-      filterTopics();
-    }
-
-    /* ---------- TOPIC SEARCH ---------- */
-
-    function filterTopics() {
-      if (!topicSearch) return;
-      const term = topicSearch.value.trim().toLowerCase();
-      const items = conversationListEl.querySelectorAll(".conv-item");
-      if (!items.length) return;
-
-      items.forEach((item) => {
-        if (!term) {
-          item.style.display = "";
-          return;
-        }
-        const title = (item.dataset.title || "").toLowerCase();
-        const question = (item.dataset.question || "").toLowerCase();
-        const match = title.includes(term) || question.includes(term);
-        item.style.display = match ? "" : "none";
-      });
-    }
-
-    if (topicSearch) {
-      topicSearch.addEventListener("input", filterTopics);
-    }
-
-    /* ---------- STRUCTURED HTML BUILDER ---------- */
-
+    // ✅ FIXED + IMPROVED STRUCTURED HTML BUILDER
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
@@ -315,10 +136,13 @@
 
       const sectionOrder = [
         "Summary",
+        "Overview",
         "Assessment",
+        "Diagnosis",
         "Investigations",
         "Treatment",
         "Management",
+        "Plan",
         "Monitoring",
         "Follow-up & Safety Netting",
         "Follow-up",
@@ -331,9 +155,9 @@
       let seenExplicitHeading = false;
 
       const isHeadingLine = (line) => {
-        const trimmed = line.trim();
+        const trimmed = line.trim().replace(/:$/, "");
         const match = sectionOrder.find(
-          (h) => trimmed.toLowerCase() === (h + ":").toLowerCase()
+          (h) => trimmed.toLowerCase() === h.toLowerCase()
         );
         return match || null;
       };
@@ -351,7 +175,7 @@
             sections.push(current);
           }
           current = { title: heading, content: [] };
-          seenExplicitHeading = True;
+          seenExplicitHeading = true; // ✅ fixed (was True)
         } else {
           current.content.push(line);
         }
@@ -364,7 +188,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // No headings → single Summary
+      // If no explicit headings → single Summary section
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -386,18 +210,16 @@
       for (const sec of sections) {
         const title = sec.title;
         const bodyLines = sec.content || [];
-
-        // Skip empty sections
         if (!hasNonEmptyContent(bodyLines)) continue;
 
         const id = `sec-${sectionIndex++}`;
 
         // SUMMARY
-        if (title === "Summary") {
+        if (title === "Summary" || title === "Overview") {
           html += `
             <div class="section">
               <div class="section-header static">
-                <span>Summary</span>
+                <span>${escapeHtml(title)}</span>
                 <button class="section-copy-btn" data-target="${id}">Copy</button>
               </div>
               <div class="section-body static-body" data-section="${id}">
@@ -426,27 +248,24 @@
         }
 
         // OTHER SECTIONS
-        const innerHtml =
-          (title === "Treatment" || title === "Management")
-            ? buildTreatmentContent(bodyLines)
-            : bodyLines
-                .filter((ln) => ln.trim() !== "")
-                .map((ln) => {
-                  const t = ln.trim();
-                  if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-                    const cleaned = t
-                      .replace(/^[-•]\s+/, "")
-                      .replace(/^\d+[\.\)]\s+/, "");
-                    return `
-                      <div class="answer-bullet">
-                        <span class="bullet-dot"></span>
-                        <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                      </div>
-                    `;
-                  }
-                  return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-                })
-                .join("");
+        const innerHtml = bodyLines
+          .filter((ln) => ln.trim() !== "")
+          .map((ln) => {
+            const t = ln.trim();
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              return `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                </div>
+              `;
+            }
+            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+          })
+          .join("");
 
         if (!innerHtml.trim()) continue;
 
@@ -466,80 +285,10 @@
       return html || "No response generated.";
     }
 
-    function buildTreatmentContent(lines) {
-      let html = "";
-      let currentOption = null;
-
-      const flushOption = () => {
-        if (currentOption && hasNonEmptyContent(currentOption.details)) {
-          const label = escapeHtml(currentOption.label);
-          const content = escapeHtml(currentOption.details.join(" ").trim());
-          html += `
-            <div class="nested-block">
-              <button class="nested-toggle">${label}</button>
-              <div class="nested-content">
-                <p>${content}</p>
-              </div>
-            </div>
-          `;
-        }
-        currentOption = null;
-      };
-
-      for (const raw of lines) {
-        const line = raw.trim();
-        if (!line) continue;
-
-        if (/^Option:\s*/i.test(line)) {
-          flushOption();
-          const label = line.replace(/^Option:\s*/i, "").trim() || "Option";
-          currentOption = { label, details: [] };
-        } else if (/^Detail:\s*/i.test(line)) {
-          const text = line.replace(/^Detail:\s*/i, "").trim();
-          if (!currentOption) currentOption = { label: "Detail", details: [] };
-          if (text) currentOption.details.push(text);
-        } else if (/^[-•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line)) {
-          const cleaned = line
-            .replace(/^[-•]\s+/, "")
-            .replace(/^\d+[\.\)]\s+/, "");
-          if (currentOption) {
-            currentOption.details.push(cleaned);
-          } else {
-            html += `
-              <div class="answer-bullet">
-                <span class="bullet-dot"></span>
-                <span class="bullet-text">${escapeHtml(cleaned)}</span>
-              </div>
-            `;
-          }
-        } else {
-          if (currentOption) {
-            currentOption.details.push(line);
-          } else {
-            html += `<p class="answer-paragraph">${escapeHtml(line)}</p>`;
-          }
-        }
-      }
-
-      flushOption();
-
-      if (!html.trim()) {
-        html = lines
-          .filter((l) => l.trim() !== "")
-          .map((l) => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
-          .join("");
-      }
-
-      return html;
-    }
-
-    /* ---------- GENERATE MAIN ANSWER ---------- */
-
+    // -------- GENERATE ANSWER ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
-
-      ensureConversationSlotForQuery(query);
 
       generateBtn.disabled = true;
       copyAllBtn.disabled = true;
@@ -560,7 +309,6 @@
         if (data.answer) {
           const structured = buildStructuredHtml(data.answer);
           answerEl.innerHTML = structured;
-          saveActiveConversation(query, structured);
         } else {
           answerEl.textContent = data.error || "No response generated.";
         }
@@ -576,61 +324,6 @@
         answerLoader.classList.add("hidden");
       }
     }
-
-    /* ---------- FOLLOW-UP ---------- */
-
-    async function generateFollowup() {
-      const follow = followupInput.value.trim();
-      if (!follow) return;
-
-      const conv = conversations.find((c) => c.id === activeId);
-      if (!conv || !conv.answerHtml || !conv.question) return;
-
-      followupBtn.disabled = true;
-      generateBtn.disabled = true;
-      copyAllBtn.disabled = true;
-      answerLoader.classList.remove("hidden");
-
-      const combinedQuery =
-        conv.question + "\n\nFollow-up question: " + follow;
-
-      try {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: combinedQuery }),
-        });
-
-        const data = await res.json();
-
-        if (data.answer) {
-          const structured = buildStructuredHtml(data.answer);
-          const block = `
-            <div class="followup-block">
-              <div class="followup-question">Follow-up: ${escapeHtml(follow)}</div>
-              ${structured}
-            </div>
-          `;
-          answerEl.classList.remove("placeholder");
-          answerEl.innerHTML += block;
-
-          conv.answerHtml = answerEl.innerHTML;
-          conv.updatedAt = new Date().toISOString();
-          saveConversations();
-        }
-
-        followupInput.value = "";
-        copyAllBtn.disabled = !answerEl.textContent.trim();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        answerLoader.classList.add("hidden");
-        followupBtn.disabled = false;
-        generateBtn.disabled = false;
-      }
-    }
-
-    /* ---------- EVENTS ---------- */
 
     generateBtn.addEventListener("click", generate);
 
@@ -652,27 +345,9 @@
       }
     });
 
-    if (followupBtn && followupInput) {
-      followupBtn.addEventListener("click", generateFollowup);
-      followupInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          generateFollowup();
-        }
-      });
-    }
-
     document.addEventListener("click", async (e) => {
-      const convItem = e.target.closest(".conv-item");
-      if (convItem) {
-        const id = convItem.dataset.id;
-        if (id) setActiveConversation(id);
-        return;
-      }
-
       if (e.target.classList.contains("section-copy-btn")) {
         const id = e.target.dataset.target;
-        if (!id) return;
         const section = document.querySelector(`[data-section="${id}"]`);
         if (!section) return;
         const text = section.innerText.trim();
@@ -683,33 +358,15 @@
         } catch (err) {
           console.error(err);
         }
-        return;
-      }
-
-      if (e.target.classList.contains("collapsible")) {
+      } else if (e.target.classList.contains("collapsible")) {
         const id = e.target.dataset.target;
-        const content = document.querySelector(
-          `.collapsible-content[data-section="${id}"]`
-        );
+        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
         if (!content) return;
         const isOpen = content.style.display === "block";
         e.target.classList.toggle("active", !isOpen);
         content.style.display = isOpen ? "none" : "block";
-        return;
-      }
-
-      if (e.target.classList.contains("nested-toggle")) {
-        const content = e.target.nextElementSibling;
-        if (!content) return;
-        const isOpen = content.style.display === "block";
-        e.target.classList.toggle("active", !isOpen);
-        content.style.display = isOpen ? "none" : "block";
-        return;
       }
     });
-
-    /* ---------- INIT ---------- */
-    loadConversations();
   </script>
 </body>
 </html>
