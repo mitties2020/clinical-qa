@@ -30,7 +30,7 @@
           <div class="actions">
             <button id="generateBtn" class="btn">Generate</button>
             <span class="hint">
-              Press <kbd>Enter</kbd> to generate • <kbd>Shift + Enter</kbd> for newline
+              Enter = generate • Shift+Enter = newline
             </span>
           </div>
         </section>
@@ -45,7 +45,7 @@
           <!-- Loading overlay -->
           <div id="answerLoader" class="answer-loader hidden">
             <div class="loader"></div>
-            <div class="loader-text">Generating answer…</div>
+            <div class="loader-text">Generating structured answer…</div>
           </div>
 
           <div class="output-body">
@@ -72,58 +72,200 @@
         .replace(/>/g, "&gt;");
     }
 
-    function formatAnswer(raw) {
+    // Parse the model output into sections + nested detail for Treatment/Management
+    function buildStructuredHtml(raw) {
       if (!raw) return "";
 
-      // strip markdown bold and headings (## etc)
+      // Clean markdown-style noise
       let text = raw
         .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "");
+        .replace(/#{1,6}\s*/g, "")
+        .replace(/\r/g, "");
 
-      const lines = text.split(/\r?\n/);
-      const out = [];
+      const lines = text.split("\n");
 
-      for (let line of lines) {
+      const sectionOrder = [
+        "Summary",
+        "Assessment",
+        "Investigations",
+        "Treatment",
+        "Management", // fallback if model uses "Management"
+        "Monitoring",
+        "Follow-up & Safety Netting",
+        "Follow-up",
+        "Red Flags",
+        "References"
+      ];
+
+      const sections = [];
+      let current = { title: "Summary", content: [] };
+      let seenExplicitHeading = false;
+
+      const isHeadingLine = (line) => {
         const trimmed = line.trim();
-        if (!trimmed) {
-          out.push(""); // blank line = spacing
+        const match = sectionOrder.find(
+          (h) => trimmed.toLowerCase() === (h + ":").toLowerCase()
+        );
+        return match || null;
+      };
+
+      for (let rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          current.content.push("");
           continue;
         }
 
-        // Heading: "Something:" on its own line
-        if (/^[A-Za-z0-9()[\]\/\-,\s]+:$/i.test(trimmed)) {
-          const heading = trimmed.slice(0, -1).trim();
-          out.push(
-            `<div class="answer-heading">${escapeHtml(heading)}</div>`
-          );
-          continue;
+        const heading = isHeadingLine(line);
+        if (heading) {
+          if (current.content.length > 0 || sections.length > 0) {
+            sections.push(current);
+          }
+          current = { title: heading, content: [] };
+          seenExplicitHeading = true;
+        } else {
+          current.content.push(line);
         }
+      }
+      if (current.content.length > 0) {
+        sections.push(current);
+      }
 
-        // Bullet: - / * / •
-        if (/^[-*•]\s+/.test(trimmed)) {
-          const bulletText = trimmed.replace(/^[-*•]\s+/, "");
-          out.push(
-            `<div class="answer-bullet">• ${escapeHtml(bulletText)}</div>`
-          );
-          continue;
-        }
-
-        // Numbered: 1. 2) etc
-        if (/^\d+[\.\)]\s+/.test(trimmed)) {
-          const numText = trimmed.replace(/^\d+[\.\)]\s+/, "");
-          out.push(
-            `<div class="answer-bullet-num">• ${escapeHtml(numText)}</div>`
-          );
-          continue;
-        }
-
-        // Default paragraph
-        out.push(
-          `<p class="answer-paragraph">${escapeHtml(trimmed)}</p>`
+      // If no explicit headings were found, treat everything as Summary
+      if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
+        return (
+          `<div class="section">` +
+          `<div class="section-header static">Summary</div>` +
+          `<div class="section-body static-body">` +
+          `<p>${escapeHtml(sections[0].content.join(" ").trim())}</p>` +
+          `</div></div>`
         );
       }
 
-      return out.join("\n");
+      // Build HTML with collapsibles
+      let html = "";
+
+      sections.forEach((sec, index) => {
+        const title = sec.title;
+        const bodyLines = sec.content;
+
+        if (!bodyLines || bodyLines.join("").trim() === "") return;
+
+        // Summary always expanded at top
+        if (title === "Summary" && index === 0) {
+          html += `<div class="section">`;
+          html += `<div class="section-header static">Summary</div>`;
+          html += `<div class="section-body static-body">`;
+          bodyLines.forEach((ln) => {
+            const t = ln.trim();
+            if (!t) return;
+            html += `<p>${escapeHtml(t)}</p>`;
+          });
+          html += `</div></div>`;
+          return;
+        }
+
+        // Collapsible sections for the rest
+        html += `<div class="section">`;
+        html += `<button class="collapsible">${escapeHtml(title)}</button>`;
+        html += `<div class="collapsible-content">`;
+
+        if (
+          title === "Treatment" ||
+          title === "Management"
+        ) {
+          html += buildTreatmentContent(bodyLines);
+        } else {
+          bodyLines.forEach((ln) => {
+            const t = ln.trim();
+            if (!t) {
+              html += `<div class="spacer"></div>`;
+              return;
+            }
+
+            // Simple bullets
+            if (/^[-•]\s+/.test(t)) {
+              html += `<div class="answer-bullet">• ${escapeHtml(t.replace(/^[-•]\s+/, ""))}</div>`;
+            } else if (/^\d+[\.\)]\s+/.test(t)) {
+              html += `<div class="answer-bullet">• ${escapeHtml(t.replace(/^\d+[\.\)]\s+/, ""))}</div>`;
+            } else {
+              html += `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+            }
+          });
+        }
+
+        html += `</div></div>`;
+      });
+
+      return html || "No response generated.";
+    }
+
+    // Build nested clickable options for Treatment/Management
+    function buildTreatmentContent(lines) {
+      let html = "";
+      let currentOption = null;
+
+      const flushOption = () => {
+        if (currentOption) {
+          const label = escapeHtml(currentOption.label);
+          const content = escapeHtml(currentOption.details.join(" ").trim());
+          html += `
+            <div class="nested-block">
+              <button class="nested-toggle">${label}</button>
+              <div class="nested-content">
+                <p>${content}</p>
+              </div>
+            </div>
+          `;
+        }
+      };
+
+      lines.forEach((raw) => {
+        const line = raw.trim();
+        if (!line) return;
+
+        // Detect "Option: ..." lines
+        if (/^Option:\s*/i.test(line)) {
+          flushOption();
+          const label = line.replace(/^Option:\s*/i, "").trim() || "Option";
+          currentOption = { label, details: [] };
+        } else if (/^Detail:\s*/i.test(line)) {
+          const text = line.replace(/^Detail:\s*/i, "").trim();
+          if (!currentOption) {
+            currentOption = { label: "Detail", details: [] };
+          }
+          if (text) currentOption.details.push(text);
+        } else if (/^[-•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line)) {
+          // Bullet under treatment
+          const cleaned = line
+            .replace(/^[-•]\s+/, "")
+            .replace(/^\d+[\.\)]\s+/, "");
+          if (!currentOption) {
+            // treat as general treatment bullet
+            html += `<div class="answer-bullet">• ${escapeHtml(cleaned)}</div>`;
+          } else {
+            currentOption.details.push(cleaned);
+          }
+        } else {
+          // Plain text: attach to current option or as paragraph
+          if (currentOption) {
+            currentOption.details.push(line);
+          } else {
+            html += `<p class="answer-paragraph">${escapeHtml(line)}</p>`;
+          }
+        }
+      });
+
+      flushOption();
+
+      if (!html.trim()) {
+        // fallback: if parsing failed, dump raw
+        html = lines
+          .map((l) => `<p class="answer-paragraph">${escapeHtml(l)}</p>`)
+          .join("");
+      }
+
+      return html;
     }
 
     async function generate() {
@@ -132,8 +274,6 @@
 
       generateBtn.disabled = true;
       copyBtn.disabled = true;
-
-      // show loader
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.innerHTML = "";
@@ -148,8 +288,8 @@
         const data = await res.json();
 
         if (data.answer) {
-          const html = formatAnswer(data.answer);
-          answerEl.innerHTML = html || "No response generated.";
+          const structured = buildStructuredHtml(data.answer);
+          answerEl.innerHTML = structured;
         } else {
           answerEl.textContent = data.error || "No response generated.";
         }
@@ -176,7 +316,7 @@
       }
     });
 
-    // Copy answer (plain text)
+    // Copy plain text
     copyBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
@@ -187,6 +327,25 @@
         setTimeout(() => (copyBtn.textContent = original), 1500);
       } catch (err) {
         console.error(err);
+      }
+    });
+
+    // Collapsible behavior (top-level + nested)
+    document.addEventListener("click", (e) => {
+      if (e.target.classList.contains("collapsible")) {
+        e.target.classList.toggle("active");
+        const content = e.target.nextElementSibling;
+        if (!content) return;
+        content.style.display =
+          content.style.display === "block" ? "none" : "block";
+      }
+
+      if (e.target.classList.contains("nested-toggle")) {
+        e.target.classList.toggle("active");
+        const content = e.target.nextElementSibling;
+        if (!content) return;
+        content.style.display =
+          content.style.display === "block" ? "none" : "block";
       }
     });
   </script>
