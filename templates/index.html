@@ -17,7 +17,7 @@
       </header>
 
       <main class="grid">
-        <!-- Left: Input -->
+        <!-- LEFT: INPUT -->
         <section class="card input-card">
           <label class="label" for="question">Clinical question</label>
           <textarea
@@ -35,23 +35,23 @@
           </div>
         </section>
 
-        <!-- Right: Output -->
+        <!-- RIGHT: OUTPUT -->
         <section class="card output-card">
           <div class="output-header">
             <h2 class="output-title">Answer</h2>
             <button id="copyBtn" class="copy-btn" disabled>Copy</button>
           </div>
 
-          <!-- Spinner overlay inside answer card -->
+          <!-- Loading overlay -->
           <div id="answerLoader" class="answer-loader hidden">
             <div class="loader"></div>
             <div class="loader-text">Generating answer…</div>
           </div>
 
           <div class="output-body">
-            <pre id="answer" class="answer placeholder">
-Your structured, evidence-based response will appear here.
-            </pre>
+            <div id="answer" class="answer placeholder">
+              Your structured, evidence-based response will appear here.
+            </div>
           </div>
         </section>
       </main>
@@ -65,6 +65,67 @@ Your structured, evidence-based response will appear here.
     const copyBtn = document.getElementById("copyBtn");
     const answerLoader = document.getElementById("answerLoader");
 
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function formatAnswer(raw) {
+      if (!raw) return "";
+
+      // strip markdown bold and headings (## etc)
+      let text = raw
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "");
+
+      const lines = text.split(/\r?\n/);
+      const out = [];
+
+      for (let line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          out.push(""); // blank line = spacing
+          continue;
+        }
+
+        // Heading: "Something:" on its own line
+        if (/^[A-Za-z0-9()[\]\/\-,\s]+:$/i.test(trimmed)) {
+          const heading = trimmed.slice(0, -1).trim();
+          out.push(
+            `<div class="answer-heading">${escapeHtml(heading)}</div>`
+          );
+          continue;
+        }
+
+        // Bullet: - / * / •
+        if (/^[-*•]\s+/.test(trimmed)) {
+          const bulletText = trimmed.replace(/^[-*•]\s+/, "");
+          out.push(
+            `<div class="answer-bullet">• ${escapeHtml(bulletText)}</div>`
+          );
+          continue;
+        }
+
+        // Numbered: 1. 2) etc
+        if (/^\d+[\.\)]\s+/.test(trimmed)) {
+          const numText = trimmed.replace(/^\d+[\.\)]\s+/, "");
+          out.push(
+            `<div class="answer-bullet-num">• ${escapeHtml(numText)}</div>`
+          );
+          continue;
+        }
+
+        // Default paragraph
+        out.push(
+          `<p class="answer-paragraph">${escapeHtml(trimmed)}</p>`
+        );
+      }
+
+      return out.join("\n");
+    }
+
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -72,10 +133,10 @@ Your structured, evidence-based response will appear here.
       generateBtn.disabled = true;
       copyBtn.disabled = true;
 
-      // show overlay spinner
-      if (answerLoader) answerLoader.classList.remove("hidden");
+      // show loader
+      answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
-      answerEl.textContent = "";
+      answerEl.innerHTML = "";
 
       try {
         const res = await fetch("/api/generate", {
@@ -87,7 +148,8 @@ Your structured, evidence-based response will appear here.
         const data = await res.json();
 
         if (data.answer) {
-          answerEl.textContent = data.answer;
+          const html = formatAnswer(data.answer);
+          answerEl.innerHTML = html || "No response generated.";
         } else {
           answerEl.textContent = data.error || "No response generated.";
         }
@@ -99,11 +161,11 @@ Your structured, evidence-based response will appear here.
         copyBtn.disabled = true;
       } finally {
         generateBtn.disabled = false;
-        if (answerLoader) answerLoader.classList.add("hidden");
+        answerLoader.classList.add("hidden");
       }
     }
 
-    // Button click
+    // Click generate
     generateBtn.addEventListener("click", generate);
 
     // Enter = generate, Shift+Enter = newline
@@ -114,7 +176,7 @@ Your structured, evidence-based response will appear here.
       }
     });
 
-    // Copy answer
+    // Copy answer (plain text)
     copyBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
