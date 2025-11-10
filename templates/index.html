@@ -69,16 +69,6 @@
                   Your structured, evidence-based response will appear here.
                 </div>
               </div>
-
-              <div class="followup-container">
-                <label for="followupInput" class="followup-label">
-                  Ask a follow-up question about this answer
-                </label>
-                <div class="followup-row">
-                  <input id="followupInput" class="followup-input" type="text" placeholder="" />
-                  <button id="followupBtn" class="followup-btn">Ask</button>
-                </div>
-              </div>
             </section>
           </main>
         </div>
@@ -92,15 +82,15 @@
     const answerEl = document.getElementById("answer");
     const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
-    const followupInput = document.getElementById("followupInput");
-    const followupBtn = document.getElementById("followupBtn");
 
     function escapeHtml(str) {
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
+
     function hasNonEmptyContent(arr) {
       return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
     }
+
     function flashCopyLabel(btn) {
       const original = btn.textContent;
       btn.textContent = "Copied";
@@ -145,6 +135,7 @@
 
       let html = "";
       let sectionIndex = 0;
+
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -186,7 +177,6 @@
       if (!query) return;
       generateBtn.disabled = true;
       copyAllBtn.disabled = true;
-      followupBtn.disabled = true;
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.innerHTML = "";
@@ -208,7 +198,6 @@
         copyAllBtn.disabled = true;
       } finally {
         generateBtn.disabled = false;
-        followupBtn.disabled = false;
         answerLoader.classList.add("hidden");
       }
     }
@@ -241,44 +230,6 @@
         const isOpen = content.style.display === "block";
         e.target.classList.toggle("active", !isOpen);
         content.style.display = isOpen ? "none" : "block";
-      }
-    });
-
-    // ---------- FOLLOW-UP HANDLER ----------
-    followupBtn.addEventListener("click", async () => {
-      const followup = followupInput.value.trim();
-      if (!followup) return;
-      const currentAnswer = answerEl.textContent.trim();
-      const combinedQuery = currentAnswer
-        ? `${currentAnswer}\n\nFollow-up question: ${followup}`
-        : followup;
-      followupBtn.disabled = true;
-      generateBtn.disabled = true;
-      copyAllBtn.disabled = true;
-      answerLoader.classList.remove("hidden");
-      try {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: combinedQuery }),
-        });
-        const data = await res.json();
-        if (data.answer) {
-          const structured = buildStructuredHtml(data.answer);
-          const newBlock = document.createElement("div");
-          newBlock.classList.add("followup-block");
-          newBlock.innerHTML = `<h3 class="followup-heading">Follow-up Answer</h3>${structured}`;
-          answerEl.appendChild(newBlock);
-        } else alert("No response generated for follow-up.");
-        followupInput.value = "";
-      } catch (err) {
-        console.error(err);
-        alert("Error generating follow-up.");
-      } finally {
-        followupBtn.disabled = false;
-        generateBtn.disabled = false;
-        copyAllBtn.disabled = false;
-        answerLoader.classList.add("hidden");
       }
     });
   </script>
