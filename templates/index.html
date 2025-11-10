@@ -36,7 +36,7 @@
         <section class="card output-card">
           <div class="output-header">
             <h2 class="output-title">Answer</h2>
-            <button id="copyBtn" class="copy-btn" disabled>Copy</button>
+            <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
           </div>
 
           <!-- Loading overlay -->
@@ -59,7 +59,7 @@
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
     const answerEl = document.getElementById("answer");
-    const copyBtn = document.getElementById("copyBtn");
+    const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
 
     function escapeHtml(str) {
@@ -69,14 +69,12 @@
         .replace(/>/g, "&gt;");
     }
 
-    // Parse the model output into sections + nested detail for Treatment/Management
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
-      // Strip markdown noise
       let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1") // remove markdown bold
+        .replace(/#{1,6}\s*/g, "")      // remove markdown headings
         .replace(/\r/g, "");
 
       const lines = text.split("\n");
@@ -124,50 +122,80 @@
           current.content.push(line);
         }
       }
-
       if (current.content.length > 0) {
         sections.push(current);
       }
 
-      // If no headings at all, treat everything as a summary paragraph
+      let html = "";
+      let sectionIndex = 0;
+
+      // If no headings, treat all as one Summary block
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
-        const content = sections[0].content.join(" ").trim();
-        if (!content) return "No response generated.";
-        return `
+        const id = `sec-${sectionIndex++}`;
+        const body = sections[0].content.join(" ").trim();
+        if (!body) return "No response generated.";
+        html += `
           <div class="section">
-            <div class="section-header static">Summary</div>
-            <div class="section-body static-body">
-              <p>${escapeHtml(content)}</p>
+            <div class="section-header static">
+              <span>Summary</span>
+              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            </div>
+            <div class="section-body static-body" data-section="${id}">
+              <p>${escapeHtml(body)}</p>
             </div>
           </div>
         `;
+        return html;
       }
 
-      let html = "";
-
-      sections.forEach((sec, index) => {
+      // Build each structured section
+      sections.forEach((sec, idx) => {
         const title = sec.title;
         const bodyLines = sec.content;
         if (!bodyLines || bodyLines.join("").trim() === "") return;
 
-        // SUMMARY: always expanded block at the top
-        if (title === "Summary" && index === 0) {
+        const id = `sec-${sectionIndex++}`;
+
+        // SUMMARY block (expanded, static)
+        if (title === "Summary" && idx === 0) {
           html += `<div class="section">`;
-          html += `<div class="section-header static">Summary</div>`;
-          html += `<div class="section-body static-body">`;
+          html += `
+            <div class="section-header static">
+              <span>Summary</span>
+              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            </div>
+          `;
+          html += `<div class="section-body static-body" data-section="${id}">`;
           bodyLines.forEach((ln) => {
             const t = ln.trim();
             if (!t) return;
-            html += `<p>${escapeHtml(t)}</p>`;
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              html += `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span>${escapeHtml(cleaned)}</span>
+                </div>
+              `;
+            } else {
+              html += `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+            }
           });
           html += `</div></div>`;
           return;
         }
 
-        // COLLAPSIBLE SECTIONS
+        // Other sections: collapsible with per-section copy
         html += `<div class="section">`;
-        html += `<button class="collapsible">${escapeHtml(title)}</button>`;
-        html += `<div class="collapsible-content">`;
+        html += `
+          <div class="collapsible-header">
+            <button class="collapsible" data-target="${id}">${escapeHtml(title)}</button>
+            <button class="section-copy-btn" data-target="${id}">Copy</button>
+          </div>
+        `;
+        html += `<div class="collapsible-content" data-section="${id}">`;
 
         if (title === "Treatment" || title === "Management") {
           html += buildTreatmentContent(bodyLines);
@@ -178,13 +206,16 @@
               html += `<div class="spacer"></div>`;
               return;
             }
-
-            // bullet-style, but render with clean dot, not hyphen
             if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
               const cleaned = t
                 .replace(/^[-•]\s+/, "")
                 .replace(/^\d+[\.\)]\s+/, "");
-              html += `<div class="answer-bullet"><span class="bullet-dot"></span><span>${escapeHtml(cleaned)}</span></div>`;
+              html += `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span>${escapeHtml(cleaned)}</span>
+                </div>
+              `;
             } else {
               html += `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
             }
@@ -197,7 +228,6 @@
       return html || "No response generated.";
     }
 
-    // Build nested clickable options for Treatment/Management
     function buildTreatmentContent(lines) {
       let html = "";
       let currentOption = null;
@@ -228,9 +258,7 @@
           currentOption = { label, details: [] };
         } else if (/^Detail:\s*/i.test(line)) {
           const text = line.replace(/^Detail:\s*/i, "").trim();
-          if (!currentOption) {
-            currentOption = { label: "Detail", details: [] };
-          }
+          if (!currentOption) currentOption = { label: "Detail", details: [] };
           if (text) currentOption.details.push(text);
         } else if (/^[-•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line)) {
           const cleaned = line
@@ -239,7 +267,12 @@
           if (currentOption) {
             currentOption.details.push(cleaned);
           } else {
-            html += `<div class="answer-bullet"><span class="bullet-dot"></span><span>${escapeHtml(cleaned)}</span></div>`;
+            html += `
+              <div class="answer-bullet">
+                <span class="bullet-dot"></span>
+                <span>${escapeHtml(cleaned)}</span>
+              </div>
+            `;
           }
         } else {
           if (currentOption) {
@@ -266,7 +299,7 @@
       if (!query) return;
 
       generateBtn.disabled = true;
-      copyBtn.disabled = true;
+      copyAllBtn.disabled = true;
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.innerHTML = "";
@@ -287,21 +320,21 @@
           answerEl.textContent = data.error || "No response generated.";
         }
 
-        copyBtn.disabled = !answerEl.textContent.trim();
+        copyAllBtn.disabled = !answerEl.textContent.trim();
       } catch (err) {
         console.error(err);
         answerEl.textContent = "Error generating answer.";
-        copyBtn.disabled = true;
+        copyAllBtn.disabled = true;
       } finally {
         generateBtn.disabled = false;
         answerLoader.classList.add("hidden");
       }
     }
 
-    // Click generate
+    // Generate on button click
     generateBtn.addEventListener("click", generate);
 
-    // Enter = generate (kept for power users, no hint shown)
+    // Enter = generate (no on-screen hint)
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -309,38 +342,68 @@
       }
     });
 
-    // Copy full plain text
-    copyBtn.addEventListener("click", async () => {
+    // Copy ALL sections
+    copyAllBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
       try {
         await navigator.clipboard.writeText(text);
-        const original = copyBtn.textContent;
-        copyBtn.textContent = "Copied";
-        setTimeout(() => (copyBtn.textContent = original), 1500);
+        flashCopyLabel(copyAllBtn);
       } catch (err) {
         console.error(err);
       }
     });
 
-    // Collapsible behaviors
-    document.addEventListener("click", (e) => {
-      if (e.target.classList.contains("collapsible")) {
-        e.target.classList.toggle("active");
-        const content = e.target.nextElementSibling;
-        if (!content) return;
-        content.style.display =
-          content.style.display === "block" ? "none" : "block";
+    // Delegate clicks: section copy + collapsibles
+    document.addEventListener("click", async (e) => {
+      // Section copy buttons
+      if (e.target.classList.contains("section-copy-btn")) {
+        const id = e.target.dataset.target;
+        if (!id) return;
+        const section = document.querySelector(`[data-section="${id}"]`);
+        if (!section) return;
+        const text = section.innerText.trim();
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          flashCopyLabel(e.target);
+        } catch (err) {
+          console.error(err);
+        }
+        return;
       }
 
+      // Top-level collapsible
+      if (e.target.classList.contains("collapsible")) {
+        const id = e.target.dataset.target;
+        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+        if (!content) return;
+        const isOpen = content.style.display === "block";
+        e.target.classList.toggle("active", !isOpen);
+        content.style.display = isOpen ? "none" : "block";
+        return;
+      }
+
+      // Nested treatment toggles
       if (e.target.classList.contains("nested-toggle")) {
-        e.target.classList.toggle("active");
         const content = e.target.nextElementSibling;
         if (!content) return;
-        content.style.display =
-          content.style.display === "block" ? "none" : "block";
+        const isOpen = content.style.display === "block";
+        e.target.classList.toggle("active", !isOpen);
+        content.style.display = isOpen ? "none" : "block";
+        return;
       }
     });
+
+    function flashCopyLabel(btn) {
+      const original = btn.textContent;
+      btn.textContent = "Copied";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove("copied");
+      }, 900);
+    }
   </script>
 </body>
 </html>
