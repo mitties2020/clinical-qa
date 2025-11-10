@@ -10,7 +10,7 @@
   <div class="app-root">
     <div class="shell">
       <div class="layout">
-        <!-- SIDEBAR: EBM Sessions -->
+        <!-- SIDEBAR -->
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -28,7 +28,7 @@
           </div>
 
           <div id="conversationList" class="conversation-list">
-            <!-- Populated by JS -->
+            <!-- Filled in by JS -->
           </div>
 
           <div class="sidebar-footer">
@@ -46,7 +46,7 @@
           </header>
 
           <main class="grid">
-            <!-- LEFT: CLINICAL QUESTION -->
+            <!-- CLINICAL QUESTION -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
               <textarea
@@ -61,27 +61,26 @@
               </div>
             </section>
 
-            <!-- RIGHT: ANSWERS -->
+            <!-- ANSWERS -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
-              <!-- LOADER -->
+              <!-- LOADER OVERLAY -->
               <div id="answerLoader" class="answer-loader hidden">
                 <div class="loader"></div>
                 <div class="loader-text">Generating structured answer…</div>
               </div>
 
-              <!-- MAIN ANSWER AREA -->
               <div class="output-body">
                 <div id="answer" class="answer placeholder">
                   Your structured, evidence-based response will appear here.
                 </div>
               </div>
 
-              <!-- FOLLOW-UP -->
+              <!-- FOLLOW UP -->
               <div class="followup-container">
                 <label for="followupInput" class="followup-label">
                   Ask a follow-up question about this answer
@@ -140,7 +139,7 @@
       return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
     }
 
-    /* ---------- LOCAL STORAGE: CONVERSATIONS ---------- */
+    /* ---------- CONVERSATIONS (LOCAL STORAGE) ---------- */
 
     function loadConversations() {
       try {
@@ -187,7 +186,6 @@
         div.dataset.id = c.id;
         div.dataset.title = title;
         div.dataset.question = c.question || "";
-
         div.innerHTML = `
           <div class="conv-title">${escapeHtml(title)}</div>
           <div class="conv-sub">${escapeHtml(preview || "")}</div>
@@ -247,13 +245,9 @@
         return;
       }
 
-      // if current slot has no answer yet, reuse
       if (!current.answerHtml) return;
-
-      // if same question, reuse
       if (current.question && current.question.trim() === query.trim()) return;
 
-      // otherwise new conversation id
       activeId = "c_" + Date.now();
     }
 
@@ -283,7 +277,7 @@
       filterTopics();
     }
 
-    /* ---------- TOPIC SEARCH FILTER ---------- */
+    /* ---------- TOPIC SEARCH ---------- */
 
     function filterTopics() {
       if (!topicSearch) return;
@@ -307,14 +301,14 @@
       topicSearch.addEventListener("input", filterTopics);
     }
 
-    /* ---------- STRUCTURED ANSWER BUILDER ---------- */
+    /* ---------- STRUCTURED HTML BUILDER ---------- */
 
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
       let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")   // remove bold markdown
-        .replace(/#{1,6}\s*/g, "")         // remove heading hashes
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "")
         .replace(/\r/g, "");
 
       const lines = text.split("\n");
@@ -370,7 +364,7 @@
       let html = "";
       let sectionIndex = 0;
 
-      // No clear headings: treat whole thing as one Summary block
+      // No explicit headings → treat as single Summary
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -393,12 +387,12 @@
         const title = sec.title;
         const bodyLines = sec.content || [];
 
-        // 🚫 Skip any completely empty section (this kills those blank boxes)
+        // 💡 Skip empty sections completely (fixes blank boxes)
         if (!hasNonEmptyContent(bodyLines)) continue;
 
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY (top, fixed)
+        // SUMMARY (fixed block)
         if (title === "Summary") {
           html += `
             <div class="section">
@@ -431,7 +425,31 @@
           continue;
         }
 
-        // OTHER SECTIONS -> collapsible
+        // OTHER SECTIONS → collapsible
+        const innerHtml =
+          (title === "Treatment" || title === "Management")
+            ? buildTreatmentContent(bodyLines)
+            : bodyLines
+                .filter((ln) => ln.trim() !== "")
+                .map((ln) => {
+                  const t = ln.trim();
+                  if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+                    const cleaned = t
+                      .replace(/^[-•]\s+/, "")
+                      .replace(/^\d+[\.\)]\s+/, "");
+                    return `
+                      <div class="answer-bullet">
+                        <span class="bullet-dot"></span>
+                        <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                      </div>
+                    `;
+                  }
+                  return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+                })
+                .join("");
+
+        if (!innerHtml.trim()) continue; // again skip if nothing
+
         html += `
           <div class="section">
             <div class="collapsible-header">
@@ -439,28 +457,7 @@
               <button class="section-copy-btn" data-target="${id}">Copy</button>
             </div>
             <div class="collapsible-content" data-section="${id}">
-              ${
-                (title === "Treatment" || title === "Management")
-                  ? buildTreatmentContent(bodyLines)
-                  : bodyLines
-                      .filter((ln) => ln.trim() !== "")
-                      .map((ln) => {
-                        const t = ln.trim();
-                        if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-                          const cleaned = t
-                            .replace(/^[-•]\s+/, "")
-                            .replace(/^\d+[\.\)]\s+/, "");
-                          return `
-                            <div class="answer-bullet">
-                              <span class="bullet-dot"></span>
-                              <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                            </div>
-                          `;
-                        }
-                        return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-                      })
-                      .join("")
-              }
+              ${innerHtml}
             </div>
           </div>
         `;
@@ -536,7 +533,7 @@
       return html;
     }
 
-    /* ---------- GENERATE MAIN ANSWER ---------- */
+    /* ---------- GENERATE (STREAMING) ---------- */
 
     async function generate() {
       const query = questionInput.value.trim();
@@ -552,20 +549,33 @@
       answerEl.innerHTML = "";
 
       try {
-        const res = await fetch("/api/generate", {
+        const response = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),
         });
 
-        const data = await res.json();
+        if (!response.body) {
+          const text = await response.text();
+          answerEl.textContent = text || "No response generated.";
+        } else {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let text = "";
 
-        if (data.answer) {
-          const structured = buildStructuredHtml(data.answer);
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            if (chunk) {
+              text += chunk;
+              answerEl.textContent = text; // live preview of raw text
+            }
+          }
+
+          const structured = buildStructuredHtml(text);
           answerEl.innerHTML = structured;
           saveActiveConversation(query, structured);
-        } else {
-          answerEl.textContent = data.error || "No response generated.";
         }
 
         copyAllBtn.disabled = !answerEl.textContent.trim();
@@ -580,7 +590,7 @@
       }
     }
 
-    /* ---------- FOLLOW-UP ANSWER ---------- */
+    /* ---------- FOLLOW-UP (STREAMING) ---------- */
 
     async function generateFollowup() {
       const follow = followupInput.value.trim();
@@ -598,16 +608,33 @@
         conv.question + "\n\nFollow-up question: " + follow;
 
       try {
-        const res = await fetch("/api/generate", {
+        const response = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: combinedQuery }),
         });
 
-        const data = await res.json();
+        let text = "";
 
-        if (data.answer) {
-          const structured = buildStructuredHtml(data.answer);
+        if (!response.body) {
+          text = await response.text();
+        } else {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            if (chunk) {
+              text += chunk;
+              // don't overwrite main; this is just building up
+            }
+          }
+        }
+
+        if (text.trim()) {
+          const structured = buildStructuredHtml(text);
           const block = `
             <div class="followup-block">
               <div class="followup-question">Follow-up: ${escapeHtml(follow)}</div>
@@ -633,7 +660,7 @@
       }
     }
 
-    /* ---------- EVENT LISTENERS ---------- */
+    /* ---------- EVENTS ---------- */
 
     generateBtn.addEventListener("click", generate);
 
