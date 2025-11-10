@@ -10,7 +10,7 @@
   <div class="app-root">
     <div class="shell">
       <div class="layout">
-        <!-- SIDEBAR: Conversation topics -->
+        <!-- SIDEBAR: EBM Sessions -->
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -28,7 +28,7 @@
           </div>
 
           <div id="conversationList" class="conversation-list">
-            <!-- Filled by JS -->
+            <!-- Populated by JS -->
           </div>
 
           <div class="sidebar-footer">
@@ -36,7 +36,7 @@
           </div>
         </aside>
 
-        <!-- MAIN PANEL -->
+        <!-- MAIN REGION -->
         <div class="main-region">
           <header class="header">
             <h1 class="title">Clinical Q&amp;A Engine</h1>
@@ -46,7 +46,7 @@
           </header>
 
           <main class="grid">
-            <!-- LEFT: INPUT -->
+            <!-- LEFT: CLINICAL QUESTION -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
               <textarea
@@ -61,26 +61,27 @@
               </div>
             </section>
 
-            <!-- RIGHT: OUTPUT -->
+            <!-- RIGHT: ANSWERS -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
-              <!-- Loading overlay -->
+              <!-- LOADER -->
               <div id="answerLoader" class="answer-loader hidden">
                 <div class="loader"></div>
                 <div class="loader-text">Generating structured answer…</div>
               </div>
 
+              <!-- MAIN ANSWER AREA -->
               <div class="output-body">
                 <div id="answer" class="answer placeholder">
                   Your structured, evidence-based response will appear here.
                 </div>
               </div>
 
-              <!-- Persistent follow-up box -->
+              <!-- FOLLOW-UP -->
               <div class="followup-container">
                 <label for="followupInput" class="followup-label">
                   Ask a follow-up question about this answer
@@ -116,7 +117,7 @@
     let conversations = [];
     let activeId = null;
 
-    /* ---------- Utils ---------- */
+    /* ---------- UTILITIES ---------- */
 
     function escapeHtml(str) {
       return str
@@ -136,11 +137,10 @@
     }
 
     function hasNonEmptyContent(arr) {
-      if (!arr) return false;
-      return arr.some((l) => l.trim() !== "");
+      return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
     }
 
-    /* ---------- Conversations (localStorage) ---------- */
+    /* ---------- LOCAL STORAGE: CONVERSATIONS ---------- */
 
     function loadConversations() {
       try {
@@ -163,9 +163,7 @@
           "ebm_conversations",
           JSON.stringify(conversations.slice(0, 80))
         );
-        if (activeId) {
-          localStorage.setItem("ebm_active", activeId);
-        }
+        if (activeId) localStorage.setItem("ebm_active", activeId);
       } catch (e) {
         console.warn("Unable to save conversations", e);
       }
@@ -249,32 +247,33 @@
         return;
       }
 
+      // if current slot has no answer yet, reuse
       if (!current.answerHtml) return;
 
+      // if same question, reuse
       if (current.question && current.question.trim() === query.trim()) return;
 
+      // otherwise new conversation id
       activeId = "c_" + Date.now();
     }
 
     function saveActiveConversation(question, answerHtml) {
-      if (!activeId) {
-        activeId = "c_" + Date.now();
-      }
+      if (!activeId) activeId = "c_" + Date.now();
 
-      const cleanTitle = (question || "Untitled topic").trim() || "Untitled topic";
+      const title = (question || "Untitled topic").trim() || "Untitled topic";
       const now = new Date().toISOString();
 
-      const existingIndex = conversations.findIndex((c) => c.id === activeId);
+      const idx = conversations.findIndex((c) => c.id === activeId);
       const conv = {
         id: activeId,
-        title: cleanTitle.slice(0, 80),
+        title: title.slice(0, 80),
         question,
         answerHtml,
         updatedAt: now,
       };
 
-      if (existingIndex >= 0) {
-        conversations[existingIndex] = conv;
+      if (idx >= 0) {
+        conversations[idx] = conv;
       } else {
         conversations.unshift(conv);
       }
@@ -284,7 +283,7 @@
       filterTopics();
     }
 
-    /* ---------- Topic search filter ---------- */
+    /* ---------- TOPIC SEARCH FILTER ---------- */
 
     function filterTopics() {
       if (!topicSearch) return;
@@ -299,8 +298,7 @@
         }
         const title = (item.dataset.title || "").toLowerCase();
         const question = (item.dataset.question || "").toLowerCase();
-        const match =
-          title.includes(term) || question.includes(term);
+        const match = title.includes(term) || question.includes(term);
         item.style.display = match ? "" : "none";
       });
     }
@@ -309,14 +307,14 @@
       topicSearch.addEventListener("input", filterTopics);
     }
 
-    /* ---------- Answer formatting ---------- */
+    /* ---------- STRUCTURED ANSWER BUILDER ---------- */
 
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
       let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")   // remove bold markdown
+        .replace(/#{1,6}\s*/g, "")         // remove heading hashes
         .replace(/\r/g, "");
 
       const lines = text.split("\n");
@@ -346,7 +344,7 @@
         return match || null;
       };
 
-      for (let rawLine of lines) {
+      for (const rawLine of lines) {
         const line = rawLine.trim();
         if (!line) {
           current.content.push("");
@@ -355,7 +353,6 @@
 
         const heading = isHeadingLine(line);
         if (heading) {
-          // push previous section ONLY if it has real content
           if (hasNonEmptyContent(current.content)) {
             sections.push(current);
           }
@@ -373,11 +370,11 @@
       let html = "";
       let sectionIndex = 0;
 
-      // If no explicit headings, treat as a single Summary block
+      // No clear headings: treat whole thing as one Summary block
       if (!seenExplicitHeading && sections.length === 1 && sections[0].title === "Summary") {
-        const id = `sec-${sectionIndex++}`;
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
+        const id = `sec-${sectionIndex++}`;
         html += `
           <div class="section">
             <div class="section-header static">
@@ -392,82 +389,82 @@
         return html;
       }
 
-      sections.forEach((sec, idx) => {
+      for (const sec of sections) {
         const title = sec.title;
         const bodyLines = sec.content || [];
-        if (!hasNonEmptyContent(bodyLines)) {
-          return; // skip empty sections entirely
-        }
+
+        // 🚫 Skip any completely empty section (this kills those blank boxes)
+        if (!hasNonEmptyContent(bodyLines)) continue;
+
         const id = `sec-${sectionIndex++}`;
 
-        // SUMMARY (first, static)
-        if (title === "Summary" && idx === 0) {
-          html += `<div class="section">`;
+        // SUMMARY (top, fixed)
+        if (title === "Summary") {
           html += `
-            <div class="section-header static">
-              <span>Summary</span>
-              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            <div class="section">
+              <div class="section-header static">
+                <span>Summary</span>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="section-body static-body" data-section="${id}">
+                ${bodyLines
+                  .map((ln) => {
+                    const t = ln.trim();
+                    if (!t) return "";
+                    if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+                      const cleaned = t
+                        .replace(/^[-•]\s+/, "")
+                        .replace(/^\d+[\.\)]\s+/, "");
+                      return `
+                        <div class="answer-bullet">
+                          <span class="bullet-dot"></span>
+                          <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                        </div>
+                      `;
+                    }
+                    return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+                  })
+                  .join("")}
+              </div>
             </div>
           `;
-          html += `<div class="section-body static-body" data-section="${id}">`;
-          bodyLines.forEach((ln) => {
-            const t = ln.trim();
-            if (!t) return;
-            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-              const cleaned = t
-                .replace(/^[-•]\s+/, "")
-                .replace(/^\d+[\.\)]\s+/, "");
-              html += `
-                <div class="answer-bullet">
-                  <span class="bullet-dot"></span>
-                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                </div>
-              `;
-            } else {
-              html += `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-            }
-          });
-          html += `</div></div>`;
-          return;
+          continue;
         }
 
         // OTHER SECTIONS -> collapsible
-        html += `<div class="section">`;
         html += `
-          <div class="collapsible-header">
-            <button class="collapsible" data-target="${id}">${escapeHtml(title)}</button>
-            <button class="section-copy-btn" data-target="${id}">Copy</button>
+          <div class="section">
+            <div class="collapsible-header">
+              <button class="collapsible" data-target="${id}">${escapeHtml(title)}</button>
+              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            </div>
+            <div class="collapsible-content" data-section="${id}">
+              ${
+                (title === "Treatment" || title === "Management")
+                  ? buildTreatmentContent(bodyLines)
+                  : bodyLines
+                      .filter((ln) => ln.trim() !== "")
+                      .map((ln) => {
+                        const t = ln.trim();
+                        if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+                          const cleaned = t
+                            .replace(/^[-•]\s+/, "")
+                            .replace(/^\d+[\.\)]\s+/, "");
+                          return `
+                            <div class="answer-bullet">
+                              <span class="bullet-dot"></span>
+                              <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                            </div>
+                          `;
+                        }
+                        return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+                      })
+                      .join("")
+              }
+            </div>
           </div>
         `;
-        html += `<div class="collapsible-content" data-section="${id}">`;
-
-        if (title === "Treatment" || title === "Management") {
-          html += buildTreatmentContent(bodyLines);
-        } else {
-          bodyLines.forEach((ln) => {
-            const t = ln.trim();
-            if (!t) {
-              html += `<div class="spacer"></div>`;
-              return;
-            }
-            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-              const cleaned = t
-                .replace(/^[-•]\s+/, "")
-                .replace(/^\d+[\.\)]\s+/, "");
-              html += `
-                <div class="answer-bullet">
-                  <span class="bullet-dot"></span>
-                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                </div>
-              `;
-            } else {
-              html += `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-            }
-          });
-        }
-
-        html += `</div></div>`;
-      });
+      }
 
       return html || "No response generated.";
     }
@@ -492,9 +489,9 @@
         currentOption = null;
       };
 
-      lines.forEach((raw) => {
+      for (const raw of lines) {
         const line = raw.trim();
-        if (!line) return;
+        if (!line) continue;
 
         if (/^Option:\s*/i.test(line)) {
           flushOption();
@@ -525,7 +522,7 @@
             html += `<p class="answer-paragraph">${escapeHtml(line)}</p>`;
           }
         }
-      });
+      }
 
       flushOption();
 
@@ -539,7 +536,7 @@
       return html;
     }
 
-    /* ---------- Generate main answer ---------- */
+    /* ---------- GENERATE MAIN ANSWER ---------- */
 
     async function generate() {
       const query = questionInput.value.trim();
@@ -583,16 +580,14 @@
       }
     }
 
-    /* ---------- Follow-up (persistent box) ---------- */
+    /* ---------- FOLLOW-UP ANSWER ---------- */
 
     async function generateFollowup() {
       const follow = followupInput.value.trim();
       if (!follow) return;
 
       const conv = conversations.find((c) => c.id === activeId);
-      if (!conv || !conv.answerHtml || !conv.question) {
-        return;
-      }
+      if (!conv || !conv.answerHtml || !conv.question) return;
 
       followupBtn.disabled = true;
       generateBtn.disabled = true;
@@ -638,7 +633,7 @@
       }
     }
 
-    /* ---------- Events ---------- */
+    /* ---------- EVENT LISTENERS ---------- */
 
     generateBtn.addEventListener("click", generate);
 
@@ -716,7 +711,7 @@
       }
     });
 
-    /* ---------- Init ---------- */
+    /* ---------- INIT ---------- */
     loadConversations();
   </script>
 </body>
