@@ -8,6 +8,13 @@
 </head>
 
 <body>
+
+  <!-- HEADER IMAGE -->
+  <div class="header-wrapper">
+    <img src="{{ url_for('static', filename='header.png') }}" alt="Header Image" class="header-image">
+  </div>
+  <!-- END HEADER IMAGE -->
+
   <div class="app-root">
     <div class="shell">
       <div class="layout">
@@ -76,10 +83,8 @@
     </div>
   </div>
 
-  <!-- Subtle corner brand image -->
-  <img src="{{ url_for('static', filename='Screenshot_20251111_061339_ChatGPT-1.png') }}"
-       alt="EBM Mark"
-       class="brand-mark">
+  <!-- REMOVED OLD BROKEN IMAGE -->
+  <!-- (No more Screenshot_202511...) -->
 
   <script>
     const questionInput = document.getElementById("question");
@@ -142,7 +147,7 @@
         if (heading) {
           if (hasNonEmpty(current.content)) sections.push(current);
           current = { title: heading, content: [] };
-          seenExplicit = true; // <-- FIX: proper JS boolean
+          seenExplicit = true;
         } else {
           current.content.push(line);
         }
@@ -153,7 +158,6 @@
       let html = "";
       let idx = 0;
 
-      // Only summary case
       if (!seenExplicit && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -231,7 +235,7 @@
     function loadConversations() {
       let data = [];
       try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+        data = JSON.parse(locallocalStorage.getItem("ebm_conversations") || "[]");
       } catch { data = []; }
 
       conversationListEl.innerHTML = "";
@@ -307,8 +311,8 @@
       const term = (topicSearch.value || "").toLowerCase().trim();
       const items = conversationListEl.querySelectorAll(".conversation-item");
       items.forEach((item) => {
-        const title = (item.querySelector(".conv-title")?.textContent || "")
-          .toLowerCase();
+        const title = (item.querySelector(".conv-title")?.textContent || "").
+          toLowerCase();
         item.style.display = !term || title.includes(term) ? "" : "none";
       });
     }
