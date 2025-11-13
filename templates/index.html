@@ -1,303 +1,429 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>EBM Nexus – Clinical Q&amp;A Engine</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <style>
-    :root {
-      color-scheme: dark;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top left, #151821, #020617 55%);
-      color: #f9fafb;
-      min-height: 100vh;
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
-    }
-
-    main {
-      width: 100%;
-      max-width: 1100px;
-      margin: 40px 16px;
-      display: grid;
-      grid-template-columns: 1.1fr 1fr;
-      gap: 28px;
-    }
-
-    @media (max-width: 900px) {
-      main {
-        grid-template-columns: 1fr;
-        margin-top: 24px;
-      }
-    }
-
-    .card {
-      background: rgba(15, 23, 42, 0.96);
-      border-radius: 18px;
-      padding: 22px 22px 24px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      backdrop-filter: blur(18px);
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.65);
-      color: #e0f2fe;
-      font-size: 0.75rem;
-      margin-bottom: 10px;
-    }
-
-    .pill-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 999px;
-      background: #22c55e;
-    }
-
-    h1 {
-      font-size: 2.4rem;
-      font-weight: 800;
-      margin: 0 0 8px;
-      color: #e5edff;
-    }
-
-    .lead {
-      color: #cbd5f5;
-      font-size: 0.96rem;
-      line-height: 1.6;
-      margin: 0 0 12px;
-    }
-
-    .subtle {
-      color: #9ca3af;
-      font-size: 0.85rem;
-      line-height: 1.5;
-      margin: 0;
-    }
-
-    .p-hint {
-      margin-top: 14px;
-      font-size: 0.8rem;
-      color: #9ca3af;
-    }
-
-    label {
-      font-size: 0.9rem;
-      color: #e5e7eb;
-    }
-
-    textarea {
-      width: 100%;
-      margin-top: 8px;
-      padding: 11px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.6);
-      background: rgba(3, 7, 18, 0.96);
-      color: #f9fafb;
-      font-size: 0.95rem;
-      resize: vertical;
-      min-height: 140px;
-    }
-
-    textarea::placeholder {
-      color: #6b7280;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #38bdf8;
-      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
-    }
-
-    .actions {
-      margin-top: 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    button#submit-btn {
-      border: none;
-      border-radius: 999px;
-      padding: 8px 18px;
-      background: linear-gradient(135deg, #38bdf8, #6366f1);
-      color: white;
-      font-weight: 600;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    button#submit-btn:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-
-    .loading {
-      font-size: 0.8rem;
-      color: #9ca3af;
-    }
-
-    .error-box {
-      margin-top: 10px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: rgba(248, 113, 113, 0.12);
-      border: 1px solid rgba(248, 113, 113, 0.8);
-      color: #fee2e2;
-      font-size: 0.8rem;
-    }
-
-    .answer-wrapper {
-      margin-top: 16px;
-    }
-
-    .answer-card {
-      padding: 14px 16px;
-      border-radius: 14px;
-      background: radial-gradient(circle at top right,
-        rgba(56, 189, 248, 0.16),
-        rgba(15, 23, 42, 0.98)
-      );
-      border: 1px solid rgba(148, 163, 184, 0.6);
-      max-height: 420px;
-      overflow-y: auto;
-      font-size: 0.9rem;
-      white-space: pre-wrap;
-    }
-
-    .answer-card h2,
-    .answer-card h3 {
-      margin: 8px 0 4px;
-      font-size: 1rem;
-      color: #e5edff;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <title>Clinical Q&A Engine | EBM Sessions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
+  <div class="app-root">
+    <div class="shell">
+      <div class="layout">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-brand">
+              <div class="brand-logo">EBM</div>
+              <div class="brand-text">
+                <div class="brand-title">EBM Sessions</div>
+              </div>
+            </div>
+            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
+          </div>
 
-<main>
-  <!-- LEFT: intro / description -->
-  <section class="card">
-    <div class="pill">
-      Clinical framing
-      <span class="pill-dot"></span>
-    </div>
+          <div id="conversationList" class="conversation-list"></div>
 
-    <h1>Clinical Q&amp;A Engine</h1>
+          <div class="sidebar-footer">
+            <span class="sidebar-hint">Locally stored • Per device</span>
+          </div>
+        </aside>
 
-    <p class="lead">
-      Ask a focused clinical question and receive a structured, evidence-aware response with Australian spelling,
-      for learning, reflection, and handover preparation.
-    </p>
+        <!-- MAIN REGION -->
+        <div class="main-region">
+          <header class="header">
+            <h1 class="title">CLINICAL Q&amp;A ENGINE</h1>
+            <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
+          </header>
 
-    <p class="subtle">
-      This tool is for <strong>education only</strong>. It provides general, evidence-informed information and does
-      <strong>not</strong> give individual treatment or dosing advice. Always follow your hospital policies,
-      local guidelines, and discuss with a senior clinician.
-    </p>
+          <main class="grid">
+            <!-- INPUT CARD -->
+            <section class="card input-card">
+              <label class="label" for="question">Clinical Question</label>
+              <textarea
+                id="question"
+                class="textarea"
+                rows="6"
+                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
+              ></textarea>
+              <div class="actions">
+                <button id="generateBtn" class="btn">Generate</button>
+              </div>
+            </section>
 
-    <p class="p-hint">
-      Examples: “Risk stratification for chest pain with normal ECG and troponin”, “Approach to new-onset AF in ED”,
-      “Workup of suspected PE in pregnancy”.
-    </p>
-  </section>
+            <!-- OUTPUT CARD -->
+            <section class="card output-card">
+              <div class="output-header">
+                <h2 class="output-title">Answers</h2>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
+              </div>
 
-  <!-- RIGHT: question + answer -->
-  <section class="card">
-    <form id="question-form">
-      <label for="question">Clinical question</label>
-      <textarea id="question"
-                name="question"
-                placeholder="e.g. Risk stratification for chest pain with normal ECG and troponin, or approach to new-onset AF in the ED."
-                required></textarea>
+              <div id="answerLoader" class="answer-loader hidden">
+                <div class="loader"></div>
+                <div class="loader-text">Generating structured answer…</div>
+              </div>
 
-      <div class="actions">
-        <button type="submit" id="submit-btn">Ask question</button>
-        <span id="loading-indicator" class="loading" style="display:none;">Thinking…</span>
+              <div class="output-body">
+                <div id="answer" class="answer placeholder">
+                  Your structured, evidence-based response will appear here.
+                </div>
+              </div>
+            </section>
+          </main>
+        </div>
       </div>
-    </form>
-
-    <div id="error-box" class="error-box" style="display:none;"></div>
-
-    <div id="answer-wrapper" class="answer-wrapper" style="display:none;">
-      <div id="answer-body" class="answer-card"></div>
     </div>
-  </section>
-</main>
+  </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  const form = document.getElementById("question-form");
-  const questionInput = document.getElementById("question");
-  const submitBtn = document.getElementById("submit-btn");
-  const loadingIndicator = document.getElementById("loading-indicator");
-  const errorBox = document.getElementById("error-box");
-  const answerWrapper = document.getElementById("answer-wrapper");
-  const answerBody = document.getElementById("answer-body");
+  <!-- SMALL BLENDED BOTTOM-LEFT LOGO -->
+  <img src="{{ url_for('static', filename='header.png') }}"
+       alt="logo"
+       class="corner-logo">
 
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
+  <!-- DISCLAIMER MODAL (shown on first visit only) -->
+  <div id="disclaimerOverlay" class="disclaimer-overlay" style="display: none;">
+    <div class="disclaimer-box">
+      <h2 class="disclaimer-title">Important Disclaimer</h2>
+      <p class="disclaimer-text">
+        This tool is provided strictly for <strong>education, revision, and study support only</strong>.<br>
+        It must <u>not</u> be used for real-world clinical decision-making, diagnosis, or patient treatment.<br>
+        Always follow local guidelines, institutional policies, and consult qualified senior clinicians when providing patient care.
+      </p>
+      <button id="disclaimerBtn" class="disclaimer-btn">I Understand</button>
+    </div>
+  </div>
 
-    const question = questionInput.value.trim();
-    if (!question) {
-      errorBox.textContent = "Please enter a clinical question.";
-      errorBox.style.display = "block";
-      return;
+  <script>
+    const questionInput = document.getElementById("question");
+    const generateBtn = document.getElementById("generateBtn");
+    const answerEl = document.getElementById("answer");
+    const copyAllBtn = document.getElementById("copyAllBtn");
+    const answerLoader = document.getElementById("answerLoader");
+    const conversationListEl = document.getElementById("conversationList");
+    const topicSearch = document.getElementById("topicSearch");
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
 
-    errorBox.style.display = "none";
-    answerWrapper.style.display = "none";
-    loadingIndicator.style.display = "inline";
-    submitBtn.disabled = true;
+    function hasNonEmpty(arr) {
+      return Array.isArray(arr) && arr.some(l => l.trim() !== "");
+    }
 
-    try {
-      const resp = await fetch("/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question })
-      });
+    function flashCopy(btn) {
+      const t = btn.textContent;
+      btn.textContent = "Copied";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = t;
+        btn.classList.remove("copied");
+      }, 900);
+    }
 
-      if (!resp.ok) {
-        let msg = "There was a problem contacting the backend.";
-        try {
-          const data = await resp.json();
-          if (data.error) msg = data.error;
-        } catch (_) {}
-        throw new Error(msg);
+    // ---------- BUILD STRUCTURED HTML ----------
+    function buildStructuredHtml(raw) {
+      if (!raw) return "";
+      let text = raw
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "")
+        .replace(/\r/g, "");
+
+      const lines = text.split("\n");
+      const sectionOrder = [
+        "Summary","Overview","Assessment","Diagnosis","Investigations",
+        "Treatment","Management","Plan","Monitoring",
+        "Follow-up & Safety Netting","Follow-up","Red Flags","References"
+      ];
+
+      const sections = [];
+      let current = { title: "Summary", content: [] };
+      let seenExplicit = false;
+
+      const isHeading = (line) => {
+        const trimmed = line.trim().replace(/:$/, "");
+        return sectionOrder.find(
+          h => trimmed.toLowerCase() === h.toLowerCase()
+        ) || null;
+      };
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          current.content.push("");
+          continue;
+        }
+        const heading = isHeading(line);
+        if (heading) {
+          if (hasNonEmpty(current.content)) sections.push(current);
+          current = { title: heading, content: [] };
+          seenExplicit = true;
+        } else {
+          current.content.push(line);
+        }
       }
 
-      const data = await resp.json();
-      const answer = data.answer || "(No answer returned.)";
+      if (hasNonEmpty(current.content)) sections.push(current);
 
-      answerBody.textContent = answer;
-      answerWrapper.style.display = "block";
-    } catch (err) {
-      console.error(err);
-      errorBox.textContent = err.message || "Unexpected error occurred.";
-      errorBox.style.display = "block";
-    } finally {
-      loadingIndicator.style.display = "none";
-      submitBtn.disabled = false;
+      let html = "";
+      let idx = 0;
+
+      // Only summary case
+      if (!seenExplicit && sections.length === 1 && sections[0].title === "Summary") {
+        const body = sections[0].content.join(" ").trim();
+        if (!body) return "No response generated.";
+        const id = `sec-${idx++}`;
+        html += `
+          <div class="section">
+            <div class="section-header static">
+              <span>Summary</span>
+              <button class="section-copy-btn" data-target="${id}">Copy</button>
+            </div>
+            <div class="section-body static-body" data-section="${id}">
+              <p>${escapeHtml(body)}</p>
+            </div>
+          </div>`;
+        return html;
+      }
+
+      for (const sec of sections) {
+        const title = sec.title;
+        const bodyLines = sec.content || [];
+        if (!hasNonEmpty(bodyLines)) continue;
+        const id = `sec-${idx++}`;
+
+        const inner = bodyLines
+          .filter(l => l.trim() !== "")
+          .map(l => {
+            const t = l.trim();
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              return `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                </div>`;
+            }
+            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+          })
+          .join("");
+
+        if (!inner.trim()) continue;
+
+        if (title === "Summary" || title === "Overview") {
+          html += `
+            <div class="section">
+              <div class="section-header static">
+                <span>${escapeHtml(title)}</span>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="section-body static-body" data-section="${id}">
+                ${inner}
+              </div>
+            </div>`;
+        } else {
+          html += `
+            <div class="section">
+              <div class="collapsible-header">
+                <button class="collapsible" data-target="${id}">
+                  ${escapeHtml(title)}
+                </button>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="collapsible-content" data-section="${id}">
+                ${inner}
+              </div>
+            </div>`;
+        }
+      }
+
+      return html || "No response generated.";
     }
-  });
-});
-</script>
 
+    // ---------- CONVERSATION STORAGE ----------
+    function loadConversations() {
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch { data = []; }
+
+      conversationListEl.innerHTML = "";
+
+      if (!data.length) {
+        conversationListEl.innerHTML =
+          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
+        return;
+      }
+
+      data.forEach((item, index) => {
+        const el = document.createElement("div");
+        el.className = "conversation-item";
+
+        const main = document.createElement("div");
+        main.className = "conv-main";
+        main.innerHTML =
+          `<div class="conv-title">${escapeHtml(item.title || "Topic")}</div>`;
+
+        const del = document.createElement("button");
+        del.className = "conv-delete";
+        del.dataset.index = index;
+        del.textContent = "✕";
+        del.title = "Remove";
+
+        main.addEventListener("click", () => {
+          questionInput.value = item.query || "";
+          answerEl.innerHTML = item.answer || "";
+          const has = !!(item.answer && item.answer.trim());
+          answerEl.classList.toggle("placeholder", !has);
+          copyAllBtn.disabled = !has;
+        });
+
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteConversation(index);
+        });
+
+        el.appendChild(main);
+        el.appendChild(del);
+        conversationListEl.appendChild(el);
+      });
+    }
+
+    function saveConversation(query, answerHtml) {
+      if (!query || !answerHtml) return;
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch { data = []; }
+
+      const title =
+        query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
+
+      data.push({ title: title || "Topic", query, answer: answerHtml });
+      if (data.length > 40) data = data.slice(data.length - 40);
+
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
+    }
+
+    function deleteConversation(index) {
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch { data = []; }
+      data.splice(index, 1);
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
+    }
+
+    function filterTopics() {
+      const term = (topicSearch.value || "").toLowerCase().trim();
+      const items = conversationListEl.querySelectorAll(".conversation-item");
+      items.forEach((item) => {
+        const title = (item.querySelector(".conv-title")?.textContent || "")
+          .toLowerCase();
+        item.style.display = !term || title.includes(term) ? "" : "none";
+      });
+    }
+
+    // ---------- GENERATE ----------
+    async function generate() {
+      const query = questionInput.value.trim();
+      if (!query) return;
+
+      generateBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+      answerEl.classList.remove("placeholder");
+      answerEl.innerHTML = "";
+
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const data = await res.json();
+        if (data.answer) {
+          const html = buildStructuredHtml(data.answer);
+          answerEl.innerHTML = html;
+          const has = !!answerEl.textContent.trim();
+          copyAllBtn.disabled = !has;
+          if (has) saveConversation(query, html);
+        } else {
+          answerEl.textContent = data.error || "No response generated.";
+          copyAllBtn.disabled = true;
+        }
+      } catch (err) {
+        console.error(err);
+        answerEl.textContent = "Error generating answer.";
+        copyAllBtn.disabled = true;
+      } finally {
+        answerLoader.classList.add("hidden");
+        generateBtn.disabled = false;
+      }
+    }
+
+    // ---------- EVENTS ----------
+    generateBtn.addEventListener("click", generate);
+
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
+      }
+    });
+
+    copyAllBtn.addEventListener("click", async () => {
+      const text = answerEl.textContent.trim();
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+      flashCopy(copyAllBtn);
+    });
+
+    document.addEventListener("click", async (e) => {
+      if (e.target.classList.contains("section-copy-btn")) {
+        const id = e.target.dataset.target;
+        const section = document.querySelector(`[data-section="${id}"]`);
+        if (!section) return;
+        const text = section.innerText.trim();
+        if (!text) return;
+        await navigator.clipboard.writeText(text);
+        flashCopy(e.target);
+      } else if (e.target.classList.contains("collapsible")) {
+        const id = e.target.dataset.target;
+        const content = document.querySelector(
+          `.collapsible-content[data-section="${id}"]`
+        );
+        if (!content) return;
+        const open = content.style.display === "block";
+        e.target.classList.toggle("active", !open);
+        content.style.display = open ? "none" : "block";
+      }
+    });
+
+    topicSearch.addEventListener("input", filterTopics);
+
+    window.addEventListener("DOMContentLoaded", () => {
+      loadConversations();
+
+      // DISCLAIMER POPUP HANDLING
+      const disclaimerOverlay = document.getElementById("disclaimerOverlay");
+      const disclaimerBtn = document.getElementById("disclaimerBtn");
+
+      if (disclaimerOverlay && disclaimerBtn) {
+        if (!localStorage.getItem("ebm_disclaimer_accepted")) {
+          disclaimerOverlay.style.display = "flex";
+        }
+
+        disclaimerBtn.addEventListener("click", () => {
+          localStorage.setItem("ebm_disclaimer_accepted", "yes");
+          disclaimerOverlay.style.display = "none";
+        });
+      }
+    });
+  </script>
 </body>
 </html>
