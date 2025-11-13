@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <div class="card">
+    <div class="card-body">
+      <button type="button"
+              class="btn-close float-end"
+              aria-label="Close"
+              onclick="window.history.back()"></button>
+
+      <h3 class="card-title">HEART Score</h3>
+      <p class="text-muted small mb-3">
+        History, ECG, Age, Risk factors, Troponin. Educational use only – always follow local chest pain pathways.
+      </p>
+
+      {% if error %}
+        <div class="alert alert-danger py-2 small">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">History</label>
+          <select name="history" class="form-select" required>
+            <option value="0">Slightly suspicious (0)</option>
+            <option value="1">Moderately suspicious (1)</option>
+            <option value="2">Highly suspicious (2)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">ECG</label>
+          <select name="ecg" class="form-select" required>
+            <option value="0">Normal (0)</option>
+            <option value="1">Non-specific repolarisation disturbance (1)</option>
+            <option value="2">Significant ST deviation (2)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Age</label>
+          <select name="age" class="form-select" required>
+            <option value="0">&lt; 45 years (0)</option>
+            <option value="1">45–64 years (1)</option>
+            <option value="2">&ge; 65 years (2)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Risk factors</label>
+          <select name="risk" class="form-select" required>
+            <option value="0">No known risk factors (0)</option>
+            <option value="1">1–2 risk factors (1)</option>
+            <option value="2">&ge; 3 risk factors or known atherosclerotic disease (2)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Troponin</label>
+          <select name="troponin" class="form-select" required>
+            <option value="0">Normal (0)</option>
+            <option value="1">1–3× upper limit of normal (1)</option>
+            <option value="2">&gt; 3× upper limit of normal (2)</option>
+          </select>
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary mt-2">Calculate HEART score</button>
+        </div>
+      </form>
+
+      {% if score is defined %}
+        <hr>
+        <h5>Result</h5>
+        <p class="fs-5">HEART score: <strong>{{ score }}</strong> / 10</p>
+        <p class="small text-muted">
+          Higher scores are associated with higher risk of major adverse cardiac events.
+          Use within your local chest pain risk pathway and in discussion with seniors.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
