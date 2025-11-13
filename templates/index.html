@@ -1,67 +1,115 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="container mt-4">
-  <div class="card">
-    <div class="card-body">
-      <button type="button"
-              class="btn-close float-end"
-              aria-label="Close"
-              onclick="window.history.back()"></button>
 
-      <h3 class="card-title">CURB-65 Score</h3>
+{% block content %}
+<div class="container py-4">
+
+  <div class="row">
+    <div class="col-lg-8 mx-auto">
+
+      <h1 class="mb-3">Clinical Q&amp;A Engine</h1>
       <p class="text-muted small">
-        Community-acquired pneumonia severity (Confusion, Urea, Respiratory rate, Blood pressure, Age ≥ 65).
+        This tool is for education only. It provides general, evidence-informed information with Australian spelling
+        and does <strong>not</strong> give individual treatment or dosing advice. Always follow local guidelines and
+        discuss with a senior clinician.
       </p>
 
-      <form method="post">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="confusion" id="confusion">
-          <label class="form-check-label" for="confusion">
-            New confusion (e.g. AMTS ≤ 8)
-          </label>
+      <!-- Question form -->
+      <form id="question-form" class="mt-4">
+        <div class="mb-3">
+          <label for="question" class="form-label">Clinical question</label>
+          <textarea
+            id="question"
+            name="question"
+            class="form-control"
+            rows="5"
+            placeholder="e.g. Risk stratification for chest pain with normal ECG and troponin, or approach to new-onset AF in the ED."
+            required
+          ></textarea>
         </div>
 
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="urea" id="urea">
-          <label class="form-check-label" for="urea">
-            Urea &gt; 7 mmol/L
-          </label>
-        </div>
-
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="rr_30" id="rr_30">
-          <label class="form-check-label" for="rr_30">
-            Respiratory rate ≥ 30 / min
-          </label>
-        </div>
-
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="bp_low" id="bp_low">
-          <label class="form-check-label" for="bp_low">
-            Systolic BP &lt; 90 mmHg or diastolic ≤ 60 mmHg
-          </label>
-        </div>
-
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" name="age_65" id="age_65">
-          <label class="form-check-label" for="age_65">
-            Age ≥ 65 years
-          </label>
-        </div>
-
-        <button type="submit" class="btn btn-primary">Calculate CURB-65</button>
+        <button type="submit" id="submit-btn" class="btn btn-primary">
+          Ask question
+        </button>
+        <span id="loading-indicator" class="text-muted small ms-2" style="display:none;">
+          Thinking…
+        </span>
       </form>
 
-      {% if score is defined %}
-        <hr>
-        <h5>Result</h5>
-        <p class="fs-5">CURB-65 score: <strong>{{ score }}</strong> / 5</p>
-        <p class="small text-muted mb-0">
-          Higher scores indicate higher mortality risk and usually support admission / higher level of care.
-          Follow local pneumonia guidelines.
-        </p>
-      {% endif %}
+      <!-- Error message -->
+      <div id="error-box" class="alert alert-danger mt-3 py-2 small" style="display:none;"></div>
+
+      <!-- Answer output -->
+      <div id="answer-wrapper" class="mt-4" style="display:none;">
+        <h4>Response</h4>
+        <div id="answer" class="card">
+          <div class="card-body" id="answer-body">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
+
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("question-form");
+  const questionInput = document.getElementById("question");
+  const submitBtn = document.getElementById("submit-btn");
+  const loadingIndicator = document.getElementById("loading-indicator");
+  const errorBox = document.getElementById("error-box");
+  const answerWrapper = document.getElementById("answer-wrapper");
+  const answerBody = document.getElementById("answer-body");
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const question = questionInput.value.trim();
+    if (!question) {
+      errorBox.textContent = "Please enter a question.";
+      errorBox.style.display = "block";
+      return;
+    }
+
+    // UI: clear old stuff, show loading
+    errorBox.style.display = "none";
+    answerWrapper.style.display = "none";
+    loadingIndicator.style.display = "inline";
+    submitBtn.disabled = true;
+
+    try {
+      const resp = await fetch("/ask", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ question: question })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        const msg = data.error || "There was a problem contacting the backend.";
+        throw new Error(msg);
+      }
+
+      const data = await resp.json();
+      const answer = data.answer || "(No answer returned.)";
+
+      // Show answer
+      answerBody.innerText = answer;
+      answerWrapper.style.display = "block";
+
+    } catch (err) {
+      console.error(err);
+      errorBox.textContent = err.message || "Unexpected error occurred.";
+      errorBox.style.display = "block";
+    } finally {
+      loadingIndicator.style.display = "none";
+      submitBtn.disabled = false;
+    }
+  });
+});
+</script>
 {% endblock %}
