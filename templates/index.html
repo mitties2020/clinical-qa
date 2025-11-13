@@ -8,13 +8,6 @@
 </head>
 
 <body>
-
-  <!-- HEADER IMAGE -->
-  <div class="header-wrapper">
-    <img src="{{ url_for('static', filename='header.png') }}" alt="Header Image" class="header-image">
-  </div>
-  <!-- END HEADER IMAGE -->
-
   <div class="app-root">
     <div class="shell">
       <div class="layout">
@@ -40,7 +33,7 @@
         <!-- MAIN REGION -->
         <div class="main-region">
           <header class="header">
-            <h1 class="title">Clinical Q&amp;A Engine</h1>
+            <h1 class="title">CLINICAL Q&A ENGINE</h1>
             <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
           </header>
 
@@ -83,8 +76,10 @@
     </div>
   </div>
 
-  <!-- REMOVED OLD BROKEN IMAGE -->
-  <!-- (No more Screenshot_202511...) -->
+  <!-- SMALL BLENDED BOTTOM-LEFT LOGO -->
+  <img src="{{ url_for('static', filename='header.png') }}"
+       alt="logo"
+       class="corner-logo">
 
   <script>
     const questionInput = document.getElementById("question");
@@ -111,7 +106,6 @@
       }, 900);
     }
 
-    // ---------- BUILD STRUCTURED HTML ----------
     function buildStructuredHtml(raw) {
       if (!raw) return "";
       let text = raw
@@ -231,11 +225,10 @@
       return html || "No response generated.";
     }
 
-    // ---------- CONVERSATION STORAGE ----------
     function loadConversations() {
       let data = [];
       try {
-        data = JSON.parse(locallocalStorage.getItem("ebm_conversations") || "[]");
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
       } catch { data = []; }
 
       conversationListEl.innerHTML = "";
@@ -311,13 +304,12 @@
       const term = (topicSearch.value || "").toLowerCase().trim();
       const items = conversationListEl.querySelectorAll(".conversation-item");
       items.forEach((item) => {
-        const title = (item.querySelector(".conv-title")?.textContent || "").
-          toLowerCase();
+        const title = (item.querySelector(".conv-title")?.textContent || "")
+          .toLowerCase();
         item.style.display = !term || title.includes(term) ? "" : "none";
       });
     }
 
-    // ---------- GENERATE ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -355,7 +347,6 @@
       }
     }
 
-    // ---------- EVENTS ----------
     generateBtn.addEventListener("click", generate);
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
