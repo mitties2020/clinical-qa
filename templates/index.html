@@ -1,57 +1,211 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container py-4">
+<style>
+  /* Restore dark original-style look just for this page */
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: radial-gradient(circle at top left, #151821, #06080d 60%);
+    color: #f5f5f5;
+    min-height: 100vh;
+  }
 
-  <div class="row">
-    <div class="col-lg-8 mx-auto">
+  main.landing {
+    max-width: 1100px;
+    margin: 40px auto;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 30px;
+    padding: 0 20px 40px;
+  }
 
-      <h1 class="mb-3">Clinical Q&amp;A Engine</h1>
-      <p class="text-muted small">
-        This tool is for education only. It provides general, evidence-informed information with Australian spelling
-        and does <strong>not</strong> give individual treatment or dosing advice. Always follow local guidelines and
-        discuss with a senior clinician.
-      </p>
+  @media (max-width: 900px) {
+    main.landing {
+      grid-template-columns: 1fr;
+    }
+  }
 
-      <!-- Question form -->
-      <form id="question-form" class="mt-4">
-        <div class="mb-3">
-          <label for="question" class="form-label">Clinical question</label>
-          <textarea
-            id="question"
-            name="question"
-            class="form-control"
-            rows="5"
-            placeholder="e.g. Risk stratification for chest pain with normal ECG and troponin, or approach to new-onset AF in the ED."
-            required
-          ></textarea>
-        </div>
+  section.card-block {
+    background: rgba(20, 25, 35, 0.96);
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+  }
 
-        <button type="submit" id="submit-btn" class="btn btn-primary">
+  h1.hero-title {
+    font-size: 2.4rem;
+    font-weight: 800;
+    margin: 0 0 8px;
+    color: #e5edff;
+  }
+
+  p.lead {
+    color: #cbd5f5;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-top: 0;
+    margin-bottom: 14px;
+  }
+
+  p.subtle {
+    color: #9ca3af;
+    font-size: 0.85rem;
+    margin-top: 0;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.6);
+    color: #e0f2fe;
+    font-size: 0.75rem;
+    margin-bottom: 10px;
+  }
+
+  textarea#question {
+    width: 100%;
+    height: 140px;
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.6);
+    background: rgba(3, 7, 18, 0.96);
+    color: #f9fafb;
+    font-size: 0.95rem;
+    resize: vertical;
+  }
+
+  textarea#question:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
+  }
+
+  .actions {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-primary-main {
+    border: none;
+    border-radius: 999px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #38bdf8, #6366f1);
+    color: white;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .btn-primary-main:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .loading-text {
+    font-size: 0.8rem;
+    color: #9ca3af;
+  }
+
+  .error-box {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.7);
+    color: #fecaca;
+    font-size: 0.8rem;
+  }
+
+  .answer-card {
+    margin-top: 16px;
+    background: radial-gradient(circle at top right, rgba(56,189,248,0.12), rgba(15,23,42,0.96));
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    padding: 14px 16px;
+    max-height: 420px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+  }
+
+  .answer-card h2,
+  .answer-card h3,
+  .answer-card h4 {
+    margin-top: 10px;
+    margin-bottom: 4px;
+    font-size: 1rem;
+    color: #e5edff;
+  }
+
+  .hint {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 6px;
+  }
+</style>
+
+<main class="landing">
+  <!-- LEFT: intro / reassurance -->
+  <section class="card-block">
+    <span class="pill">
+      Clinical framing
+      <span style="width:6px;height:6px;border-radius:999px;background:#22c55e;display:inline-block;"></span>
+    </span>
+
+    <h1 class="hero-title">Clinical Q&amp;A Engine</h1>
+
+    <p class="lead">
+      Ask a focused clinical question and receive a structured, evidence-aware response with Australian spelling,
+      for learning, reflection, and handover preparation.
+    </p>
+
+    <p class="subtle">
+      This tool is for <strong>education only</strong>. It provides general, evidence-informed information and does
+      <strong>not</strong> give individual treatment or dosing advice. Always follow your hospital policies,
+      local guidelines, and discuss with a senior clinician.
+    </p>
+
+    <p class="hint">
+      Examples: “Risk stratification for chest pain with normal ECG and troponin”, “Approach to new-onset AF in ED”,
+      “Workup of suspected PE in pregnancy”.
+    </p>
+  </section>
+
+  <!-- RIGHT: question + answer -->
+  <section class="card-block">
+    <form id="question-form">
+      <label for="question">Clinical question</label>
+      <textarea id="question"
+                name="question"
+                placeholder="e.g. Risk stratification for chest pain with normal ECG and troponin, or approach to new-onset AF in the ED."
+                required></textarea>
+
+      <div class="actions">
+        <button type="submit" id="submit-btn" class="btn-primary-main">
           Ask question
         </button>
-        <span id="loading-indicator" class="text-muted small ms-2" style="display:none;">
+        <span id="loading-indicator" class="loading-text" style="display:none;">
           Thinking…
         </span>
-      </form>
-
-      <!-- Error message -->
-      <div id="error-box" class="alert alert-danger mt-3 py-2 small" style="display:none;"></div>
-
-      <!-- Answer output -->
-      <div id="answer-wrapper" class="mt-4" style="display:none;">
-        <h4>Response</h4>
-        <div id="answer" class="card">
-          <div class="card-body" id="answer-body">
-            <!-- Filled by JS -->
-          </div>
-        </div>
       </div>
+    </form>
 
+    <div id="error-box" class="error-box" style="display:none;"></div>
+
+    <div id="answer-wrapper" style="display:none;">
+      <div class="answer-card" id="answer-body"></div>
     </div>
-  </div>
-
-</div>
+  </section>
+</main>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -68,12 +222,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const question = questionInput.value.trim();
     if (!question) {
-      errorBox.textContent = "Please enter a question.";
+      errorBox.textContent = "Please enter a clinical question.";
       errorBox.style.display = "block";
       return;
     }
 
-    // UI: clear old stuff, show loading
     errorBox.style.display = "none";
     answerWrapper.style.display = "none";
     loadingIndicator.style.display = "inline";
@@ -82,25 +235,24 @@ document.addEventListener("DOMContentLoaded", function () {
     try {
       const resp = await fetch("/ask", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ question: question })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
       });
 
       if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        const msg = data.error || "There was a problem contacting the backend.";
+        let msg = "There was a problem contacting the backend.";
+        try {
+          const data = await resp.json();
+          if (data.error) msg = data.error;
+        } catch (_) {}
         throw new Error(msg);
       }
 
       const data = await resp.json();
       const answer = data.answer || "(No answer returned.)";
 
-      // Show answer
-      answerBody.innerText = answer;
+      answerBody.textContent = answer;
       answerWrapper.style.display = "block";
-
     } catch (err) {
       console.error(err);
       errorBox.textContent = err.message || "Unexpected error occurred.";
