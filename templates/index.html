@@ -1,167 +1,205 @@
-{% extends "base.html" %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>EBM Nexus – Clinical Q&amp;A Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-{% block content %}
-<style>
-  /* Restore dark original-style look just for this page */
-  body {
-    margin: 0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: radial-gradient(circle at top left, #151821, #06080d 60%);
-    color: #f5f5f5;
-    min-height: 100vh;
-  }
-
-  main.landing {
-    max-width: 1100px;
-    margin: 40px auto;
-    display: grid;
-    grid-template-columns: 1.1fr 1fr;
-    gap: 30px;
-    padding: 0 20px 40px;
-  }
-
-  @media (max-width: 900px) {
-    main.landing {
-      grid-template-columns: 1fr;
+  <style>
+    :root {
+      color-scheme: dark;
     }
-  }
 
-  section.card-block {
-    background: rgba(20, 25, 35, 0.96);
-    border-radius: 18px;
-    padding: 24px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(148, 163, 184, 0.35);
-  }
+    * {
+      box-sizing: border-box;
+    }
 
-  h1.hero-title {
-    font-size: 2.4rem;
-    font-weight: 800;
-    margin: 0 0 8px;
-    color: #e5edff;
-  }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #151821, #020617 55%);
+      color: #f9fafb;
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
 
-  p.lead {
-    color: #cbd5f5;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    margin-top: 0;
-    margin-bottom: 14px;
-  }
+    main {
+      width: 100%;
+      max-width: 1100px;
+      margin: 40px 16px;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 28px;
+    }
 
-  p.subtle {
-    color: #9ca3af;
-    font-size: 0.85rem;
-    margin-top: 0;
-  }
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+        margin-top: 24px;
+      }
+    }
 
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background: rgba(56, 189, 248, 0.1);
-    border: 1px solid rgba(56, 189, 248, 0.6);
-    color: #e0f2fe;
-    font-size: 0.75rem;
-    margin-bottom: 10px;
-  }
+    .card {
+      background: rgba(15, 23, 42, 0.96);
+      border-radius: 18px;
+      padding: 22px 22px 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      backdrop-filter: blur(18px);
+    }
 
-  textarea#question {
-    width: 100%;
-    height: 140px;
-    margin-top: 8px;
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.6);
-    background: rgba(3, 7, 18, 0.96);
-    color: #f9fafb;
-    font-size: 0.95rem;
-    resize: vertical;
-  }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.65);
+      color: #e0f2fe;
+      font-size: 0.75rem;
+      margin-bottom: 10px;
+    }
 
-  textarea#question:focus {
-    outline: none;
-    border-color: #38bdf8;
-    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
-  }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+    }
 
-  .actions {
-    margin-top: 12px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+    h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      margin: 0 0 8px;
+      color: #e5edff;
+    }
 
-  .btn-primary-main {
-    border: none;
-    border-radius: 999px;
-    padding: 8px 16px;
-    background: linear-gradient(135deg, #38bdf8, #6366f1);
-    color: white;
-    font-weight: 600;
-    font-size: 0.9rem;
-    cursor: pointer;
-  }
+    .lead {
+      color: #cbd5f5;
+      font-size: 0.96rem;
+      line-height: 1.6;
+      margin: 0 0 12px;
+    }
 
-  .btn-primary-main:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
+    .subtle {
+      color: #9ca3af;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin: 0;
+    }
 
-  .loading-text {
-    font-size: 0.8rem;
-    color: #9ca3af;
-  }
+    .p-hint {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
 
-  .error-box {
-    margin-top: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(248, 113, 113, 0.1);
-    border: 1px solid rgba(248, 113, 113, 0.7);
-    color: #fecaca;
-    font-size: 0.8rem;
-  }
+    label {
+      font-size: 0.9rem;
+      color: #e5e7eb;
+    }
 
-  .answer-card {
-    margin-top: 16px;
-    background: radial-gradient(circle at top right, rgba(56,189,248,0.12), rgba(15,23,42,0.96));
-    border-radius: 14px;
-    border: 1px solid rgba(148, 163, 184, 0.45);
-    padding: 14px 16px;
-    max-height: 420px;
-    overflow-y: auto;
-    font-size: 0.9rem;
-    white-space: pre-wrap;
-  }
+    textarea {
+      width: 100%;
+      margin-top: 8px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(3, 7, 18, 0.96);
+      color: #f9fafb;
+      font-size: 0.95rem;
+      resize: vertical;
+      min-height: 140px;
+    }
 
-  .answer-card h2,
-  .answer-card h3,
-  .answer-card h4 {
-    margin-top: 10px;
-    margin-bottom: 4px;
-    font-size: 1rem;
-    color: #e5edff;
-  }
+    textarea::placeholder {
+      color: #6b7280;
+    }
 
-  .hint {
-    font-size: 0.75rem;
-    color: #9ca3af;
-    margin-top: 6px;
-  }
-</style>
+    textarea:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
+    }
 
-<main class="landing">
-  <!-- LEFT: intro / reassurance -->
-  <section class="card-block">
-    <span class="pill">
+    .actions {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    button#submit-btn {
+      border: none;
+      border-radius: 999px;
+      padding: 8px 18px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    button#submit-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .loading {
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+
+    .error-box {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(248, 113, 113, 0.12);
+      border: 1px solid rgba(248, 113, 113, 0.8);
+      color: #fee2e2;
+      font-size: 0.8rem;
+    }
+
+    .answer-wrapper {
+      margin-top: 16px;
+    }
+
+    .answer-card {
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: radial-gradient(circle at top right,
+        rgba(56, 189, 248, 0.16),
+        rgba(15, 23, 42, 0.98)
+      );
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      max-height: 420px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+
+    .answer-card h2,
+    .answer-card h3 {
+      margin: 8px 0 4px;
+      font-size: 1rem;
+      color: #e5edff;
+    }
+  </style>
+</head>
+<body>
+
+<main>
+  <!-- LEFT: intro / description -->
+  <section class="card">
+    <div class="pill">
       Clinical framing
-      <span style="width:6px;height:6px;border-radius:999px;background:#22c55e;display:inline-block;"></span>
-    </span>
+      <span class="pill-dot"></span>
+    </div>
 
-    <h1 class="hero-title">Clinical Q&amp;A Engine</h1>
+    <h1>Clinical Q&amp;A Engine</h1>
 
     <p class="lead">
       Ask a focused clinical question and receive a structured, evidence-aware response with Australian spelling,
@@ -174,14 +212,14 @@
       local guidelines, and discuss with a senior clinician.
     </p>
 
-    <p class="hint">
+    <p class="p-hint">
       Examples: “Risk stratification for chest pain with normal ECG and troponin”, “Approach to new-onset AF in ED”,
       “Workup of suspected PE in pregnancy”.
     </p>
   </section>
 
   <!-- RIGHT: question + answer -->
-  <section class="card-block">
+  <section class="card">
     <form id="question-form">
       <label for="question">Clinical question</label>
       <textarea id="question"
@@ -190,19 +228,15 @@
                 required></textarea>
 
       <div class="actions">
-        <button type="submit" id="submit-btn" class="btn-primary-main">
-          Ask question
-        </button>
-        <span id="loading-indicator" class="loading-text" style="display:none;">
-          Thinking…
-        </span>
+        <button type="submit" id="submit-btn">Ask question</button>
+        <span id="loading-indicator" class="loading" style="display:none;">Thinking…</span>
       </div>
     </form>
 
     <div id="error-box" class="error-box" style="display:none;"></div>
 
-    <div id="answer-wrapper" style="display:none;">
-      <div class="answer-card" id="answer-body"></div>
+    <div id="answer-wrapper" class="answer-wrapper" style="display:none;">
+      <div id="answer-body" class="answer-card"></div>
     </div>
   </section>
 </main>
@@ -264,4 +298,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 </script>
-{% endblock %}
+
+</body>
+</html>
