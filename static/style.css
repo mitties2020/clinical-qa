@@ -127,7 +127,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Discreet delete button */
+/* Delete button */
 
 .conv-delete {
   border: none;
@@ -146,9 +146,7 @@ body {
   box-shadow: none;
 }
 
-.conversation-item:hover .conv-delete {
-  opacity: 1;
-}
+.conversation-item:hover .conv-delete { opacity: 1; }
 
 .conv-delete:hover {
   background: rgba(239,68,68,0.14);
@@ -412,20 +410,23 @@ body {
   .grid { grid-template-columns: 1fr; }
 }
 
-/* Header image */
+/* ===== CORNER LOGO (bottom-left) ===== */
 
-.header-wrapper {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin: 18px 0 10px;
+.corner-logo {
+  position: fixed;
+  bottom: 18px;
+  left: 18px;
+  width: 80px;
+  height: auto;
+  opacity: 0.40;
+  z-index: 50;
+  filter: drop-shadow(0 0 10px rgba(34,197,94,0.25))
+          brightness(0.85) contrast(1.2);
+  transition: 0.25s ease;
 }
 
-.header-image {
-  max-width: 320px;
-  width: 80%;
-  height: auto;
-  border-radius: 18px;
-  display: block;
-  box-shadow: 0 0 28px rgba(0, 0, 0, 0.85);
+.corner-logo:hover {
+  opacity: 0.75;
+  filter: drop-shadow(0 0 14px rgba(34,197,94,0.55))
+          brightness(1);
 }
