@@ -33,7 +33,7 @@
         <!-- MAIN REGION -->
         <div class="main-region">
           <header class="header">
-            <h1 class="title">CLINICAL Q&A ENGINE</h1>
+            <h1 class="title">CLINICAL Q&amp;A ENGINE</h1>
             <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
           </header>
 
@@ -81,6 +81,19 @@
        alt="logo"
        class="corner-logo">
 
+  <!-- DISCLAIMER MODAL (shown on first visit only) -->
+  <div id="disclaimerOverlay" class="disclaimer-overlay" style="display: none;">
+    <div class="disclaimer-box">
+      <h2 class="disclaimer-title">Important Disclaimer</h2>
+      <p class="disclaimer-text">
+        This tool is provided strictly for <strong>education, revision, and study support only</strong>.<br>
+        It must <u>not</u> be used for real-world clinical decision-making, diagnosis, or patient treatment.<br>
+        Always follow local guidelines, institutional policies, and consult qualified senior clinicians when providing patient care.
+      </p>
+      <button id="disclaimerBtn" class="disclaimer-btn">I Understand</button>
+    </div>
+  </div>
+
   <script>
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
@@ -93,9 +106,11 @@
     function escapeHtml(str) {
       return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
+
     function hasNonEmpty(arr) {
       return Array.isArray(arr) && arr.some(l => l.trim() !== "");
     }
+
     function flashCopy(btn) {
       const t = btn.textContent;
       btn.textContent = "Copied";
@@ -106,6 +121,7 @@
       }, 900);
     }
 
+    // ---------- BUILD STRUCTURED HTML ----------
     function buildStructuredHtml(raw) {
       if (!raw) return "";
       let text = raw
@@ -152,6 +168,7 @@
       let html = "";
       let idx = 0;
 
+      // Only summary case
       if (!seenExplicit && sections.length === 1 && sections[0].title === "Summary") {
         const body = sections[0].content.join(" ").trim();
         if (!body) return "No response generated.";
@@ -225,6 +242,7 @@
       return html || "No response generated.";
     }
 
+    // ---------- CONVERSATION STORAGE ----------
     function loadConversations() {
       let data = [];
       try {
@@ -310,6 +328,7 @@
       });
     }
 
+    // ---------- GENERATE ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -347,19 +366,23 @@
       }
     }
 
+    // ---------- EVENTS ----------
     generateBtn.addEventListener("click", generate);
+
     questionInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         generate();
       }
     });
+
     copyAllBtn.addEventListener("click", async () => {
       const text = answerEl.textContent.trim();
       if (!text) return;
       await navigator.clipboard.writeText(text);
       flashCopy(copyAllBtn);
     });
+
     document.addEventListener("click", async (e) => {
       if (e.target.classList.contains("section-copy-btn")) {
         const id = e.target.dataset.target;
@@ -380,8 +403,27 @@
         content.style.display = open ? "none" : "block";
       }
     });
+
     topicSearch.addEventListener("input", filterTopics);
-    window.addEventListener("DOMContentLoaded", loadConversations);
+
+    window.addEventListener("DOMContentLoaded", () => {
+      loadConversations();
+
+      // DISCLAIMER POPUP HANDLING
+      const disclaimerOverlay = document.getElementById("disclaimerOverlay");
+      const disclaimerBtn = document.getElementById("disclaimerBtn");
+
+      if (disclaimerOverlay && disclaimerBtn) {
+        if (!localStorage.getItem("ebm_disclaimer_accepted")) {
+          disclaimerOverlay.style.display = "flex";
+        }
+
+        disclaimerBtn.addEventListener("click", () => {
+          localStorage.setItem("ebm_disclaimer_accepted", "yes");
+          disclaimerOverlay.style.display = "none";
+        });
+      }
+    });
   </script>
 </body>
 </html>
