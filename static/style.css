@@ -411,3 +411,21 @@ body {
   .layout { grid-template-columns: 1fr; }
   .grid { grid-template-columns: 1fr; }
 }
+
+/* Header image */
+
+.header-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 10px;
+}
+
+.header-image {
+  max-width: 320px;
+  width: 80%;
+  height: auto;
+  border-radius: 18px;
+  display: block;
+  box-shadow: 0 0 28px rgba(0, 0, 0, 0.85);
+}
