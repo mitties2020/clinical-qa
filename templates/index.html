@@ -11,7 +11,6 @@
   <div class="app-root">
     <div class="shell">
       <div class="layout">
-        <!-- SIDEBAR -->
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -21,63 +20,40 @@
                 <div class="sidebar-title">EBM Session</div>
               </div>
             </div>
-            <input
-              id="topicSearch"
-              class="topic-search"
-              type="text"
-              placeholder="Search topics..."
-            />
+            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
           </div>
-
           <div id="conversationList" class="conversation-list"></div>
-
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
         </aside>
 
-        <!-- MAIN REGION -->
         <div class="main-region">
           <header class="header">
             <h1 class="title">CLINICAL ENGINE</h1>
-            <p class="subtitle">
-              Enter a clinical question to generate an evidence-based answer.
-            </p>
+            <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
           </header>
 
           <main class="grid">
-            <!-- INPUT CARD -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
-              <textarea
-                id="question"
-                class="textarea"
-                rows="6"
-                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
-              ></textarea>
+              <textarea id="question" class="textarea" rows="6"></textarea>
               <div class="actions">
                 <button id="generateBtn" class="btn">Generate</button>
               </div>
             </section>
 
-            <!-- OUTPUT CARD -->
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
-                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>
-                  Copy All
-                </button>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
-
               <div id="answerLoader" class="answer-loader hidden">
                 <div class="loader"></div>
                 <div class="loader-text">Generating structured answer…</div>
               </div>
-
               <div class="output-body">
-                <div id="answer" class="answer placeholder">
-                  Your structured, evidence-based response will appear here.
-                </div>
+                <div id="answer" class="answer placeholder">Your structured response will appear here.</div>
               </div>
             </section>
           </main>
@@ -86,119 +62,48 @@
     </div>
   </div>
 
-  <img
-    src="{{ url_for('static', filename='header.png') }}"
-    alt="logo"
-    class="corner-logo"
-  >
-
-  <!-- DISCLAIMER MODAL -->
-  <div id="disclaimerOverlay" class="disclaimer-overlay" style="display: none;">
-    <div class="disclaimer-box">
-      <h2 class="disclaimer-title">Important Disclaimer</h2>
-      <p class="disclaimer-text">
-        This tool is provided strictly for <strong>education, revision, and study support only</strong>.<br>
-        It must <u>not</u> be used for real-world clinical decision-making, diagnosis, or patient treatment.<br>
-        Always follow local guidelines, institutional policies, and consult qualified senior clinicians when providing patient care.
-      </p>
-      <button id="disclaimerBtn" class="disclaimer-btn">I Understand</button>
-    </div>
-  </div>
-
   <script>
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
     const answerEl = document.getElementById("answer");
-    const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
-    const conversationListEl = document.getElementById("conversationList");
-    const topicSearch = document.getElementById("topicSearch");
-
-    function escapeHtml(str) {
-      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    }
-
-    function flashCopy(btn) {
-      const t = btn.textContent;
-      btn.textContent = "Copied";
-      btn.classList.add("copied");
-      setTimeout(() => {
-        btn.textContent = t;
-        btn.classList.remove("copied");
-      }, 900);
-    }
 
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
-
-      generateBtn.disabled = true;
-      copyAllBtn.disabled = true;
       answerLoader.classList.remove("hidden");
-      answerEl.classList.remove("placeholder");
-      answerEl.innerHTML = "";
-
+      answerEl.textContent = "";
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query })
         });
         const data = await res.json();
-        if (data.answer) {
-          answerEl.textContent = data.answer;
-          copyAllBtn.disabled = false;
-        } else {
-          answerEl.textContent = data.error || "No response generated.";
-        }
-      } catch {
-        answerEl.textContent = "Error generating answer.";
+        answerEl.textContent = data.answer || data.error || "No response.";
       } finally {
         answerLoader.classList.add("hidden");
-        generateBtn.disabled = false;
       }
     }
 
     generateBtn.addEventListener("click", generate);
 
-    questionInput.addEventListener("keydown", (e) => {
+    questionInput.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         generate();
       }
     });
 
-    copyAllBtn.addEventListener("click", async () => {
-      const text = answerEl.textContent.trim();
-      if (!text) return;
-      await navigator.clipboard.writeText(text);
-      flashCopy(copyAllBtn);
-    });
-
-    window.addEventListener("DOMContentLoaded", () => {
-      const disclaimerOverlay = document.getElementById("disclaimerOverlay");
-      const disclaimerBtn = document.getElementById("disclaimerBtn");
-
-      if (disclaimerOverlay && disclaimerBtn) {
-        if (!localStorage.getItem("ebm_disclaimer_accepted")) {
-          disclaimerOverlay.style.display = "flex";
-        }
-        disclaimerBtn.addEventListener("click", () => {
-          localStorage.setItem("ebm_disclaimer_accepted", "yes");
-          disclaimerOverlay.style.display = "none";
-        });
-      }
-    });
-
     /* =====================================================
-       STAGE 1 — HI EBM VOICE ACTIVATION (NO UI CHANGES)
+       STAGE 1 — ROBUST “HI EBM” VOICE ACTIVATION
        ===================================================== */
     (function () {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return;
 
       const WAKE = ["hi ebm", "hey ebm", "okay ebm"];
-      const SESSION_KEY = "ebm_voice_enabled_v1";
+      const SESSION_KEY = "ebm_voice_enabled_v3";
 
       const rec = new SpeechRecognition();
       rec.lang = "en-AU";
@@ -206,80 +111,80 @@
       rec.continuous = true;
 
       let listening = false;
+      let armed = false;
+      let buffer = "";
       let lastFinal = "";
 
-      function normalise(s) {
+      function norm(s) {
         return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
       }
 
-      function extractAfterWake(raw) {
-        const lower = normalise(raw);
-        for (const w of WAKE) {
-          if (lower.includes(w)) {
-            const re = new RegExp(w, "i");
-            return raw.replace(re, "").trim().replace(/^[,:\-\s]+/, "");
-          }
-        }
-        return null;
+      function containsWake(s) {
+        return WAKE.some(w => norm(s).includes(w));
       }
 
-      function startListening() {
+      function stripWake(s) {
+        let out = s;
+        WAKE.forEach(w => {
+          out = out.replace(new RegExp(w, "i"), "");
+        });
+        return out.trim().replace(/^[,:\-\s]+/, "");
+      }
+
+      function start() {
         if (listening) return;
         listening = true;
         try { rec.start(); } catch {}
       }
 
-      function stopListening() {
+      function stop() {
         listening = false;
         try { rec.stop(); } catch {}
       }
 
       rec.onend = () => {
-        if (listening) setTimeout(() => {
-          try { rec.start(); } catch {}
-        }, 300);
+        if (listening) setTimeout(() => { try { rec.start(); } catch {} }, 250);
       };
 
-      rec.onresult = (event) => {
+      rec.onresult = (e) => {
         let finalText = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalText += event.results[i][0].transcript + " ";
-          }
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
         }
-
         if (!finalText.trim()) return;
-        if (normalise(finalText) === normalise(lastFinal)) return;
+        if (norm(finalText) === norm(lastFinal)) return;
         lastFinal = finalText;
 
-        const q = extractAfterWake(finalText);
-        if (!q) return;
-
-        const t = normalise(q);
-        if (t === "stop" || t === "stop listening") {
-          stopListening();
-          return;
-        }
-        if (t === "clear") {
-          questionInput.value = "";
+        if (containsWake(finalText)) {
+          armed = true;
+          buffer = stripWake(finalText);
           return;
         }
 
-        questionInput.value = q;
-        setTimeout(() => generateBtn.click(), 200);
+        if (armed) {
+          buffer += " " + finalText;
+          const q = buffer.trim();
+          armed = false;
+          buffer = "";
+          if (!q) return;
+          questionInput.value = q;
+          setTimeout(() => generateBtn.click(), 150);
+        }
       };
 
       if (!sessionStorage.getItem(SESSION_KEY)) {
-        const enable = confirm(
-          'Enable "Hi EBM" voice mode for this session?\n\n' +
-          'After enabling, you can say:\n' +
-          '"Hi EBM what is the dose of ondansetron over 24 hours"'
-        );
-        if (!enable) return;
+        if (!confirm('Enable "Hi EBM" voice mode for this session?\n\nClick anywhere once, then say:\n"Hi EBM what is the dose of ondansetron over 24 hours"')) return;
         sessionStorage.setItem(SESSION_KEY, "1");
       }
 
-      startListening();
+      let activated = false;
+      document.addEventListener("click", () => {
+        if (!activated) {
+          activated = true;
+          start();
+        }
+      }, { once: true });
+
     })();
   </script>
 </body>
