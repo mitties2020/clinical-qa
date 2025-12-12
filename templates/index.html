@@ -187,5 +187,121 @@
 
     })();
   </script>
+  <script>
+/* =========================================================
+   EBM RELIABLE VOICE INPUT (WHISPER BACKEND)
+   Hold SPACE to speak → text fills question → auto-generate
+   ========================================================= */
+
+(function () {
+  const questionInput = document.getElementById("question");
+  const generateBtn = document.getElementById("generateBtn");
+
+  if (!questionInput || !generateBtn) {
+    console.error("EBM Voice: required elements not found.");
+    return;
+  }
+
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let stream = null;
+  let recording = false;
+
+  async function startRecording() {
+    if (recording) return;
+    recording = true;
+    audioChunks = [];
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm"
+      });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunks.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        try {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "speech.webm");
+
+          const res = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData
+          });
+
+          const data = await res.json();
+
+          if (data && typeof data.text === "string") {
+            const text = data.text.trim();
+            if (text.length > 0) {
+              questionInput.value = text;
+              setTimeout(() => generateBtn.click(), 150);
+            }
+          } else {
+            console.warn("EBM Voice: empty transcription", data);
+          }
+        } catch (err) {
+          console.error("EBM Voice: transcription failed", err);
+        } finally {
+          if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+          }
+          mediaRecorder = null;
+          audioChunks = [];
+          recording = false;
+        }
+      };
+
+      mediaRecorder.start();
+      console.log("EBM Voice: recording started (hold SPACE)");
+    } catch (err) {
+      recording = false;
+      console.error("EBM Voice: microphone access failed", err);
+    }
+  }
+
+  function stopRecording() {
+    if (!recording || !mediaRecorder) return;
+    try {
+      mediaRecorder.stop();
+      console.log("EBM Voice: recording stopped → transcribing");
+    } catch (err) {
+      console.error("EBM Voice: stop failed", err);
+      recording = false;
+    }
+  }
+
+  // Hold SPACE to record (does NOT interfere with typing)
+  document.addEventListener("keydown", (e) => {
+    if (e.code !== "Space") return;
+
+    const active = document.activeElement;
+    if (active && active.id === "question") return;
+
+    e.preventDefault();
+    startRecording();
+  }, true);
+
+  document.addEventListener("keyup", (e) => {
+    if (e.code !== "Space") return;
+
+    const active = document.activeElement;
+    if (active && active.id === "question") return;
+
+    e.preventDefault();
+    stopRecording();
+  }, true);
+
+  console.log("EBM Voice: Whisper voice input initialised. Hold SPACE to speak.");
+})();
+</script>
 </body>
 </html>
