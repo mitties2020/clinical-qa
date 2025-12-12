@@ -1,7 +1,9 @@
 import os
+import tempfile
 import requests
 from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
+from faster_whisper import WhisperModel
 
 load_dotenv()
 
@@ -9,16 +11,66 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
+# Whisper config (local transcription)
+# Options: tiny, base, small, medium, large-v3
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
+
 if not DEEPSEEK_API_KEY:
     raise RuntimeError("Missing DEEPSEEK_API_KEY environment variable.")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 session = requests.Session()
 
+# Load Whisper model once at startup (CPU-friendly defaults)
+# NOTE: Faster-whisper decoding of webm/ogg typically requires ffmpeg in the runtime.
+whisper_model = WhisperModel(
+    WHISPER_MODEL_SIZE,
+    device="cpu",
+    compute_type="int8"
+)
+
 
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/transcribe", methods=["POST"])
+def transcribe():
+    """
+    Receives audio as multipart/form-data with field name 'audio'
+    Returns JSON: { "text": "..." }
+    """
+    if "audio" not in request.files:
+        return jsonify({"error": "Missing audio field 'audio'."}), 400
+
+    f = request.files["audio"]
+    if not f:
+        return jsonify({"error": "Empty audio upload."}), 400
+
+    # Save to a temp file. MediaRecorder commonly sends webm/ogg.
+    # We use .webm as suffix; ffmpeg typically handles decoding by content.
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        tmp_path = tmp.name
+        f.save(tmp_path)
+
+    try:
+        segments, info = whisper_model.transcribe(
+            tmp_path,
+            language="en",
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 250}
+        )
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        return jsonify({"text": text})
+    except Exception as e:
+        print("TRANSCRIBE ERROR:", repr(e))
+        return jsonify({"error": "Transcription failed on server."}), 502
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
 
 
 @app.route("/api/generate", methods=["POST"])
@@ -112,7 +164,6 @@ def generate():
     try:
         resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
         print("DeepSeek status:", resp.status_code)
-        # If debugging: print(resp.text[:600])
         resp.raise_for_status()
         data = resp.json()
         answer = (
