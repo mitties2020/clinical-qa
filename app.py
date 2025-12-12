@@ -13,7 +13,8 @@ DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # Whisper config (local transcription)
 # Options: tiny, base, small, medium, large-v3
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
+# Default to tiny to reduce RAM and prevent Render restarts.
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 if not DEEPSEEK_API_KEY:
     raise RuntimeError("Missing DEEPSEEK_API_KEY environment variable.")
@@ -21,13 +22,25 @@ if not DEEPSEEK_API_KEY:
 app = Flask(__name__, template_folder="templates", static_folder="static")
 session = requests.Session()
 
-# Load Whisper model once at startup (CPU-friendly defaults)
-# NOTE: Faster-whisper decoding of webm/ogg typically requires ffmpeg in the runtime.
-whisper_model = WhisperModel(
-    WHISPER_MODEL_SIZE,
-    device="cpu",
-    compute_type="int8"
-)
+# Lazy-loaded Whisper model to avoid boot-time memory spikes / double-loads
+_whisper_model = None
+
+
+def get_whisper_model() -> WhisperModel:
+    """
+    Create Whisper model once per process. Using lazy init helps on Render.
+    compute_type=int8 is RAM/CPU friendly on CPU.
+    """
+    global _whisper_model
+    if _whisper_model is None:
+        size = os.getenv("WHISPER_MODEL_SIZE", WHISPER_MODEL_SIZE)
+        print(f"Loading Whisper model: {size}")
+        _whisper_model = WhisperModel(
+            size,
+            device="cpu",
+            compute_type="int8"
+        )
+    return _whisper_model
 
 
 @app.route("/")
@@ -49,13 +62,14 @@ def transcribe():
         return jsonify({"error": "Empty audio upload."}), 400
 
     # Save to a temp file. MediaRecorder commonly sends webm/ogg.
-    # We use .webm as suffix; ffmpeg typically handles decoding by content.
+    # NOTE: Decoding webm/ogg typically requires ffmpeg in the runtime.
     with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
         tmp_path = tmp.name
         f.save(tmp_path)
 
     try:
-        segments, info = whisper_model.transcribe(
+        model = get_whisper_model()
+        segments, info = model.transcribe(
             tmp_path,
             language="en",
             vad_filter=True,
@@ -136,7 +150,6 @@ def generate():
         "- Use plain text headings exactly as written above and simple line-separated statements underneath.\n"
     )
 
-    # Wrap the user's query as a hypothetical, educational question
     user_content = (
         "This is a hypothetical, de-identified clinical study question for educational purposes only. "
         "It is NOT a real patient consultation and will NOT be used to make real-time clinical decisions.\n\n"
@@ -181,5 +194,6 @@ def generate():
 
 
 if __name__ == "__main__":
+    # IMPORTANT: never run debug/reloader on Render (it can double-load Whisper and exceed RAM)
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
