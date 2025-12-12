@@ -48,10 +48,12 @@
                 <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
+
               <div id="answerLoader" class="answer-loader hidden">
                 <div class="loader"></div>
                 <div class="loader-text">Generating structured answer…</div>
               </div>
+
               <div class="output-body">
                 <div id="answer" class="answer placeholder">Your structured response will appear here.</div>
               </div>
@@ -63,6 +65,7 @@
   </div>
 
   <script>
+    // ---------------- BASIC GENERATE ----------------
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
     const answerEl = document.getElementById("answer");
@@ -71,8 +74,11 @@
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
+
       answerLoader.classList.remove("hidden");
+      answerEl.classList.remove("placeholder");
       answerEl.textContent = "";
+
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
@@ -81,6 +87,9 @@
         });
         const data = await res.json();
         answerEl.textContent = data.answer || data.error || "No response.";
+      } catch (e) {
+        console.error(e);
+        answerEl.textContent = "Error generating answer.";
       } finally {
         answerLoader.classList.add("hidden");
       }
@@ -95,398 +104,175 @@
       }
     });
 
-    /* =====================================================
-       STAGE 1 — ROBUST “HI EBM” VOICE ACTIVATION
-       ===================================================== */
+    // =========================================================
+    // VOICE ACTIVATION (WAKE WORD) USING /api/transcribe (Whisper)
+    // - Tap once anywhere to enable mic (browser requirement)
+    // - Then say: "Hi EBM ...your question..."
+    // - Auto-fills #question and clicks Generate
+    // =========================================================
     (function () {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-
       const WAKE = ["hi ebm", "hey ebm", "okay ebm"];
-      const SESSION_KEY = "ebm_voice_enabled_v3";
+      const CHUNK_MS = 4000;     // paid Render: fewer calls, good accuracy
+      const COOLDOWN_MS = 6000;
+      const SESSION_KEY = "ebm_voice_wake_enabled_v1";
 
-      const rec = new SpeechRecognition();
-      rec.lang = "en-AU";
-      rec.interimResults = true;
-      rec.continuous = true;
-
-      let listening = false;
-      let armed = false;
-      let buffer = "";
-      let lastFinal = "";
+      let stream = null;
+      let recorder = null;
+      let chunks = [];
+      let running = false;
+      let lastFire = 0;
+      let rollingText = "";
+      let mimeTypeChosen = "";
 
       function norm(s) {
         return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
       }
 
-      function containsWake(s) {
-        return WAKE.some(w => norm(s).includes(w));
+      function pickMimeType() {
+        const candidates = [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/ogg"
+        ];
+        for (const t of candidates) {
+          if (window.MediaRecorder?.isTypeSupported?.(t)) return t;
+        }
+        return "";
       }
 
-      function stripWake(s) {
-        let out = s;
-        WAKE.forEach(w => {
-          out = out.replace(new RegExp(w, "i"), "");
-        });
-        return out.trim().replace(/^[,:\-\s]+/, "");
+      function findWakeAndExtract(text) {
+        const lower = norm(text);
+        for (const w of WAKE) {
+          if (lower.includes(w)) {
+            const re = new RegExp(w, "i");
+            const after = text.replace(re, "").trim().replace(/^[,:\-\s]+/, "");
+            return after || "";
+          }
+        }
+        return null;
       }
 
-      function start() {
-        if (listening) return;
-        listening = true;
-        try { rec.start(); } catch {}
+      async function transcribeBlob(blob) {
+        const form = new FormData();
+        form.append("audio", blob, "chunk.webm");
+
+        const res = await fetch("/api/transcribe", { method: "POST", body: form });
+        const raw = await res.text();
+
+        let data = {};
+        try { data = JSON.parse(raw); } catch {}
+
+        if (!res.ok) {
+          console.warn("EBM Voice: /api/transcribe failed", res.status, data.error || raw);
+          return "";
+        }
+        return (data.text || "").trim();
       }
 
-      function stop() {
-        listening = false;
-        try { rec.stop(); } catch {}
-      }
+      async function startVoiceLoop() {
+        if (running) return;
+        running = true;
 
-      rec.onend = () => {
-        if (listening) setTimeout(() => { try { rec.start(); } catch {} }, 250);
-      };
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      rec.onresult = (e) => {
-        let finalText = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) finalText += e.results[i][0].transcript + " ";
-        }
-        if (!finalText.trim()) return;
-        if (norm(finalText) === norm(lastFinal)) return;
-        lastFinal = finalText;
+        mimeTypeChosen = pickMimeType();
+        recorder = mimeTypeChosen
+          ? new MediaRecorder(stream, { mimeType: mimeTypeChosen })
+          : new MediaRecorder(stream);
 
-        if (containsWake(finalText)) {
-          armed = true;
-          buffer = stripWake(finalText);
-          return;
-        }
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
 
-        if (armed) {
-          buffer += " " + finalText;
-          const q = buffer.trim();
-          armed = false;
-          buffer = "";
-          if (!q) return;
-          questionInput.value = q;
-          setTimeout(() => generateBtn.click(), 150);
-        }
-      };
+        recorder.start();
+        console.log("EBM Voice: armed. Say 'Hi EBM ...'");
 
-      if (!sessionStorage.getItem(SESSION_KEY)) {
-        if (!confirm('Enable "Hi EBM" voice mode for this session?\n\nClick anywhere once, then say:\n"Hi EBM what is the dose of ondansetron over 24 hours"')) return;
-        sessionStorage.setItem(SESSION_KEY, "1");
-      }
+        const interval = setInterval(async () => {
+          if (!running) { clearInterval(interval); return; }
 
-      let activated = false;
-      document.addEventListener("click", () => {
-        if (!activated) {
-          activated = true;
-          start();
-        }
-      }, { once: true });
+          try { recorder.stop(); } catch { return; }
 
-    })();
-  </script>
-  <script>
-/* =========================================================
-   EBM RELIABLE VOICE INPUT (WHISPER BACKEND)
-   Hold SPACE to speak → text fills question → auto-generate
-   ========================================================= */
+          setTimeout(async () => {
+            if (!running) return;
 
-(function () {
-  const questionInput = document.getElementById("question");
-  const generateBtn = document.getElementById("generateBtn");
+            const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+            chunks = [];
 
-  if (!questionInput || !generateBtn) {
-    console.error("EBM Voice: required elements not found.");
-    return;
-  }
+            // Restart recorder immediately
+            try {
+              recorder = mimeTypeChosen
+                ? new MediaRecorder(stream, { mimeType: mimeTypeChosen })
+                : new MediaRecorder(stream);
 
-  let mediaRecorder = null;
-  let audioChunks = [];
-  let stream = null;
-  let recording = false;
+              recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) chunks.push(e.data);
+              };
+              recorder.start();
+            } catch (e) {
+              console.warn("EBM Voice: recorder restart failed", e);
+              return;
+            }
 
-  async function startRecording() {
-    if (recording) return;
-    recording = true;
-    audioChunks = [];
+            // Skip tiny blobs (silence)
+            if (!blob || blob.size < 1500) return;
 
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const text = await transcribeBlob(blob);
+            if (!text) return;
 
-      mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm"
-      });
+            rollingText = (rollingText + " " + text).trim();
+            if (rollingText.length > 350) rollingText = rollingText.slice(-350);
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunks.push(e.data);
-        }
-      };
+            const now = Date.now();
+            if (now - lastFire < COOLDOWN_MS) return;
 
-      mediaRecorder.onstop = async () => {
-        try {
-          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-          const formData = new FormData();
-          formData.append("audio", audioBlob, "speech.webm");
+            const extracted = findWakeAndExtract(rollingText);
+            if (extracted !== null) {
+              // Wake phrase heard but question not yet
+              if (!extracted) return;
 
-          const res = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData
-          });
+              lastFire = now;
+              questionInput.value = extracted;
+              rollingText = "";
 
-          const data = await res.json();
-
-          if (data && typeof data.text === "string") {
-            const text = data.text.trim();
-            if (text.length > 0) {
-              questionInput.value = text;
               setTimeout(() => generateBtn.click(), 150);
             }
-          } else {
-            console.warn("EBM Voice: empty transcription", data);
-          }
-        } catch (err) {
-          console.error("EBM Voice: transcription failed", err);
-        } finally {
-          if (stream) {
-            stream.getTracks().forEach(t => t.stop());
-            stream = null;
-          }
-          mediaRecorder = null;
-          audioChunks = [];
-          recording = false;
-        }
-      };
-
-      mediaRecorder.start();
-      console.log("EBM Voice: recording started (hold SPACE)");
-    } catch (err) {
-      recording = false;
-      console.error("EBM Voice: microphone access failed", err);
-    }
-  }
-
-  function stopRecording() {
-    if (!recording || !mediaRecorder) return;
-    try {
-      mediaRecorder.stop();
-      console.log("EBM Voice: recording stopped → transcribing");
-    } catch (err) {
-      console.error("EBM Voice: stop failed", err);
-      recording = false;
-    }
-  }
-
-  // Hold SPACE to record (does NOT interfere with typing)
-  document.addEventListener("keydown", (e) => {
-    if (e.code !== "Space") return;
-
-    const active = document.activeElement;
-    if (active && active.id === "question") return;
-
-    e.preventDefault();
-    startRecording();
-  }, true);
-
-  document.addEventListener("keyup", (e) => {
-    if (e.code !== "Space") return;
-
-    const active = document.activeElement;
-    if (active && active.id === "question") return;
-
-    e.preventDefault();
-    stopRecording();
-  }, true);
-
-  console.log("EBM Voice: Whisper voice input initialised. Hold SPACE to speak.");
-})();
-</script>
-</body>/* =========================================================
-   VOICE ACTIVATION (WAKE WORD) USING /api/transcribe (Whisper)
-   Flow:
-   - Tap once anywhere to enable mic (browser requirement)
-   - Then say: "Hi EBM ...your question..."
-   - Auto-fills #question and clicks #generateBtn
-   ========================================================= */
-(function () {
-  const questionInput = document.getElementById("question");
-  const generateBtn = document.getElementById("generateBtn");
-  if (!questionInput || !generateBtn) return;
-
-  const WAKE = ["hi ebm", "hey ebm", "okay ebm"];
-  const CHUNK_MS = 2000;          // 2s chunks
-  const COOLDOWN_MS = 4000;       // avoid double-fires
-  const SESSION_KEY = "ebm_voice_wake_enabled_v1";
-
-  let stream = null;
-  let recorder = null;
-  let chunks = [];
-  let running = false;
-  let lastFire = 0;
-
-  // transcript buffer to catch wake phrase split across chunks
-  let rollingText = "";
-
-  function norm(s) {
-    return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
-  }
-
-  function findWakeAndExtract(text) {
-    const lower = norm(text);
-    for (const w of WAKE) {
-      const idx = lower.indexOf(w);
-      if (idx >= 0) {
-        // Extract everything after wake phrase (using original text slice via approx)
-        // We’ll do a simpler approach: remove wake phrase case-insensitively.
-        const re = new RegExp(w, "i");
-        const after = text.replace(re, "").trim().replace(/^[,:\-\s]+/, "");
-        return after || "";
-      }
-    }
-    return null;
-  }
-
-  function pickMimeType() {
-    const candidates = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/ogg"
-    ];
-    for (const t of candidates) {
-      if (window.MediaRecorder?.isTypeSupported?.(t)) return t;
-    }
-    return "";
-  }
-
-  async function transcribeBlob(blob) {
-    const form = new FormData();
-    form.append("audio", blob, "chunk.webm");
-
-    const res = await fetch("/api/transcribe", { method: "POST", body: form });
-    const raw = await res.text();
-
-    let data = {};
-    try { data = JSON.parse(raw); } catch {}
-
-    if (!res.ok) {
-      console.warn("EBM Voice: transcribe failed", res.status, data.error || raw);
-      return "";
-    }
-    return (data.text || "").trim();
-  }
-
-  async function startVoiceLoop() {
-    if (running) return;
-    running = true;
-
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    const mimeType = pickMimeType();
-    recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-
-    recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunks.push(e.data);
-    };
-
-    recorder.start();
-    console.log("EBM Voice: listening armed. Say 'Hi EBM ...'");
-
-    // Every CHUNK_MS, stop+restart to flush audio chunk
-    const interval = setInterval(async () => {
-      if (!running) {
-        clearInterval(interval);
-        return;
+          }, 50);
+        }, CHUNK_MS);
       }
 
-      // Rotate recorder to flush chunk
-      try {
-        recorder.stop();
-      } catch {
-        // If stop fails, keep going
-        return;
-      }
+      async function enableOnce() {
+        if (sessionStorage.getItem(SESSION_KEY) === "1") return;
 
-      // Wait a tick for onstop/ondataavailable to finish
-      setTimeout(async () => {
-        if (!running) return;
+        const ok = confirm(
+          "Enable voice activation for this tab?\n\n" +
+          "Then say: 'Hi EBM ...your question...'"
+        );
+        if (!ok) return;
 
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        chunks = [];
+        sessionStorage.setItem(SESSION_KEY, "1");
 
-        // Restart recording immediately
         try {
-          recorder = (mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream));
-          recorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) chunks.push(e.data);
-          };
-          recorder.start();
+          await startVoiceLoop();
         } catch (e) {
-          console.warn("EBM Voice: recorder restart failed", e);
-          return;
+          console.warn("EBM Voice: failed to start", e);
+          alert("Could not start microphone. Check Chrome mic permissions for this site.");
         }
+      }
 
-        // Skip tiny blobs (silence)
-        if (!blob || blob.size < 1500) return;
+      // Browser requirement: start mic on first user interaction
+      document.addEventListener("click", function firstTap() {
+        document.removeEventListener("click", firstTap, true);
+        enableOnce();
+      }, true);
 
-        // Transcribe this chunk
-        const text = await transcribeBlob(blob);
-        if (!text) return;
-
-        // Maintain a rolling window so wake phrase can span chunks
-        rollingText = (rollingText + " " + text).trim();
-        if (rollingText.length > 300) rollingText = rollingText.slice(-300);
-
-        const now = Date.now();
-        if (now - lastFire < COOLDOWN_MS) return;
-
-        const extracted = findWakeAndExtract(rollingText);
-        if (extracted !== null) {
-          // If wake phrase found but no question yet, keep listening
-          if (!extracted) return;
-
-          lastFire = now;
-          questionInput.value = extracted;
-          rollingText = ""; // reset buffer after a successful trigger
-          setTimeout(() => generateBtn.click(), 150);
+      // If already enabled in this tab session, try to start again on load
+      window.addEventListener("DOMContentLoaded", async () => {
+        if (sessionStorage.getItem(SESSION_KEY) === "1") {
+          try { await startVoiceLoop(); } catch {}
         }
-      }, 50);
-    }, CHUNK_MS);
-  }
-
-  async function enableOnce() {
-    if (sessionStorage.getItem(SESSION_KEY) === "1") return;
-
-    // This tap is REQUIRED by browser security rules.
-    const ok = confirm(
-      "Enable voice activation for this tab?\n\n" +
-      "After enabling, say:\n" +
-      "\"Hi EBM ...your question...\""
-    );
-    if (!ok) return;
-
-    sessionStorage.setItem(SESSION_KEY, "1");
-    try {
-      await startVoiceLoop();
-    } catch (e) {
-      console.warn("EBM Voice: failed to start voice loop", e);
-      alert("Could not start microphone. Check site mic permissions in your browser settings.");
-    }
-  }
-
-  // Start voice mode on the first tap/click anywhere (no UI changes)
-  document.addEventListener("click", function firstTap() {
-    document.removeEventListener("click", firstTap, true);
-    enableOnce();
-  }, true);
-
-  // Auto-arm if already enabled in this tab session (still requires mic permission already granted)
-  window.addEventListener("DOMContentLoaded", async () => {
-    if (sessionStorage.getItem(SESSION_KEY) === "1") {
-      try { await startVoiceLoop(); } catch {}
-    }
-  });
-})();
+      });
+    })();
+  </script>
+</body>
 </html>
