@@ -86,14 +86,13 @@
     </div>
   </div>
 
-  <!-- SMALL BLENDED BOTTOM-LEFT LOGO -->
   <img
     src="{{ url_for('static', filename='header.png') }}"
     alt="logo"
     class="corner-logo"
   >
 
-  <!-- DISCLAIMER MODAL (shown on first visit only) -->
+  <!-- DISCLAIMER MODAL -->
   <div id="disclaimerOverlay" class="disclaimer-overlay" style="display: none;">
     <div class="disclaimer-box">
       <h2 class="disclaimer-title">Important Disclaimer</h2>
@@ -116,14 +115,7 @@
     const topicSearch = document.getElementById("topicSearch");
 
     function escapeHtml(str) {
-      return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-    }
-
-    function hasNonEmpty(arr) {
-      return Array.isArray(arr) && arr.some((l) => l.trim() !== "");
+      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
 
     function flashCopy(btn) {
@@ -136,234 +128,6 @@
       }, 900);
     }
 
-    // ---------- BUILD STRUCTURED HTML ----------
-    function buildStructuredHtml(raw) {
-      if (!raw) return "";
-      let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "")
-        .replace(/\r/g, "");
-
-      const lines = text.split("\n");
-      const sectionOrder = [
-        "Summary",
-        "Overview",
-        "Assessment",
-        "Diagnosis",
-        "Investigations",
-        "Treatment",
-        "Management",
-        "Plan",
-        "Monitoring",
-        "Follow-up & Safety Netting",
-        "Follow-up",
-        "Red Flags",
-        "References",
-      ];
-
-      const sections = [];
-      let current = { title: "Summary", content: [] };
-      let seenExplicit = false;
-
-      const isHeading = (line) => {
-        const trimmed = line.trim().replace(/:$/, "");
-        return (
-          sectionOrder.find(
-            (h) => trimmed.toLowerCase() === h.toLowerCase()
-          ) || null
-        );
-      };
-
-      for (const rawLine of lines) {
-        const line = rawLine.trim();
-        if (!line) {
-          current.content.push("");
-          continue;
-        }
-        const heading = isHeading(line);
-        if (heading) {
-          if (hasNonEmpty(current.content)) sections.push(current);
-          current = { title: heading, content: [] };
-          seenExplicit = true;
-        } else {
-          current.content.push(line);
-        }
-      }
-
-      if (hasNonEmpty(current.content)) sections.push(current);
-
-      let html = "";
-      let idx = 0;
-
-      // Only summary case
-      if (!seenExplicit && sections.length === 1 && sections[0].title === "Summary") {
-        const body = sections[0].content.join(" ").trim();
-        if (!body) return "No response generated.";
-        const id = `sec-${idx++}`;
-        html += `
-          <div class="section">
-            <div class="section-header static">
-              <span>Summary</span>
-              <button class="section-copy-btn" data-target="${id}">Copy</button>
-            </div>
-            <div class="section-body static-body" data-section="${id}">
-              <p>${escapeHtml(body)}</p>
-            </div>
-          </div>`;
-        return html;
-      }
-
-      for (const sec of sections) {
-        const title = sec.title;
-        const bodyLines = sec.content || [];
-        if (!hasNonEmpty(bodyLines)) continue;
-        const id = `sec-${idx++}`;
-
-        const inner = bodyLines
-          .filter((l) => l.trim() !== "")
-          .map((l) => {
-            const t = l.trim();
-            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-              const cleaned = t
-                .replace(/^[-•]\s+/, "")
-                .replace(/^\d+[\.\)]\s+/, "");
-              return `
-                <div class="answer-bullet">
-                  <span class="bullet-dot"></span>
-                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                </div>`;
-            }
-            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-          })
-          .join("");
-
-        if (!inner.trim()) continue;
-
-        if (title === "Summary" || title === "Overview") {
-          html += `
-            <div class="section">
-              <div class="section-header static">
-                <span>${escapeHtml(title)}</span>
-                <button class="section-copy-btn" data-target="${id}">Copy</button>
-              </div>
-              <div class="section-body static-body" data-section="${id}">
-                ${inner}
-              </div>
-            </div>`;
-        } else {
-          html += `
-            <div class="section">
-              <div class="collapsible-header">
-                <button class="collapsible" data-target="${id}">
-                  ${escapeHtml(title)}
-                </button>
-                <button class="section-copy-btn" data-target="${id}">Copy</button>
-              </div>
-              <div class="collapsible-content" data-section="${id}">
-                ${inner}
-              </div>
-            </div>`;
-        }
-      }
-
-      return html || "No response generated.";
-    }
-
-    // ---------- CONVERSATION STORAGE ----------
-    function loadConversations() {
-      let data = [];
-      try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
-
-      conversationListEl.innerHTML = "";
-
-      if (!data.length) {
-        conversationListEl.innerHTML =
-          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
-        return;
-      }
-
-      data.forEach((item, index) => {
-        const el = document.createElement("div");
-        el.className = "conversation-item";
-
-        const main = document.createElement("div");
-        main.className = "conv-main";
-        main.innerHTML = `<div class="conv-title">${escapeHtml(
-          item.title || "Topic"
-        )}</div>`;
-
-        const del = document.createElement("button");
-        del.className = "conv-delete";
-        del.dataset.index = index;
-        del.textContent = "✕";
-        del.title = "Remove";
-
-        main.addEventListener("click", () => {
-          questionInput.value = item.query || "";
-          answerEl.innerHTML = item.answer || "";
-          const has = !!(item.answer && item.answer.trim());
-          answerEl.classList.toggle("placeholder", !has);
-          copyAllBtn.disabled = !has;
-        });
-
-        del.addEventListener("click", (e) => {
-          e.stopPropagation();
-          deleteConversation(index);
-        });
-
-        el.appendChild(main);
-        el.appendChild(del);
-        conversationListEl.appendChild(el);
-      });
-    }
-
-    function saveConversation(query, answerHtml) {
-      if (!query || !answerHtml) return;
-      let data = [];
-      try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
-
-      const title =
-        query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
-
-      data.push({ title: title || "Topic", query, answer: answerHtml });
-      if (data.length > 40) data = data.slice(data.length - 40);
-
-      localStorage.setItem("ebm_conversations", JSON.stringify(data));
-      loadConversations();
-    }
-
-    function deleteConversation(index) {
-      let data = [];
-      try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
-      data.splice(index, 1);
-      localStorage.setItem("ebm_conversations", JSON.stringify(data));
-      loadConversations();
-    }
-
-    function filterTopics() {
-      const term = (topicSearch.value || "").toLowerCase().trim();
-      const items = conversationListEl.querySelectorAll(".conversation-item");
-      items.forEach((item) => {
-        const title = (
-          item.querySelector(".conv-title")?.textContent || ""
-        ).toLowerCase();
-        item.style.display = !term || title.includes(term) ? "" : "none";
-      });
-    }
-
-    // ---------- GENERATE ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
@@ -382,26 +146,19 @@
         });
         const data = await res.json();
         if (data.answer) {
-          const html = buildStructuredHtml(data.answer);
-          answerEl.innerHTML = html;
-          const has = !!answerEl.textContent.trim();
-          copyAllBtn.disabled = !has;
-          if (has) saveConversation(query, html);
+          answerEl.textContent = data.answer;
+          copyAllBtn.disabled = false;
         } else {
           answerEl.textContent = data.error || "No response generated.";
-          copyAllBtn.disabled = true;
         }
-      } catch (err) {
-        console.error(err);
+      } catch {
         answerEl.textContent = "Error generating answer.";
-        copyAllBtn.disabled = true;
       } finally {
         answerLoader.classList.add("hidden");
         generateBtn.disabled = false;
       }
     }
 
-    // ---------- EVENTS ----------
     generateBtn.addEventListener("click", generate);
 
     questionInput.addEventListener("keydown", (e) => {
@@ -418,33 +175,7 @@
       flashCopy(copyAllBtn);
     });
 
-    document.addEventListener("click", async (e) => {
-      if (e.target.classList.contains("section-copy-btn")) {
-        const id = e.target.dataset.target;
-        const section = document.querySelector(`[data-section="${id}"]`);
-        if (!section) return;
-        const text = section.innerText.trim();
-        if (!text) return;
-        await navigator.clipboard.writeText(text);
-        flashCopy(e.target);
-      } else if (e.target.classList.contains("collapsible")) {
-        const id = e.target.dataset.target;
-        const content = document.querySelector(
-          `.collapsible-content[data-section="${id}"]`
-        );
-        if (!content) return;
-        const open = content.style.display === "block";
-        e.target.classList.toggle("active", !open);
-        content.style.display = open ? "none" : "block";
-      }
-    });
-
-    topicSearch.addEventListener("input", filterTopics);
-
     window.addEventListener("DOMContentLoaded", () => {
-      loadConversations();
-
-      // DISCLAIMER POPUP HANDLING
       const disclaimerOverlay = document.getElementById("disclaimerOverlay");
       const disclaimerBtn = document.getElementById("disclaimerBtn");
 
@@ -452,13 +183,104 @@
         if (!localStorage.getItem("ebm_disclaimer_accepted")) {
           disclaimerOverlay.style.display = "flex";
         }
-
         disclaimerBtn.addEventListener("click", () => {
           localStorage.setItem("ebm_disclaimer_accepted", "yes");
           disclaimerOverlay.style.display = "none";
         });
       }
     });
+
+    /* =====================================================
+       STAGE 1 — HI EBM VOICE ACTIVATION (NO UI CHANGES)
+       ===================================================== */
+    (function () {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+
+      const WAKE = ["hi ebm", "hey ebm", "okay ebm"];
+      const SESSION_KEY = "ebm_voice_enabled_v1";
+
+      const rec = new SpeechRecognition();
+      rec.lang = "en-AU";
+      rec.interimResults = true;
+      rec.continuous = true;
+
+      let listening = false;
+      let lastFinal = "";
+
+      function normalise(s) {
+        return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+      }
+
+      function extractAfterWake(raw) {
+        const lower = normalise(raw);
+        for (const w of WAKE) {
+          if (lower.includes(w)) {
+            const re = new RegExp(w, "i");
+            return raw.replace(re, "").trim().replace(/^[,:\-\s]+/, "");
+          }
+        }
+        return null;
+      }
+
+      function startListening() {
+        if (listening) return;
+        listening = true;
+        try { rec.start(); } catch {}
+      }
+
+      function stopListening() {
+        listening = false;
+        try { rec.stop(); } catch {}
+      }
+
+      rec.onend = () => {
+        if (listening) setTimeout(() => {
+          try { rec.start(); } catch {}
+        }, 300);
+      };
+
+      rec.onresult = (event) => {
+        let finalText = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalText += event.results[i][0].transcript + " ";
+          }
+        }
+
+        if (!finalText.trim()) return;
+        if (normalise(finalText) === normalise(lastFinal)) return;
+        lastFinal = finalText;
+
+        const q = extractAfterWake(finalText);
+        if (!q) return;
+
+        const t = normalise(q);
+        if (t === "stop" || t === "stop listening") {
+          stopListening();
+          return;
+        }
+        if (t === "clear") {
+          questionInput.value = "";
+          return;
+        }
+
+        questionInput.value = q;
+        setTimeout(() => generateBtn.click(), 200);
+      };
+
+      if (!sessionStorage.getItem(SESSION_KEY)) {
+        const enable = confirm(
+          'Enable "Hi EBM" voice mode for this session?\n\n' +
+          'After enabling, you can say:\n' +
+          '"Hi EBM what is the dose of ondansetron over 24 hours"'
+        );
+        if (!enable) return;
+        sessionStorage.setItem(SESSION_KEY, "1");
+      }
+
+      startListening();
+    })();
   </script>
 </body>
 </html>
