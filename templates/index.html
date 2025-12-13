@@ -5,37 +5,14 @@
   <title>Clinical Engine | EBM Session</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
-  <!-- Minimal, isolated styling for ONLY the new toast (won’t affect your existing site) -->
-  <style>
-    .ebm-toast {
-      position: fixed;
-      left: 16px;
-      bottom: 16px;
-      max-width: calc(100vw - 32px);
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: rgba(15, 15, 18, 0.92);
-      color: #fff;
-      font-size: 14px;
-      line-height: 1.3;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-      z-index: 9999;
-      display: none;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-    .ebm-toast strong { font-weight: 700; }
-    .ebm-toast .muted { opacity: 0.8; }
-    .ebm-toast.show { display: block; animation: ebmToastIn 160ms ease-out; }
-    @keyframes ebmToastIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  </style>
 </head>
 
 <body>
   <div class="app-root">
     <div class="shell">
       <div class="layout">
+
+        <!-- SIDEBAR -->
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -53,28 +30,31 @@
           </div>
         </aside>
 
+        <!-- MAIN -->
         <div class="main-region">
           <header class="header">
             <h1 class="title">CLINICAL ENGINE</h1>
-            <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
+            <p class="subtitle">Dictate or type ward round notes, then generate evidence-based answers.</p>
           </header>
 
           <main class="grid">
+
+            <!-- INPUT -->
             <section class="card input-card">
-              <label class="label" for="question">Clinical Question / WR Note</label>
-              <textarea id="question" class="textarea" rows="10"></textarea>
+              <label class="label" for="question">WR Note (Speech-enabled)</label>
+
+              <textarea id="question" class="textarea" rows="18"></textarea>
 
               <div class="actions">
                 <button id="generateBtn" class="btn" type="button">Generate</button>
-                <button id="copyOneNoteBtn" class="btn" type="button">Copy to OneNote</button>
-                <button id="openOneNoteBtn" class="btn" type="button">Open OneNote</button>
+                <button id="dictateBtn" class="btn" type="button">🎙 Dictate</button>
               </div>
             </section>
 
+            <!-- OUTPUT -->
             <section class="card output-card">
               <div class="output-header">
-                <h2 class="output-title">Answers</h2>
-                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
+                <h2 class="output-title">Answer</h2>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
@@ -83,84 +63,23 @@
               </div>
 
               <div class="output-body">
-                <div id="answer" class="answer placeholder">Your structured response will appear here.</div>
+                <div id="answer" class="answer placeholder">
+                  Generated structured content will appear here.
+                </div>
               </div>
             </section>
+
           </main>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="ebmToast" class="ebm-toast" role="status" aria-live="polite"></div>
-
   <script>
-    // ---------------- BASIC GENERATE (unchanged behaviour) ----------------
-    const questionInput = document.getElementById("question");
-    const generateBtn = document.getElementById("generateBtn");
-    const answerEl = document.getElementById("answer");
-    const answerLoader = document.getElementById("answerLoader");
-    const copyAllBtn = document.getElementById("copyAllBtn");
-
-    async function generate() {
-      const query = questionInput.value.trim();
-      if (!query) return;
-
-      answerLoader.classList.remove("hidden");
-      answerEl.classList.remove("placeholder");
-      answerEl.textContent = "";
-      copyAllBtn.disabled = true;
-
-      try {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query })
-        });
-        const data = await res.json();
-        const out = data.answer || data.error || "No response.";
-        answerEl.textContent = out;
-        copyAllBtn.disabled = !out.trim();
-      } catch (e) {
-        console.error(e);
-        answerEl.textContent = "Error generating answer.";
-      } finally {
-        answerLoader.classList.add("hidden");
-      }
-    }
-
-    generateBtn.addEventListener("click", generate);
-
-    questionInput.addEventListener("keydown", e => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        generate();
-      }
-    });
-
-    copyAllBtn.addEventListener("click", async () => {
-      const text = (answerEl.textContent || "").trim();
-      if (!text) return;
-      try {
-        await navigator.clipboard.writeText(text);
-        toast("Copied answer.", "Paste wherever you need.");
-      } catch (e) {
-        console.warn(e);
-        toast("Copy failed.", "On mobile: long-press to select, then Copy.");
-      }
-    });
-
-    // ---------------- NEW: COPY/OPEN ONE NOTE (no backend) ----------------
-    const copyOneNoteBtn = document.getElementById("copyOneNoteBtn");
-    const openOneNoteBtn = document.getElementById("openOneNoteBtn");
-
-    // Your OneNote Online link (as you posted)
-    const ONENOTE_URL = "https://wahealthdept-my.sharepoint.com/:o:/g/personal/he198569_health_wa_gov_au/IgAiehh99mjRSqgkg7Ey0oMxAXHzaEIIta9g8j5-dTzq_Hw?email=Michael.Addis%40health.wa.gov.au&e=adMWRB";
-
-    // Your WR template (prefills the textarea on first load if empty)
+    /* ===============================
+       WR TEMPLATE
+       =============================== */
     const WR_TEMPLATE = `WR:
-
 Pt:
 
 ISSUES:
@@ -191,76 +110,117 @@ Drains:
 -
 -`;
 
-    // Minimal toast (isolated styling above)
-    const toastEl = document.getElementById("ebmToast");
-    let toastTimer = null;
+    const textarea = document.getElementById("question");
+    const generateBtn = document.getElementById("generateBtn");
+    const dictateBtn = document.getElementById("dictateBtn");
+    const answerEl = document.getElementById("answer");
+    const answerLoader = document.getElementById("answerLoader");
 
-    function toast(title, detail) {
-      if (!toastEl) return;
-      const t = String(title || "").trim();
-      const d = String(detail || "").trim();
-      toastEl.innerHTML = `<strong>${escapeHtml(t)}</strong>${d ? `<div class="muted">${escapeHtml(d)}</div>` : ""}`;
-      toastEl.classList.add("show");
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2600);
+    if (!textarea.value.trim()) {
+      textarea.value = WR_TEMPLATE;
     }
 
-    function escapeHtml(str) {
-      return (str || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-    }
+    /* ===============================
+       GENERATE (unchanged behaviour)
+       =============================== */
+    async function generate() {
+      const query = textarea.value.trim();
+      if (!query) return;
 
-    async function copyToClipboard(text) {
-      // Clipboard API requires HTTPS + user gesture (your site is HTTPS)
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-      // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      if (!ok) throw new Error("execCommand copy failed");
-      return true;
-    }
-
-    copyOneNoteBtn.addEventListener("click", async () => {
-      const content = (questionInput.value || "").trim();
-      if (!content) {
-        toast("Nothing to copy.", "Fill the template first.");
-        return;
-      }
+      answerLoader.classList.remove("hidden");
+      answerEl.classList.remove("placeholder");
+      answerEl.textContent = "";
 
       try {
-        await copyToClipboard(content);
-        toast("Copied to clipboard.", "Now tap Open OneNote and paste.");
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query })
+        });
+        const data = await res.json();
+        answerEl.textContent = data.answer || data.error || "No response.";
       } catch (e) {
-        console.warn(e);
-        toast("Copy blocked by browser.", "On Android: long-press the text → Copy.");
+        console.error(e);
+        answerEl.textContent = "Error generating answer.";
+      } finally {
+        answerLoader.classList.add("hidden");
       }
-    });
+    }
 
-    openOneNoteBtn.addEventListener("click", () => {
-      // Opens OneNote Online in a new tab
-      // On some Android browsers, popups require a direct tap (this is direct tap)
-      window.open(ONENOTE_URL, "_blank", "noopener,noreferrer");
-      toast("Opened OneNote.", "Paste the note into your page.");
-    });
+    generateBtn.addEventListener("click", generate);
 
-    window.addEventListener("DOMContentLoaded", () => {
-      // Prefill template only if empty
-      if (!questionInput.value.trim()) {
-        questionInput.value = WR_TEMPLATE;
+    /* ===============================
+       SPEECH → TEMPLATE DICTATION
+       =============================== */
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      dictateBtn.disabled = true;
+      dictateBtn.textContent = "🎙 Not supported";
+    }
+
+    const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+    let listening = false;
+    let lastFinal = "";
+
+    if (recognition) {
+      recognition.lang = "en-AU";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognition.onresult = (event) => {
+        let finalText = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalText += event.results[i][0].transcript;
+          }
+        }
+
+        finalText = finalText.trim();
+        if (!finalText || finalText === lastFinal) return;
+        lastFinal = finalText;
+
+        if (!finalText.endsWith(".")) finalText += ".";
+
+        insertAtCursor(" " + finalText + "\n");
+      };
+
+      recognition.onend = () => {
+        if (listening) {
+          try { recognition.start(); } catch {}
+        }
+      };
+    }
+
+    function insertAtCursor(text) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = before + text + after;
+      textarea.selectionStart = textarea.selectionEnd = start + text.length;
+    }
+
+    dictateBtn.addEventListener("click", async () => {
+      if (!recognition) return;
+
+      if (!listening) {
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+          alert("Microphone permission required.");
+          return;
+        }
+        listening = true;
+        dictateBtn.textContent = "⏹ Stop";
+        recognition.start();
+      } else {
+        listening = false;
+        dictateBtn.textContent = "🎙 Dictate";
+        recognition.stop();
       }
-      toast("Ready.", "Fill WR note → Copy to OneNote → Open OneNote → Paste.");
     });
   </script>
 </body>
