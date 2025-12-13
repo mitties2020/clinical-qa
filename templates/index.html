@@ -11,6 +11,7 @@
   <div class="app-root">
     <div class="shell">
       <div class="layout">
+        <!-- SIDEBAR -->
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -20,32 +21,48 @@
                 <div class="sidebar-title">EBM Session</div>
               </div>
             </div>
-            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
+            <input
+              id="topicSearch"
+              class="topic-search"
+              type="text"
+              placeholder="Search topics..."
+            />
           </div>
+
           <div id="conversationList" class="conversation-list"></div>
+
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
         </aside>
 
+        <!-- MAIN -->
         <div class="main-region">
           <header class="header">
-            <h1 class="title">CLINICAL ENGINE</h1>
+            <h1 class="title">CLINICAL Q&A ENGINE</h1>
             <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
           </header>
 
           <main class="grid">
+            <!-- INPUT -->
             <section class="card input-card">
               <label class="label" for="question">Clinical Question</label>
-              <textarea id="question" class="textarea" rows="6"></textarea>
+              <textarea
+                id="question"
+                class="textarea"
+                rows="6"
+                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
+              ></textarea>
               <div class="actions">
                 <button id="generateBtn" class="btn">Generate</button>
               </div>
             </section>
 
+            <!-- OUTPUT -->
             <section class="card output-card">
               <div class="output-header">
-                <h2 class="output-title">Answers</h2>
+                <h2 class="output-title">Answer</h2>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
@@ -55,7 +72,7 @@
 
               <div class="output-body">
                 <div id="answer" class="answer placeholder">
-                  Hold the mic button to speak.
+                  Your structured, evidence-based response will appear here.
                 </div>
               </div>
             </section>
@@ -86,211 +103,485 @@
       touch-action: none;
     ">🎙️</button>
 
-<script>
-/* =========================================================
-   CORE GENERATE
-   ========================================================= */
-const questionInput = document.getElementById("question");
-const generateBtn = document.getElementById("generateBtn");
-const answerEl = document.getElementById("answer");
-const answerLoader = document.getElementById("answerLoader");
+  <script>
+    // ---------- ELEMENTS ----------
+    const questionInput = document.getElementById("question");
+    const generateBtn = document.getElementById("generateBtn");
+    const answerEl = document.getElementById("answer");
+    const copyAllBtn = document.getElementById("copyAllBtn");
+    const answerLoader = document.getElementById("answerLoader");
+    const conversationListEl = document.getElementById("conversationList");
+    const topicSearch = document.getElementById("topicSearch");
+    const micBtn = document.getElementById("micBtn");
 
-function setStatus(msg) {
-  answerEl.classList.remove("placeholder");
-  answerEl.textContent = msg;
-}
-
-async function generate() {
-  const query = questionInput.value.trim();
-  if (!query) return;
-
-  answerLoader.classList.remove("hidden");
-  answerEl.textContent = "";
-
-  try {
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query })
-    });
-    const data = await res.json();
-    answerEl.textContent = data.answer || data.error || "No response.";
-  } catch (e) {
-    console.error(e);
-    answerEl.textContent = "Error generating answer.";
-  } finally {
-    answerLoader.classList.add("hidden");
-  }
-}
-
-generateBtn.addEventListener("click", generate);
-
-questionInput.addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    generate();
-  }
-});
-
-/* =========================================================
-   MOBILE + DESKTOP HOLD-TO-TALK
-   ========================================================= */
-const micBtn = document.getElementById("micBtn");
-
-let stream = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let recording = false;
-let startAt = 0;
-
-function pickMimeType() {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-    "audio/ogg"
-  ];
-  for (const t of candidates) {
-    if (window.MediaRecorder && window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t)) {
-      return t;
+    // ---------- HELPERS ----------
+    function escapeHtml(str) {
+      return (str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
     }
-  }
-  return "";
-}
 
-async function startRecording() {
-  if (recording) return;
+    function hasNonEmpty(arr) {
+      return Array.isArray(arr) && arr.some((l) => (l || "").trim() !== "");
+    }
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setStatus("Voice: your browser does not support microphone recording.");
-    return;
-  }
-  if (!window.MediaRecorder) {
-    setStatus("Voice: MediaRecorder not supported. (Some iPhones/iOS versions.)");
-    return;
-  }
+    function flashCopy(btn) {
+      const t = btn.textContent;
+      btn.textContent = "Copied";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.textContent = t;
+        btn.classList.remove("copied");
+      }, 900);
+    }
 
-  recording = true;
-  audioChunks = [];
-  startAt = Date.now();
+    // ---------- STRUCTURED RENDER (COLLAPSIBLE) ----------
+    function buildStructuredHtml(raw) {
+      if (!raw) return "";
 
-  micBtn.textContent = "🔴";
+      // Strip markdown-ish chars if any slip through
+      let text = raw
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "")
+        .replace(/\r/g, "");
 
-  try {
-    setStatus("Voice: requesting microphone permission…");
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const lines = text.split("\n");
 
-    const mt = pickMimeType();
-    mediaRecorder = mt ? new MediaRecorder(stream, { mimeType: mt }) : new MediaRecorder(stream);
+      const sectionOrder = [
+        "Summary",
+        "Assessment",
+        "Diagnosis",
+        "Investigations",
+        "Treatment",
+        "Monitoring",
+        "Follow-up & Safety Netting",
+        "Red Flags",
+        "References",
+      ];
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) audioChunks.push(e.data);
-    };
+      const sections = [];
+      let current = { title: "Summary", content: [] };
+      let seenExplicit = false;
 
-    mediaRecorder.onstop = async () => {
+      const isHeading = (line) => {
+        const trimmed = line.trim().replace(/:$/, "");
+        return sectionOrder.find((h) => trimmed.toLowerCase() === h.toLowerCase()) || null;
+      };
+
+      for (const rawLine of lines) {
+        const line = (rawLine || "").trim();
+        if (!line) {
+          current.content.push("");
+          continue;
+        }
+        const heading = isHeading(line);
+        if (heading) {
+          if (hasNonEmpty(current.content)) sections.push(current);
+          current = { title: heading, content: [] };
+          seenExplicit = true;
+        } else {
+          current.content.push(line);
+        }
+      }
+      if (hasNonEmpty(current.content)) sections.push(current);
+
+      if (!sections.length) return "No response generated.";
+
+      let html = "";
+      let idx = 0;
+
+      for (const sec of sections) {
+        const title = sec.title;
+        const bodyLines = sec.content || [];
+        if (!hasNonEmpty(bodyLines)) continue;
+
+        const id = `sec-${idx++}`;
+
+        const inner = bodyLines
+          .filter((l) => (l || "").trim() !== "")
+          .map((l) => {
+            const t = (l || "").trim();
+            // bullet-like lines
+            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
+              const cleaned = t
+                .replace(/^[-•]\s+/, "")
+                .replace(/^\d+[\.\)]\s+/, "");
+              return `
+                <div class="answer-bullet">
+                  <span class="bullet-dot"></span>
+                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
+                </div>`;
+            }
+            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
+          })
+          .join("");
+
+        if (!inner.trim()) continue;
+
+        // Summary shown open by default; others collapsible
+        if (title.toLowerCase() === "summary") {
+          html += `
+            <div class="section">
+              <div class="section-header static">
+                <span>${escapeHtml(title)}</span>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="section-body static-body" data-section="${id}">
+                ${inner}
+              </div>
+            </div>`;
+        } else {
+          html += `
+            <div class="section">
+              <div class="collapsible-header">
+                <button class="collapsible" data-target="${id}">
+                  ${escapeHtml(title)}
+                </button>
+                <button class="section-copy-btn" data-target="${id}">Copy</button>
+              </div>
+              <div class="collapsible-content" data-section="${id}" style="display:none;">
+                ${inner}
+              </div>
+            </div>`;
+        }
+      }
+
+      return html || "No response generated.";
+    }
+
+    // ---------- CONVERSATIONS (LOCAL STORAGE) ----------
+    function loadConversations() {
+      let data = [];
       try {
-        micBtn.textContent = "🎙️";
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
 
-        // stop tracks
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        stream = null;
+      conversationListEl.innerHTML = "";
 
-        const durationMs = Date.now() - startAt;
-        if (durationMs < 350) {
-          setStatus("Voice: too short. Hold the mic button and speak, then release.");
-          return;
-        }
+      if (!data.length) {
+        conversationListEl.innerHTML =
+          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
+        return;
+      }
 
-        const blob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
-        audioChunks = [];
-        mediaRecorder = null;
+      data.forEach((item, index) => {
+        const el = document.createElement("div");
+        el.className = "conversation-item";
 
-        if (!blob || blob.size < 2500) {
-          setStatus("Voice: too quiet/short. Try again closer to the mic.");
-          return;
-        }
+        const main = document.createElement("div");
+        main.className = "conv-main";
+        main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Topic")}</div>`;
 
-        setStatus("Voice: transcribing…");
+        const del = document.createElement("button");
+        del.className = "conv-delete";
+        del.dataset.index = index;
+        del.textContent = "✕";
+        del.title = "Remove";
 
-        const form = new FormData();
-        form.append("audio", blob, "speech.webm");
+        main.addEventListener("click", () => {
+          questionInput.value = item.query || "";
+          answerEl.innerHTML = item.answer || "";
+          const has = !!(item.answer && item.answer.trim());
+          answerEl.classList.toggle("placeholder", !has);
+          copyAllBtn.disabled = !has;
+        });
 
-        const res = await fetch("/api/transcribe", { method: "POST", body: form });
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteConversation(index);
+        });
+
+        el.appendChild(main);
+        el.appendChild(del);
+        conversationListEl.appendChild(el);
+      });
+    }
+
+    function saveConversation(query, answerHtml) {
+      if (!query || !answerHtml) return;
+
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+
+      const title = query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
+      data.push({ title: title || "Topic", query, answer: answerHtml });
+      if (data.length > 40) data = data.slice(data.length - 40);
+
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
+    }
+
+    function deleteConversation(index) {
+      let data = [];
+      try {
+        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
+      } catch {
+        data = [];
+      }
+      data.splice(index, 1);
+      localStorage.setItem("ebm_conversations", JSON.stringify(data));
+      loadConversations();
+    }
+
+    function filterTopics() {
+      const term = (topicSearch.value || "").toLowerCase().trim();
+      const items = conversationListEl.querySelectorAll(".conversation-item");
+      items.forEach((item) => {
+        const title = (item.querySelector(".conv-title")?.textContent || "").toLowerCase();
+        item.style.display = !term || title.includes(term) ? "" : "none";
+      });
+    }
+
+    // ---------- GENERATE ----------
+    async function generate() {
+      const query = questionInput.value.trim();
+      if (!query) return;
+
+      generateBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+      answerEl.classList.remove("placeholder");
+      answerEl.innerHTML = "";
+
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
         const data = await res.json();
 
-        const text = (data.text || "").trim();
-        if (!text) {
-          setStatus("Voice: no text recognised. Try again.");
-          return;
+        if (data.answer) {
+          const html = buildStructuredHtml(data.answer);
+          answerEl.innerHTML = html;
+          const has = !!answerEl.textContent.trim();
+          copyAllBtn.disabled = !has;
+          if (has) saveConversation(query, html);
+        } else {
+          answerEl.textContent = data.error || "No response generated.";
+          copyAllBtn.disabled = true;
         }
+      } catch (err) {
+        console.error(err);
+        answerEl.textContent = "Error generating answer.";
+        copyAllBtn.disabled = true;
+      } finally {
+        answerLoader.classList.add("hidden");
+        generateBtn.disabled = false;
+      }
+    }
 
-        questionInput.value = text;
-        setStatus("Voice captured — generating…");
-        setTimeout(() => generateBtn.click(), 150);
+    generateBtn.addEventListener("click", generate);
+
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
+      }
+    });
+
+    copyAllBtn.addEventListener("click", async () => {
+      const text = answerEl.textContent.trim();
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+      flashCopy(copyAllBtn);
+    });
+
+    // Collapsible + section copy
+    document.addEventListener("click", async (e) => {
+      if (e.target.classList.contains("section-copy-btn")) {
+        const id = e.target.dataset.target;
+        const section = document.querySelector(`[data-section="${id}"]`);
+        if (!section) return;
+        const text = section.innerText.trim();
+        if (!text) return;
+        await navigator.clipboard.writeText(text);
+        flashCopy(e.target);
+      } else if (e.target.classList.contains("collapsible")) {
+        const id = e.target.dataset.target;
+        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+        if (!content) return;
+        const open = content.style.display === "block";
+        e.target.classList.toggle("active", !open);
+        content.style.display = open ? "none" : "block";
+      }
+    });
+
+    topicSearch.addEventListener("input", filterTopics);
+
+    // ---------- VOICE: HOLD-TO-RECORD FLOATING MIC ----------
+    let stream = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recording = false;
+    let startAt = 0;
+
+    function pickMimeType() {
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/ogg"
+      ];
+      for (const t of candidates) {
+        if (window.MediaRecorder && window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t)) {
+          return t;
+        }
+      }
+      return "";
+    }
+
+    async function startRecording() {
+      if (recording) return;
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        answerEl.classList.remove("placeholder");
+        answerEl.textContent = "Voice: browser does not support microphone recording.";
+        return;
+      }
+      if (!window.MediaRecorder) {
+        answerEl.classList.remove("placeholder");
+        answerEl.textContent = "Voice: MediaRecorder not supported in this browser.";
+        return;
+      }
+
+      recording = true;
+      audioChunks = [];
+      startAt = Date.now();
+      micBtn.textContent = "🔴";
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        const mt = pickMimeType();
+        mediaRecorder = mt ? new MediaRecorder(stream, { mimeType: mt }) : new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          try {
+            micBtn.textContent = "🎙️";
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            stream = null;
+
+            const durationMs = Date.now() - startAt;
+            if (durationMs < 350) {
+              answerEl.classList.remove("placeholder");
+              answerEl.textContent = "Voice: too short. Hold the mic and speak, then release.";
+              return;
+            }
+
+            const blob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
+            audioChunks = [];
+            mediaRecorder = null;
+
+            if (!blob || blob.size < 2500) {
+              answerEl.classList.remove("placeholder");
+              answerEl.textContent = "Voice: too quiet/short. Try again closer to the mic.";
+              return;
+            }
+
+            answerEl.classList.remove("placeholder");
+            answerEl.textContent = "Voice: transcribing…";
+
+            const form = new FormData();
+            form.append("audio", blob, "speech.webm");
+
+            const res = await fetch("/api/transcribe", { method: "POST", body: form });
+            const data = await res.json();
+
+            const text = (data.text || "").trim();
+            if (!text) {
+              answerEl.textContent = "Voice: no text recognised. Try again.";
+              return;
+            }
+
+            questionInput.value = text;
+
+            // Only auto-generate if it looks like a full question
+            if (text.split(/\s+/).length >= 4) {
+              answerEl.textContent = "Voice captured — generating…";
+              setTimeout(() => generateBtn.click(), 150);
+            } else {
+              answerEl.textContent = "Voice captured. Please check the text then press Generate.";
+            }
+
+          } catch (e) {
+            console.error(e);
+            answerEl.classList.remove("placeholder");
+            answerEl.textContent = "Voice: transcription failed.";
+          } finally {
+            recording = false;
+            micBtn.textContent = "🎙️";
+          }
+        };
+
+        mediaRecorder.start();
+        answerEl.classList.remove("placeholder");
+        answerEl.textContent = "Voice: recording… release to send";
 
       } catch (e) {
-        console.error(e);
-        setStatus("Voice: transcription failed.");
-      } finally {
+        console.warn(e);
         recording = false;
         micBtn.textContent = "🎙️";
+        answerEl.classList.remove("placeholder");
+        answerEl.textContent = "Voice: microphone blocked. Allow mic permission for this site and refresh.";
       }
-    };
-
-    mediaRecorder.start();
-    setStatus("Voice: recording… release to send");
-
-  } catch (e) {
-    console.warn(e);
-    recording = false;
-    micBtn.textContent = "🎙️";
-    setStatus("Voice: microphone blocked. Enable mic permission for this site and refresh.");
-  }
-}
-
-function stopRecording() {
-  if (!recording) return;
-  try {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
     }
-  } catch (e) {
-    console.warn(e);
-    recording = false;
-    micBtn.textContent = "🎙️";
-    setStatus("Voice: stop failed. Try again.");
-  }
-}
 
-/* ---- Desktop (mouse) ---- */
-micBtn.addEventListener("mousedown", (e) => {
-  e.preventDefault();
-  startRecording();
-});
-document.addEventListener("mouseup", (e) => {
-  if (recording) stopRecording();
-});
+    function stopRecording() {
+      if (!recording) return;
+      try {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
+      } catch (e) {
+        console.warn(e);
+        recording = false;
+        micBtn.textContent = "🎙️";
+        answerEl.classList.remove("placeholder");
+        answerEl.textContent = "Voice: stop failed. Try again.";
+      }
+    }
 
-/* ---- Mobile (touch) ---- */
-micBtn.addEventListener("touchstart", (e) => {
-  e.preventDefault(); // prevents long-press menu + scrolling issues
-  startRecording();
-}, { passive: false });
+    // Desktop mouse
+    micBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      startRecording();
+    });
+    document.addEventListener("mouseup", () => {
+      if (recording) stopRecording();
+    });
 
-micBtn.addEventListener("touchend", (e) => {
-  e.preventDefault();
-  stopRecording();
-}, { passive: false });
+    // Mobile touch
+    micBtn.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      startRecording();
+    }, { passive: false });
 
-micBtn.addEventListener("touchcancel", (e) => {
-  e.preventDefault();
-  stopRecording();
-}, { passive: false });
+    micBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      stopRecording();
+    }, { passive: false });
 
-window.addEventListener("DOMContentLoaded", () => {
-  setStatus("Hold the mic button, speak, then release.");
-});
-</script>
+    micBtn.addEventListener("touchcancel", (e) => {
+      e.preventDefault();
+      stopRecording();
+    }, { passive: false });
 
+    // ---------- INIT ----------
+    window.addEventListener("DOMContentLoaded", () => {
+      loadConversations();
+    });
+  </script>
 </body>
 </html>
