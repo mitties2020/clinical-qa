@@ -1,5 +1,6 @@
 flask
+gunicorn
 requests
 python-dotenv
 faster-whisper
-gunicorn
+msal==1.31.0
