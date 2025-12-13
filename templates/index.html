@@ -1,91 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Clinical Engine | EBM Session</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>EBM Clinical Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
-  <div class="app-root">
-    <div class="shell">
-      <div class="layout">
+<div class="app-root">
+  <div class="shell">
+    <div class="layout">
 
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
-          <div class="sidebar-header">
-            <div class="sidebar-brand">
-              <div class="brand-logo"></div>
-              <div class="brand-text">
-                <div class="brand-title">EBM</div>
-                <div class="sidebar-title">EBM Session</div>
-              </div>
-            </div>
-            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
-          </div>
-          <div id="conversationList" class="conversation-list"></div>
-          <div class="sidebar-footer">
-            <span class="sidebar-hint">Locally stored • Per device</span>
-          </div>
-        </aside>
-
-        <!-- MAIN -->
-        <div class="main-region">
-          <header class="header">
-            <h1 class="title">CLINICAL ENGINE</h1>
-            <p class="subtitle">Dictate WR notes into your template, then generate an answer.</p>
-          </header>
-
-          <main class="grid">
-
-            <!-- INPUT -->
-            <section class="card input-card">
-              <label class="label" for="question">WR Note (Smart Dictation)</label>
-              <textarea id="question" class="textarea" rows="18"></textarea>
-
-              <div class="actions">
-                <button id="generateBtn" class="btn" type="button">Generate</button>
-                <button id="dictateBtn" class="btn" type="button">🎙 Dictate</button>
-                <button id="incorrectBtn" class="btn" type="button">Incorrect</button>
-              </div>
-
-              <!-- tiny helper text only; uses no new CSS classes -->
-              <div style="opacity:.7; font-size:12px; margin-top:8px;">
-                Tip: highlight the wrong words in the WR note → tap “Incorrect” → enter the correct phrase. Learns on this device.
-              </div>
-            </section>
-
-            <!-- OUTPUT -->
-            <section class="card output-card">
-              <div class="output-header">
-                <h2 class="output-title">Answer</h2>
-                <button id="copyAnswerBtn" class="copy-btn main-copy-btn" type="button" disabled>Copy</button>
-              </div>
-
-              <div id="answerLoader" class="answer-loader hidden">
-                <div class="loader"></div>
-                <div class="loader-text">Generating structured answer…</div>
-              </div>
-
-              <div class="output-body">
-                <div id="answer" class="answer placeholder">
-                  Generated structured content will appear here.
-                </div>
-              </div>
-            </section>
-
-          </main>
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="brand-title">EBM SESSION</div>
         </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Saved Clinical Questions</div>
+          <div id="savedQuestions"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Ward Round Templates</div>
+          <div>WR Template (default)</div>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <div class="main-region">
+
+        <!-- ================= CLINICAL ENGINE ================= -->
+        <section class="card">
+          <h2>Clinical Question</h2>
+
+          <textarea id="clinicalQuestion" class="textarea" rows="4"
+            placeholder="Dictate or type a clinical question…"></textarea>
+
+          <div class="actions">
+            <button class="btn" id="dictateQuestion">🎙 Dictate Question</button>
+            <button class="btn" id="incorrectQuestion">Incorrect</button>
+            <button class="btn" id="generateAnswer">Generate</button>
+          </div>
+        </section>
+
+        <!-- ================= ANSWER ================= -->
+        <section class="card">
+          <h2>Answer</h2>
+          <div id="answer" class="answer placeholder">
+            Generated structured answer will appear here.
+          </div>
+        </section>
+
+        <!-- ================= WARD ROUND ================= -->
+        <section class="card">
+          <h2>Ward Round Note</h2>
+
+          <textarea id="wrNote" class="textarea" rows="20"></textarea>
+
+          <div class="actions">
+            <button class="btn" id="dictateWR">🎙 Dictate WR</button>
+            <button class="btn" id="incorrectWR">Incorrect</button>
+            <button class="btn" onclick="copyWR()">Copy WR</button>
+          </div>
+        </section>
+
       </div>
     </div>
   </div>
+</div>
 
-  <script>
-    /* ===============================
-       WR TEMPLATE
-       =============================== */
-    const WR_TEMPLATE = `WR:
+<script>
+/* =========================
+   DEFAULT WR TEMPLATE
+   ========================= */
+const WR_TEMPLATE = `WR:
 Pt:
 
 ISSUES:
@@ -95,7 +86,6 @@ ISSUES:
 4.
 
 ==REVIEW==
-
 
 ==O/E==
 Vitals:
@@ -116,368 +106,132 @@ Drains:
 -
 -`;
 
-    const textarea = document.getElementById("question");
-    const generateBtn = document.getElementById("generateBtn");
-    const dictateBtn = document.getElementById("dictateBtn");
-    const incorrectBtn = document.getElementById("incorrectBtn");
-    const answerEl = document.getElementById("answer");
-    const answerLoader = document.getElementById("answerLoader");
-    const copyAnswerBtn = document.getElementById("copyAnswerBtn");
+const wrNote = document.getElementById("wrNote");
+if (!wrNote.value.trim()) wrNote.value = WR_TEMPLATE;
 
-    if (!textarea.value.trim()) textarea.value = WR_TEMPLATE;
+/* =========================
+   LOCAL LEARNING MEMORY
+   ========================= */
+function getCorrections(key) {
+  return JSON.parse(localStorage.getItem(key) || "{}");
+}
+function saveCorrection(key, wrong, correct) {
+  const data = getCorrections(key);
+  data[wrong.toLowerCase()] = correct;
+  localStorage.setItem(key, JSON.stringify(data));
+}
+function applyCorrections(key, text) {
+  const data = getCorrections(key);
+  Object.keys(data).forEach(w => {
+    const re = new RegExp(`\\b${w}\\b`, "gi");
+    text = text.replace(re, data[w]);
+  });
+  return text;
+}
 
-    /* ===============================
-       GENERATE (same endpoint)
-       =============================== */
-    async function generate() {
-      const query = textarea.value.trim();
-      if (!query) return;
+/* =========================
+   SPEECH SETUP
+   ========================= */
+function setupDictation(button, target, memoryKey) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
 
-      answerLoader.classList.remove("hidden");
-      answerEl.classList.remove("placeholder");
-      answerEl.textContent = "";
-      copyAnswerBtn.disabled = true;
+  const rec = new SR();
+  rec.lang = "en-AU";
+  rec.continuous = true;
+  rec.interimResults = true;
 
-      try {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query })
-        });
-        const data = await res.json();
-        const out = (data.answer || data.error || "No response.").trim();
-        answerEl.textContent = out;
-        copyAnswerBtn.disabled = !out;
-      } catch (e) {
-        console.error(e);
-        answerEl.textContent = "Error generating answer.";
-        copyAnswerBtn.disabled = true;
-      } finally {
-        answerLoader.classList.add("hidden");
-      }
+  let active = false;
+
+  rec.onresult = e => {
+    let text = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) text += e.results[i][0].transcript;
     }
-    generateBtn.addEventListener("click", generate);
+    if (!text) return;
 
-    textarea.addEventListener("keydown", e => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        generate();
-      }
-    });
+    text = applyCorrections(memoryKey, text.trim()) + ".\n";
+    const start = target.selectionStart;
+    target.value = target.value.slice(0, start) + text + target.value.slice(start);
+    target.selectionStart = target.selectionEnd = start + text.length;
+  };
 
-    copyAnswerBtn.addEventListener("click", async () => {
-      const text = (answerEl.textContent || "").trim();
-      if (!text) return;
-      try {
-        await navigator.clipboard.writeText(text);
-        // quick feedback without changing UI
-        const old = copyAnswerBtn.textContent;
-        copyAnswerBtn.textContent = "Copied";
-        setTimeout(() => (copyAnswerBtn.textContent = old), 900);
-      } catch (e) {
-        console.warn(e);
-        alert("Copy blocked by browser. On Android: long-press the answer and copy.");
-      }
-    });
-
-    /* =========================================================
-       LOCAL “LEARNING” FOR MISHEARS (no backend)
-       - Stores replacements in localStorage
-       - Applies them to future dictation before routing
-       ========================================================= */
-    const LEARN_KEY = "ebm_speech_corrections_v1";
-
-    function loadCorrections() {
-      try {
-        const obj = JSON.parse(localStorage.getItem(LEARN_KEY) || "{}");
-        return (obj && typeof obj === "object") ? obj : {};
-      } catch {
-        return {};
-      }
+  button.onclick = async () => {
+    if (!active) {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      rec.start();
+      button.textContent = "⏹ Stop";
+      active = true;
+    } else {
+      rec.stop();
+      button.textContent = "🎙 Dictate";
+      active = false;
     }
+  };
+}
 
-    function saveCorrections(map) {
-      try {
-        localStorage.setItem(LEARN_KEY, JSON.stringify(map || {}));
-      } catch {}
-    }
+/* =========================
+   INCORRECT BUTTON LOGIC
+   ========================= */
+function setupIncorrect(button, target, memoryKey) {
+  button.onclick = () => {
+    const sel = target.value.substring(
+      target.selectionStart, target.selectionEnd
+    );
+    if (!sel) return alert("Highlight incorrect text first");
+    const correction = prompt("Correct phrase:", sel);
+    if (!correction) return;
+    saveCorrection(memoryKey, sel, correction);
+    alert("Saved. Will learn on this device.");
+  };
+}
 
-    function applyCorrections(text) {
-      let out = text || "";
-      const map = loadCorrections();
+/* =========================
+   WIRE IT ALL UP
+   ========================= */
+setupDictation(
+  document.getElementById("dictateQuestion"),
+  document.getElementById("clinicalQuestion"),
+  "q_corrections"
+);
+setupDictation(
+  document.getElementById("dictateWR"),
+  document.getElementById("wrNote"),
+  "wr_corrections"
+);
 
-      // Replace longest keys first (reduces partial collisions)
-      const keys = Object.keys(map).sort((a, b) => b.length - a.length);
+setupIncorrect(
+  document.getElementById("incorrectQuestion"),
+  document.getElementById("clinicalQuestion"),
+  "q_corrections"
+);
+setupIncorrect(
+  document.getElementById("incorrectWR"),
+  document.getElementById("wrNote"),
+  "wr_corrections"
+);
 
-      for (const k of keys) {
-        const v = map[k];
-        if (!k || !v) continue;
-        // whole-word-ish replacement (case-insensitive), but still works for phrases
-        const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-        out = out.replace(re, v);
-      }
-      return out;
-    }
+/* =========================
+   GENERATE ANSWER
+   ========================= */
+document.getElementById("generateAnswer").onclick = async () => {
+  const q = document.getElementById("clinicalQuestion").value.trim();
+  if (!q) return;
 
-    incorrectBtn.addEventListener("click", () => {
-      const selStart = textarea.selectionStart;
-      const selEnd = textarea.selectionEnd;
-      const selected = (textarea.value || "").slice(selStart, selEnd).trim();
+  const res = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: q })
+  });
+  const data = await res.json();
+  document.getElementById("answer").textContent =
+    data.answer || data.error || "No response.";
+};
 
-      if (!selected) {
-        alert("Highlight the incorrect words in the WR note first, then press Incorrect.");
-        return;
-      }
-
-      const correct = prompt("What should it be instead?", selected);
-      if (!correct || !correct.trim()) return;
-
-      const map = loadCorrections();
-      // store exact phrase as keyed pattern (works well clinically)
-      map[selected] = correct.trim();
-      saveCorrections(map);
-
-      // immediately apply in the current note as well (nice UX)
-      const before = textarea.value.slice(0, selStart);
-      const after = textarea.value.slice(selEnd);
-      textarea.value = before + correct.trim() + after;
-      textarea.selectionStart = textarea.selectionEnd = before.length + correct.trim().length;
-    });
-
-    /* =========================================================
-       SMART DICTATION ROUTING
-       Speak like:
-       - "Patient: 31-year-old female anorexia nervosa"
-       - "Issues: malnutrition, epilepsy"
-       - "Vitals: afebrile, sats 96 on room air"
-       - "Plan: check lamotrigine level, neuro review"
-       ========================================================= */
-    function norm(s) {
-      return (s || "").toLowerCase().replace(/[^\w\s&/:-]/g, " ").replace(/\s+/g, " ").trim();
-    }
-
-    function stripLeadingLabel(text) {
-      return (text || "")
-        .replace(/^\s*(patient|pt|issues?|review|o\/e|exam|examination|vitals?|alertness|orientation|fluid|bowel|chest|lungs?|resp|abdo|abdomen|cardiac|heart|lower limbs?|upper limbs?|neuro|neurology|wounds?|drains?|plan)\s*[:\-]\s*/i, "")
-        .trim();
-    }
-
-    function getLines() { return textarea.value.replace(/\r/g, "").split("\n"); }
-    function setLines(lines) { textarea.value = lines.join("\n"); }
-
-    function findLineIndex(lines, startsWith) {
-      const key = startsWith.toLowerCase();
-      for (let i = 0; i < lines.length; i++) {
-        if ((lines[i] || "").toLowerCase().startsWith(key)) return i;
-      }
-      return -1;
-    }
-
-    function appendToLabelLine(label, content) {
-      const lines = getLines();
-      const idx = findLineIndex(lines, label);
-      if (idx === -1) return false;
-
-      const existing = (lines[idx] || "").slice(label.length).trim();
-      const cleaned = (content || "").trim();
-      if (!cleaned) return true;
-
-      if (!existing) {
-        lines[idx] = label + " " + cleaned;
-      } else {
-        const sep = (existing.endsWith(",") || existing.endsWith(";")) ? " " : ", ";
-        lines[idx] = label + " " + existing + sep + cleaned;
-      }
-      setLines(lines);
-      return true;
-    }
-
-    function fillPt(content) { return appendToLabelLine("Pt:", content); }
-
-    function fillIssues(content) {
-      const raw = (content || "").trim();
-      if (!raw) return true;
-
-      const parts = raw.split(/\s*(?:,|;|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
-
-      const lines = getLines();
-      const issuesHeader = findLineIndex(lines, "ISSUES:");
-      if (issuesHeader === -1) return false;
-
-      const slots = [];
-      for (let i = issuesHeader + 1; i < lines.length; i++) {
-        if ((lines[i] || "").startsWith("==")) break;
-        if (/^\s*\d\.\s*/.test(lines[i])) slots.push(i);
-        if (slots.length > 30) break;
-      }
-      if (!slots.length) return false;
-
-      let p = 0;
-      // fill empty slots first
-      for (const idx of slots) {
-        if (p >= parts.length) break;
-        const m = (lines[idx] || "").match(/^(\s*\d\.\s*)(.*)$/);
-        if (!m) continue;
-        const prefix = m[1];
-        const existing = (m[2] || "").trim();
-        if (!existing || existing === ".") {
-          lines[idx] = prefix + parts[p];
-          p++;
-        }
-      }
-
-      // append extras as new numbered lines if needed
-      while (p < parts.length) {
-        const nextNum = slots.length + (p - (parts.length - 1)) + 1;
-        lines.splice(slots[slots.length - 1] + 1, 0, `${nextNum}. ${parts[p]}`);
-        p++;
-      }
-
-      setLines(lines);
-      return true;
-    }
-
-    function fillPlan(content) {
-      const raw = (content || "").trim();
-      if (!raw) return true;
-
-      const parts = raw.split(/\s*(?:,|;|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
-
-      const lines = getLines();
-      const planHeader = findLineIndex(lines, "==Plan==");
-      if (planHeader === -1) return false;
-
-      const slots = [];
-      for (let i = planHeader + 1; i < lines.length; i++) {
-        if ((lines[i] || "").startsWith("==") && i !== planHeader) break;
-        if (/^\s*-\s*/.test(lines[i])) slots.push(i);
-        if (slots.length > 60) break;
-      }
-      if (!slots.length) return false;
-
-      let p = 0;
-      for (const idx of slots) {
-        if (p >= parts.length) break;
-        const m = (lines[idx] || "").match(/^(\s*-\s*)(.*)$/);
-        if (!m) continue;
-        const prefix = m[1];
-        const existing = (m[2] || "").trim();
-        if (!existing) {
-          lines[idx] = prefix + parts[p];
-          p++;
-        }
-      }
-
-      // add more bullets if overflow
-      if (p < parts.length) {
-        const insertAt = slots[slots.length - 1] + 1;
-        const extras = [];
-        while (p < parts.length) extras.push("- " + parts[p++]);
-        lines.splice(insertAt, 0, ...extras);
-      }
-
-      setLines(lines);
-      return true;
-    }
-
-    function fillOEField(label, content) { return appendToLabelLine(label, content); }
-
-    function insertAtCursor(text) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const before = textarea.value.slice(0, start);
-      const after = textarea.value.slice(end);
-      textarea.value = before + text + after;
-      textarea.selectionStart = textarea.selectionEnd = start + text.length;
-    }
-
-    function routeDictation(finalText) {
-      const t0 = (finalText || "").trim();
-      if (!t0) return;
-
-      // Apply local correction map first
-      const t = applyCorrections(t0);
-      const n = norm(t);
-
-      if (/^(patient|pt)\b/.test(n)) return fillPt(stripLeadingLabel(t));
-      if (/^issues?\b/.test(n)) return fillIssues(stripLeadingLabel(t));
-      if (/^plan\b/.test(n)) return fillPlan(stripLeadingLabel(t));
-
-      if (/^vitals?\b/.test(n)) return fillOEField("Vitals:", stripLeadingLabel(t));
-      if (/^(alertness|orientation|alertness & orientation)\b/.test(n)) return fillOEField("Alertness & Orientation:", stripLeadingLabel(t));
-      if (/^fluid\b/.test(n)) return fillOEField("Fluid Balance:", stripLeadingLabel(t));
-      if (/^bowel\b/.test(n)) return fillOEField("Bowel chart:", stripLeadingLabel(t));
-      if (/^(chest|lungs?|resp)\b/.test(n)) return fillOEField("Chest:", stripLeadingLabel(t));
-      if (/^(abdo|abdomen)\b/.test(n)) return fillOEField("Abdo:", stripLeadingLabel(t));
-      if (/^(cardiac|heart)\b/.test(n)) return fillOEField("Cardiac:", stripLeadingLabel(t));
-      if (/^(lower limbs?|legs?)\b/.test(n)) return fillOEField("Lower limbs:", stripLeadingLabel(t));
-      if (/^(upper limbs?|arms?)\b/.test(n)) return fillOEField("Upper limbs:", stripLeadingLabel(t));
-      if (/^(neuro|neurology)\b/.test(n)) return fillOEField("Neuro:", stripLeadingLabel(t));
-      if (/^wounds?\b/.test(n)) return fillOEField("Wounds:", stripLeadingLabel(t));
-      if (/^drains?\b/.test(n)) return fillOEField("Drains:", stripLeadingLabel(t));
-
-      // fallback: cursor
-      insertAtCursor(" " + t + "\n");
-      return true;
-    }
-
-    /* ===============================
-       SpeechRecognition
-       =============================== */
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      dictateBtn.disabled = true;
-      dictateBtn.textContent = "🎙 Not supported";
-    }
-
-    const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-    let listening = false;
-    let lastFinal = "";
-
-    if (recognition) {
-      recognition.lang = "en-AU";
-      recognition.interimResults = true;
-      recognition.continuous = true;
-
-      recognition.onresult = (event) => {
-        let finalText = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) finalText += event.results[i][0].transcript + " ";
-        }
-
-        finalText = finalText.trim();
-        if (!finalText) return;
-
-        if (norm(finalText) === norm(lastFinal)) return;
-        lastFinal = finalText;
-
-        routeDictation(finalText);
-      };
-
-      recognition.onend = () => {
-        if (listening) {
-          try { recognition.start(); } catch {}
-        }
-      };
-    }
-
-    dictateBtn.addEventListener("click", async () => {
-      if (!recognition) return;
-
-      if (!listening) {
-        try { await navigator.mediaDevices.getUserMedia({ audio: true }); }
-        catch { alert("Microphone permission required."); return; }
-
-        listening = true;
-        dictateBtn.textContent = "⏹ Stop";
-        try { recognition.start(); } catch {}
-      } else {
-        listening = false;
-        dictateBtn.textContent = "🎙 Dictate";
-        try { recognition.stop(); } catch {}
-      }
-    });
-  </script>
+function copyWR() {
+  navigator.clipboard.writeText(wrNote.value);
+  alert("WR copied");
+}
+</script>
 </body>
 </html>
