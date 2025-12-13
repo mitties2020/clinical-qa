@@ -532,3 +532,97 @@ body {
   transform: translateY(-2px) scale(1.02);
   box-shadow: 0 0 22px rgba(34,197,94,0.8);
   }
+/* =========================
+   V5 OVERRIDES: SMALLER + METALLIC BUTTONS, CLEAN HEADER LAYOUT
+   Paste at BOTTOM of style.css
+   ========================= */
+
+.sidebar-section-title{
+  padding: 10px 14px 6px;
+  opacity: .85;
+  font-size: 12px;
+  letter-spacing: .02em;
+}
+
+.status-line{
+  opacity: .75;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.actions-compact{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-start;
+}
+
+/* Metallic button style */
+.btn{
+  padding: 7px 12px !important;
+  font-size: 13px !important;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 20px rgba(0,0,0,.35), 0 0 12px rgba(34,197,94,.22) !important;
+  background: linear-gradient(180deg, rgba(235,245,255,0.10), rgba(3,7,18,0.75)),
+              linear-gradient(90deg, rgba(34,197,94,0.92), rgba(74,222,128,0.75)) !important;
+  color: #061018 !important;
+}
+
+.btn:hover{
+  transform: translateY(-1px) scale(1.01) !important;
+  box-shadow: 0 12px 24px rgba(0,0,0,.40), 0 0 16px rgba(34,197,94,.30) !important;
+}
+
+.btn-sm{
+  padding: 7px 12px !important;
+  font-size: 13px !important;
+}
+
+/* Ghost buttons (clear/copy/new) */
+.btn-ghost{
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(3,7,18,0.88)) !important;
+  color: var(--accent-text) !important;
+  border: 1px solid rgba(148,163,253,0.18) !important;
+  box-shadow: 0 10px 20px rgba(0,0,0,.35) !important;
+}
+
+.btn-ghost:hover{
+  border-color: rgba(34,197,94,0.40) !important;
+  box-shadow: 0 12px 24px rgba(0,0,0,.40), 0 0 14px rgba(34,197,94,.25) !important;
+}
+
+/* Copy buttons smaller */
+.copy-btn{
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(3,7,18,0.92)) !important;
+}
+
+/* WR header layout */
+.wr-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.wr-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.wr-subhint{
+  opacity:.75;
+  font-size:12px;
+}
+
+/* Mobile: keep buttons neat */
+@media (max-width: 900px){
+  .btn{ padding: 7px 11px !important; font-size: 13px !important; }
+  .wr-actions{ gap:8px; }
+}
