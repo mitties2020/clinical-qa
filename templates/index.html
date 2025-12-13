@@ -67,7 +67,7 @@
                 placeholder="Type or dictate a clinical question…"
               ></textarea>
 
-              <!-- Compact action row (prevents giant button takeover on mobile) -->
+              <!-- Compact action row -->
               <div class="actions" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                 <button id="generateBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Generate</button>
                 <button id="dictateQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">🎙 Dictate</button>
@@ -115,7 +115,7 @@
               </div>
 
               <!-- Compact WR actions -->
-              <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <div class="wr-actions" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                 <button id="dictateWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Copy WR</button>
@@ -233,6 +233,9 @@ async function copyText(text) {
   if (!text) return;
   try { await navigator.clipboard.writeText(text); } catch {}
 }
+function setStatus(el, msg) {
+  if (el) el.textContent = msg;
+}
 
 /* =========================
    ANSWER: STRUCTURED + EXPANDABLE + COPY PER SECTION
@@ -244,7 +247,6 @@ function hasNonEmpty(arr) {
 function buildStructuredHtml(raw) {
   if (!raw) return "";
 
-  // Strip markdown-ish artefacts (defensive)
   let text = String(raw)
     .replace(/\r/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -265,7 +267,6 @@ function buildStructuredHtml(raw) {
   const lines = text.split("\n");
   const sections = [];
   let current = { title: "Summary", content: [] };
-  let seenExplicit = false;
 
   function isHeading(line) {
     const t = (line || "").trim().replace(/:$/, "");
@@ -281,13 +282,11 @@ function buildStructuredHtml(raw) {
     if (heading) {
       if (hasNonEmpty(current.content)) sections.push(current);
       current = { title: heading, content: [] };
-      seenExplicit = true;
     } else {
       current.content.push(line);
     }
   }
   if (hasNonEmpty(current.content)) sections.push(current);
-
   if (!sections.length) return escapeHtml(text);
 
   let html = "";
@@ -299,7 +298,6 @@ function buildStructuredHtml(raw) {
     if (!hasNonEmpty(bodyLines)) continue;
 
     const id = `sec-${idx++}`;
-
     const inner = bodyLines
       .filter(l => (l || "").trim() !== "")
       .map(l => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
@@ -307,8 +305,7 @@ function buildStructuredHtml(raw) {
 
     if (!inner.trim()) continue;
 
-    const isAlwaysOpen = (title === "Summary");
-    if (isAlwaysOpen) {
+    if (title === "Summary") {
       html += `
         <div class="section">
           <div class="section-header static" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
@@ -338,7 +335,6 @@ function buildStructuredHtml(raw) {
   return html || escapeHtml(text);
 }
 
-/* Click handlers for collapsible + copy-per-section */
 document.addEventListener("click", async (e) => {
   const t = e.target;
 
@@ -421,9 +417,9 @@ function saveCurrentWR(forceTitle) {
   const content = (wrNote.value || "").trim();
   if (!content) return;
   const list = loadSavedWR();
-  const title = forceTitle || ("WR " + new Date().toLocaleTimeString());
+  const title = forceTitle || ("WR " + new Date().toLocaleString());
   list.unshift({ id: Date.now(), title, content, ts: Date.now() });
-  saveSavedWR(list.slice(0, 50));
+  saveSavedWR(list.slice(0, 60));
   renderSidebar();
 }
 
@@ -513,7 +509,7 @@ function renderSidebar() {
 sidebarSearch.addEventListener("input", renderSidebar);
 
 /* =========================
-   GENERATE ANSWER (NOW STRUCTURED + EXPANDABLE)
+   GENERATE ANSWER
    ========================= */
 async function generate() {
   const query = (clinicalQuestion.value || "").trim();
@@ -585,201 +581,197 @@ newWrBtn.addEventListener("click", () => {
     if (save) saveCurrentWR();
   }
   wrNote.value = WR_TEMPLATE;
-  wrStatus.textContent = "WR reset. Ready for next patient.";
+  setStatus(wrStatus, "WR reset. Ready for next patient.");
 });
 
 /* =========================
-   MIC PERMISSION CHECK
+   WHISPER DICTATION (MediaRecorder -> /api/transcribe)
+   Fixes Android cut-off + “mic on but no text”
    ========================= */
+
+function pickMimeType() {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/ogg"
+  ];
+  for (const t of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
+
 async function ensureMic(statusEl) {
   if (!window.isSecureContext) {
-    statusEl.textContent = "Mic error: site must be HTTPS for voice features.";
-    return false;
+    setStatus(statusEl, "Mic error: site must be HTTPS for voice features.");
+    return null;
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    statusEl.textContent = "Mic error: getUserMedia not supported in this browser.";
-    return false;
+    setStatus(statusEl, "Mic error: audio capture not supported in this browser.");
+    return null;
   }
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
-    return true;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return stream;
   } catch (e) {
     console.warn(e);
-    statusEl.textContent = "Mic blocked: allow microphone permission in browser settings.";
-    return false;
+    setStatus(statusEl, "Mic blocked: allow microphone permission in browser settings.");
+    return null;
   }
 }
 
-/* =========================
-   ANDROID FIX: AUTO-RESTART SpeechRecognition
-   ========================= */
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const speechSupported = !!SpeechRecognition;
-
-if (!speechSupported) {
-  qStatus.textContent = "Question mic: SpeechRecognition NOT supported on this browser.";
-  wrStatus.textContent = "WR mic: SpeechRecognition NOT supported on this browser.";
-  dictateQuestionBtn.disabled = true;
-  dictateWrBtn.disabled = true;
+async function transcribeBlob(blob) {
+  const form = new FormData();
+  form.append("audio", blob, "speech.webm");
+  const res = await fetch("/api/transcribe", { method: "POST", body: form });
+  const raw = await res.text();
+  let data = {};
+  try { data = JSON.parse(raw); } catch {}
+  if (!res.ok) {
+    throw new Error(data.error || raw || ("HTTP " + res.status));
+  }
+  return (data.text || "").trim();
 }
 
-function makeRecognizer({ statusEl, onCommit }) {
-  const rec = new SpeechRecognition();
-  rec.lang = "en-AU";
-  rec.interimResults = true;
-  rec.continuous = true;
+/**
+ * Dictation controller:
+ * - Press Dictate to start
+ * - Press Stop to finish -> sends ONE transcription request
+ * - No 3–4 second cut-off
+ */
+function makeWhisperDictation({ statusEl, onFinalText }) {
+  let stream = null;
+  let recorder = null;
+  let chunks = [];
+  let recording = false;
+  let mime = "";
 
-  let bufferFinal = "";
-  let bufferInterim = "";
-  let armed = false;
-  let starting = false;
-  let commitTimer = null;
-  let lastError = "";
+  async function start() {
+    if (recording) return;
+    chunks = [];
 
-  function commitIfAny() {
-    const combined = (bufferFinal || bufferInterim || "").trim();
-    bufferFinal = "";
-    bufferInterim = "";
-    if (!combined) return;
-    onCommit(combined);
-  }
+    stream = await ensureMic(statusEl);
+    if (!stream) return;
 
-  function scheduleCommit() {
-    if (commitTimer) clearTimeout(commitTimer);
-    commitTimer = setTimeout(() => commitIfAny(), 900);
-  }
-
-  function safeStart() {
-    if (!armed || starting) return;
-    starting = true;
-    try { rec.start(); statusEl.textContent = "Mic: listening…"; } catch {}
-    setTimeout(() => { starting = false; }, 450);
-  }
-
-  function safeStop() {
-    armed = false;
-    try { rec.stop(); } catch {}
-    statusEl.textContent = "Mic: stopped.";
-  }
-
-  rec.onresult = (event) => {
-    let interim = "";
-    let final = "";
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const r = event.results[i];
-      const t = (r[0]?.transcript || "");
-      if (r.isFinal) final += t + " ";
-      else interim += t + " ";
+    if (!window.MediaRecorder) {
+      setStatus(statusEl, "Mic error: MediaRecorder not supported on this browser.");
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      return;
     }
 
-    if (final.trim()) bufferFinal += final;
-    if (interim.trim()) bufferInterim = interim;
-
-    statusEl.textContent = "Mic: hearing…";
-    scheduleCommit();
-  };
-
-  rec.onspeechend = () => {
-    commitIfAny();
-  };
-
-  rec.onerror = (e) => {
-    lastError = e.error || "unknown";
-    statusEl.textContent = "Mic error: " + lastError;
-  };
-
-  rec.onend = () => {
-    if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
-    if (armed) {
-      const delay = (lastError === "no-speech" || lastError === "aborted") ? 350 : 250;
-      setTimeout(() => safeStart(), delay);
+    mime = pickMimeType();
+    try {
+      recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (e) {
+      console.warn(e);
+      setStatus(statusEl, "Mic error: could not start recorder.");
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      return;
     }
-  };
 
-  return {
-    start: () => { armed = true; lastError = ""; safeStart(); },
-    stop: () => safeStop(),
-    isArmed: () => armed
-  };
-}
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
 
-/* =========================
-   QUESTION DICTATION (replace + auto-generate)
-   ========================= */
-let qRecCtl = null;
-let qOn = false;
+    recorder.onstop = async () => {
+      try {
+        setStatus(statusEl, "Mic: transcribing…");
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        chunks = [];
 
-dictateQuestionBtn.addEventListener("click", async () => {
-  if (!speechSupported) return;
-  const ok = await ensureMic(qStatus);
-  if (!ok) return;
+        if (!blob || blob.size < 1200) {
+          setStatus(statusEl, "Mic: no audio captured. Try again.");
+          return;
+        }
 
-  if (!qRecCtl) {
-    qRecCtl = makeRecognizer({
-      statusEl: qStatus,
-      onCommit: (text) => {
-        const fixed = applyCorrections(STORE_Q_CORR, text).trim();
-        if (!fixed) return;
-        clinicalQuestion.value = fixed;
-        qStatus.textContent = "Mic: captured question → generating…";
-        setTimeout(() => generateBtn.click(), 150);
+        const text = await transcribeBlob(blob);
+        if (!text) {
+          setStatus(statusEl, "Mic: no speech detected. Try again.");
+          return;
+        }
+
+        onFinalText(text);
+      } catch (e) {
+        console.warn(e);
+        setStatus(statusEl, "Mic: transcription failed. Check /api/transcribe + Render logs.");
+      } finally {
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+        }
+        stream = null;
+        recorder = null;
+        recording = false;
       }
-    });
+    };
+
+    recorder.start();
+    recording = true;
+    setStatus(statusEl, "Mic: recording… press Stop when finished.");
   }
 
-  if (!qOn) {
-    qOn = true;
-    dictateQuestionBtn.textContent = "⏹ Stop";
-    qRecCtl.start();
-  } else {
-    qOn = false;
-    dictateQuestionBtn.textContent = "🎙 Dictate";
-    qRecCtl.stop();
+  function stop() {
+    if (!recording || !recorder) return;
+    try { recorder.stop(); } catch {}
+    setStatus(statusEl, "Mic: stopping…");
+  }
+
+  function isRecording() { return recording; }
+
+  return { start, stop, isRecording };
+}
+
+/* QUESTION DICTATION: replace textarea, apply corrections, auto-generate */
+const qDict = makeWhisperDictation({
+  statusEl: qStatus,
+  onFinalText: (text) => {
+    const fixed = applyCorrections(STORE_Q_CORR, text).trim();
+    clinicalQuestion.value = fixed;
+    setStatus(qStatus, "Mic: captured question → generating…");
+    setTimeout(() => generateBtn.click(), 150);
   }
 });
 
-/* =========================
-   WR DICTATION (append only)
-   ========================= */
-let wrRecCtl = null;
-let wrOn = false;
+/* WR DICTATION: append into WR note, apply corrections */
+const wrDict = makeWhisperDictation({
+  statusEl: wrStatus,
+  onFinalText: (text) => {
+    const fixed = applyCorrections(STORE_WR_CORR, text).trim();
+    if (!fixed) return;
+
+    const startPos = (wrNote.selectionStart ?? wrNote.value.length);
+    const before = wrNote.value.slice(0, startPos);
+    const after = wrNote.value.slice(startPos);
+
+    const needsNewline = before && !before.endsWith("\n");
+    const insert = (needsNewline ? "\n" : "") + fixed + "\n";
+
+    wrNote.value = before + insert + after;
+    wrNote.selectionStart = wrNote.selectionEnd = (before + insert).length;
+
+    setStatus(wrStatus, "Mic: inserted into WR note.");
+  }
+});
+
+dictateQuestionBtn.addEventListener("click", async () => {
+  if (!qDict.isRecording()) {
+    dictateQuestionBtn.textContent = "⏹ Stop";
+    await qDict.start();
+  } else {
+    dictateQuestionBtn.textContent = "🎙 Dictate";
+    qDict.stop();
+  }
+});
 
 dictateWrBtn.addEventListener("click", async () => {
-  if (!speechSupported) return;
-  const ok = await ensureMic(wrStatus);
-  if (!ok) return;
-
-  if (!wrRecCtl) {
-    wrRecCtl = makeRecognizer({
-      statusEl: wrStatus,
-      onCommit: (text) => {
-        const fixed = applyCorrections(STORE_WR_CORR, text).trim();
-        if (!fixed) return;
-
-        const start = (wrNote.selectionStart ?? wrNote.value.length);
-        const before = wrNote.value.slice(0, start);
-        const after = wrNote.value.slice(start);
-
-        const needsNewline = before && !before.endsWith("\n");
-        const insert = (needsNewline ? "\n" : "") + fixed + "\n";
-
-        wrNote.value = before + insert + after;
-        wrNote.selectionStart = wrNote.selectionEnd = (before + insert).length;
-
-        wrStatus.textContent = "Mic: inserted into WR note.";
-      }
-    });
-  }
-
-  if (!wrOn) {
-    wrOn = true;
+  if (!wrDict.isRecording()) {
     dictateWrBtn.textContent = "⏹ Stop";
-    wrRecCtl.start();
+    await wrDict.start();
   } else {
-    wrOn = false;
     dictateWrBtn.textContent = "🎙 Dictate";
-    wrRecCtl.stop();
+    wrDict.stop();
   }
 });
 
@@ -788,6 +780,8 @@ dictateWrBtn.addEventListener("click", async () => {
    ========================= */
 window.addEventListener("DOMContentLoaded", () => {
   renderSidebar();
+  setStatus(qStatus, "Question mic: idle (press Dictate, then Stop when done)");
+  setStatus(wrStatus, "WR mic: idle (press Dictate, then Stop when done)");
 });
 </script>
 
