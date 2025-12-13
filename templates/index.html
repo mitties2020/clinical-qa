@@ -31,14 +31,10 @@
             />
           </div>
 
-          <div style="padding: 10px 14px 6px; opacity: .8; font-size: 12px;">
-            Saved Clinical Questions
-          </div>
+          <div class="sidebar-section-title">Saved Clinical Questions</div>
           <div id="savedQuestionsList" class="conversation-list"></div>
 
-          <div style="padding: 14px 14px 6px; opacity: .8; font-size: 12px;">
-            Ward Round Notes (saved)
-          </div>
+          <div class="sidebar-section-title">Ward Round Notes (saved)</div>
           <div id="savedWrList" class="conversation-list"></div>
 
           <div class="sidebar-footer">
@@ -67,23 +63,20 @@
                 placeholder="Type or dictate a clinical question…"
               ></textarea>
 
-              <!-- Compact action row -->
-              <div class="actions" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                <button id="generateBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Generate</button>
-                <button id="dictateQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">🎙 Dictate</button>
-                <button id="incorrectQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Incorrect</button>
-                <button id="copyQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Copy Q</button>
+              <div class="actions actions-compact">
+                <button id="generateBtn" class="btn btn-sm" type="button">Generate</button>
+                <button id="dictateQuestionBtn" class="btn btn-sm" type="button">🎙 Dictate</button>
+                <button id="incorrectQuestionBtn" class="btn btn-sm" type="button">Incorrect</button>
+                <button id="clearQuestionBtn" class="btn btn-sm btn-ghost" type="button">Clear</button>
               </div>
 
-              <div id="qStatus" style="opacity:.75; font-size:12px; margin-top:8px;">
-                Question mic: idle
-              </div>
+              <div id="qStatus" class="status-line">Question mic: idle</div>
             </section>
 
             <!-- ANSWER -->
             <section class="card output-card">
-              <div class="output-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <h2 class="output-title" style="margin:0;">Answer</h2>
+              <div class="output-header">
+                <h2 class="output-title">Answer</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">
                   Copy All
                 </button>
@@ -106,21 +99,18 @@
 
           <!-- WR -->
           <section class="card" style="width: 100%;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div class="wr-head">
               <div>
                 <div class="label" style="margin-bottom: 6px;">Ward Round Notes</div>
-                <div style="opacity:.75; font-size:12px;">
-                  Dictation fills WR only. It never triggers the Clinical Engine.
-                </div>
+                <div class="wr-subhint">Dictation files into the template headings (Issues / O/E / Plan) automatically.</div>
               </div>
 
-              <!-- Compact WR actions -->
-              <div class="wr-actions" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                <button id="dictateWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">🎙 Dictate</button>
-                <button id="incorrectWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Incorrect</button>
-                <button id="copyWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Copy WR</button>
-                <button id="saveWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Save WR</button>
-                <button id="newWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">New WR</button>
+              <div class="wr-actions">
+                <button id="dictateWrBtn" class="btn btn-sm" type="button">🎙 Dictate</button>
+                <button id="incorrectWrBtn" class="btn btn-sm" type="button">Incorrect</button>
+                <button id="copyWrBtn" class="btn btn-sm btn-ghost" type="button">Copy WR</button>
+                <button id="saveWrBtn" class="btn btn-sm" type="button">Save WR</button>
+                <button id="newWrBtn" class="btn btn-sm btn-ghost" type="button">New WR</button>
               </div>
             </div>
 
@@ -128,9 +118,7 @@
 
             <textarea id="wrNote" class="textarea" rows="16"></textarea>
 
-            <div id="wrStatus" style="opacity:.75; font-size:12px; margin-top:8px;">
-              WR mic: idle
-            </div>
+            <div id="wrStatus" class="status-line">WR mic: idle</div>
           </section>
 
         </div>
@@ -177,10 +165,10 @@ Drains:
 /* =========================
    STORAGE KEYS
    ========================= */
-const STORE_Q_CORR = "ebm_q_corrections_v4";
-const STORE_WR_CORR = "ebm_wr_corrections_v4";
-const STORE_SAVED_Q = "ebm_saved_questions_v4";
-const STORE_SAVED_WR = "ebm_saved_wr_v4";
+const STORE_Q_CORR = "ebm_q_corrections_v5";
+const STORE_WR_CORR = "ebm_wr_corrections_v5";
+const STORE_SAVED_Q = "ebm_saved_questions_v5";
+const STORE_SAVED_WR = "ebm_saved_wr_v5";
 
 /* =========================
    ELEMENTS
@@ -189,7 +177,7 @@ const clinicalQuestion = document.getElementById("clinicalQuestion");
 const generateBtn = document.getElementById("generateBtn");
 const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
 const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
-const copyQuestionBtn = document.getElementById("copyQuestionBtn");
+const clearQuestionBtn = document.getElementById("clearQuestionBtn");
 
 const wrNote = document.getElementById("wrNote");
 const dictateWrBtn = document.getElementById("dictateWrBtn");
@@ -233,9 +221,6 @@ async function copyText(text) {
   if (!text) return;
   try { await navigator.clipboard.writeText(text); } catch {}
 }
-function setStatus(el, msg) {
-  if (el) el.textContent = msg;
-}
 
 /* =========================
    ANSWER: STRUCTURED + EXPANDABLE + COPY PER SECTION
@@ -250,7 +235,8 @@ function buildStructuredHtml(raw) {
   let text = String(raw)
     .replace(/\r/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/#{1,6}\s*/g, "");
+    .replace(/#{1,6}\s*/g, "")
+    .replace(/^\s*[-•]\s+/gm, ""); // remove markdown bullets if any
 
   const sectionOrder = [
     "Summary",
@@ -270,8 +256,7 @@ function buildStructuredHtml(raw) {
 
   function isHeading(line) {
     const t = (line || "").trim().replace(/:$/, "");
-    const match = sectionOrder.find(h => h.toLowerCase() === t.toLowerCase());
-    return match || null;
+    return sectionOrder.find(h => h.toLowerCase() === t.toLowerCase()) || null;
   }
 
   for (const rawLine of lines) {
@@ -287,28 +272,28 @@ function buildStructuredHtml(raw) {
     }
   }
   if (hasNonEmpty(current.content)) sections.push(current);
-  if (!sections.length) return escapeHtml(text);
+
+  if (!sections.length) return `<p class="answer-paragraph">${escapeHtml(text)}</p>`;
 
   let html = "";
   let idx = 0;
 
   for (const sec of sections) {
     const title = sec.title;
-    const bodyLines = sec.content || [];
-    if (!hasNonEmpty(bodyLines)) continue;
+    const bodyLines = (sec.content || []).filter(l => (l || "").trim() !== "");
+    if (!bodyLines.length) continue;
 
     const id = `sec-${idx++}`;
+
     const inner = bodyLines
-      .filter(l => (l || "").trim() !== "")
       .map(l => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
       .join("");
 
-    if (!inner.trim()) continue;
-
-    if (title === "Summary") {
+    const isAlwaysOpen = (title === "Summary");
+    if (isAlwaysOpen) {
       html += `
         <div class="section">
-          <div class="section-header static" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div class="section-header static">
             <span>${escapeHtml(title)}</span>
             <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
           </div>
@@ -320,7 +305,7 @@ function buildStructuredHtml(raw) {
     } else {
       html += `
         <div class="section">
-          <div class="collapsible-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div class="collapsible-header">
             <button class="collapsible" data-target="${id}" type="button">${escapeHtml(title)}</button>
             <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
           </div>
@@ -332,7 +317,7 @@ function buildStructuredHtml(raw) {
     }
   }
 
-  return html || escapeHtml(text);
+  return html || `<p class="answer-paragraph">${escapeHtml(text)}</p>`;
 }
 
 document.addEventListener("click", async (e) => {
@@ -411,16 +396,35 @@ function addSavedQuestion(query) {
   list.unshift({ id: Date.now(), title, query, ts: Date.now() });
   saveSavedQuestions(list.slice(0, 80));
 }
+
 function loadSavedWR() { return safeJsonParse(localStorage.getItem(STORE_SAVED_WR) || "[]", []); }
 function saveSavedWR(list) { localStorage.setItem(STORE_SAVED_WR, JSON.stringify(list || [])); }
+
 function saveCurrentWR(forceTitle) {
   const content = (wrNote.value || "").trim();
   if (!content) return;
+
+  // Make sidebar entry look like a real WR summary, not “a paragraph”
+  const ptLine = (content.match(/^Pt:\s*(.*)$/m)?.[1] || "").trim();
+  const issues = extractIssuesForTitle(content);
+  const titleBase = ptLine ? `WR ${ptLine}` : "WR";
+  const title = forceTitle || `${titleBase} • ${issues || new Date().toLocaleString()}`;
+
   const list = loadSavedWR();
-  const title = forceTitle || ("WR " + new Date().toLocaleString());
   list.unshift({ id: Date.now(), title, content, ts: Date.now() });
-  saveSavedWR(list.slice(0, 60));
+  saveSavedWR(list.slice(0, 80));
   renderSidebar();
+}
+
+function extractIssuesForTitle(content) {
+  const m = content.match(/ISSUES:\s*([\s\S]*?)==REVIEW==/m);
+  if (!m) return "";
+  const block = m[1].split("\n").map(s => s.trim()).filter(Boolean);
+  const issues = block
+    .map(l => l.replace(/^\d+\.\s*/, ""))
+    .filter(l => l && l !== "." && l !== "-" )
+    .slice(0, 2);
+  return issues.join(" / ");
 }
 
 function renderSidebar() {
@@ -530,16 +534,13 @@ async function generate() {
     const data = await res.json();
 
     if (data.answer) {
-      const html = buildStructuredHtml(data.answer);
-      answerEl.innerHTML = html;
-      const has = !!(answerEl.innerText || "").trim();
-      copyAllBtn.disabled = !has;
+      answerEl.innerHTML = buildStructuredHtml(data.answer);
+      copyAllBtn.disabled = !((answerEl.innerText || "").trim());
 
       addSavedQuestion(query);
       renderSidebar();
     } else {
-      const err = (data.error || "No response.").trim();
-      answerEl.textContent = err;
+      answerEl.textContent = (data.error || "No response.").trim();
       copyAllBtn.disabled = true;
     }
   } catch (e) {
@@ -559,12 +560,14 @@ copyAllBtn.addEventListener("click", async () => {
   await copyText(text);
 });
 
-copyQuestionBtn.addEventListener("click", async () => {
-  const text = (clinicalQuestion.value || "").trim();
-  if (!text) return;
-  await copyText(text);
+/* Clear button replaces Copy Q */
+clearQuestionBtn.addEventListener("click", () => {
+  clinicalQuestion.value = "";
+  clinicalQuestion.focus();
+  qStatus.textContent = "Question cleared.";
 });
 
+/* WR copy */
 copyWrBtn.addEventListener("click", async () => {
   const text = (wrNote.value || "").trim();
   if (!text) return;
@@ -581,197 +584,311 @@ newWrBtn.addEventListener("click", () => {
     if (save) saveCurrentWR();
   }
   wrNote.value = WR_TEMPLATE;
-  setStatus(wrStatus, "WR reset. Ready for next patient.");
+  wrStatus.textContent = "WR reset. Ready for next patient.";
 });
 
 /* =========================
-   WHISPER DICTATION (MediaRecorder -> /api/transcribe)
-   Fixes Android cut-off + “mic on but no text”
+   MIC PERMISSION CHECK
    ========================= */
-
-function pickMimeType() {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-    "audio/ogg"
-  ];
-  for (const t of candidates) {
-    if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return "";
-}
-
 async function ensureMic(statusEl) {
   if (!window.isSecureContext) {
-    setStatus(statusEl, "Mic error: site must be HTTPS for voice features.");
-    return null;
+    statusEl.textContent = "Mic error: site must be HTTPS for voice features.";
+    return false;
   }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setStatus(statusEl, "Mic error: audio capture not supported in this browser.");
-    return null;
+    statusEl.textContent = "Mic error: getUserMedia not supported in this browser.";
+    return false;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    return stream;
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    return true;
   } catch (e) {
     console.warn(e);
-    setStatus(statusEl, "Mic blocked: allow microphone permission in browser settings.");
+    statusEl.textContent = "Mic blocked: allow microphone permission in browser settings.";
+    return false;
+  }
+}
+
+/* =========================
+   SPEECH RECOGNITION
+   ========================= */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speechSupported = !!SpeechRecognition;
+
+if (!speechSupported) {
+  qStatus.textContent = "Question mic: SpeechRecognition NOT supported on this browser.";
+  wrStatus.textContent = "WR mic: SpeechRecognition NOT supported on this browser.";
+  dictateQuestionBtn.disabled = true;
+  dictateWrBtn.disabled = true;
+}
+
+/* Robust auto-restart recogniser */
+function makeRecognizer({ statusEl, onCommit }) {
+  const rec = new SpeechRecognition();
+  rec.lang = "en-AU";
+  rec.interimResults = true;
+  rec.continuous = true;
+
+  let bufferFinal = "";
+  let bufferInterim = "";
+  let armed = false;
+  let starting = false;
+  let commitTimer = null;
+  let lastError = "";
+
+  function commitIfAny() {
+    const combined = (bufferFinal || bufferInterim || "").trim();
+    bufferFinal = "";
+    bufferInterim = "";
+    if (!combined) return;
+    onCommit(combined);
+  }
+
+  function scheduleCommit() {
+    if (commitTimer) clearTimeout(commitTimer);
+    commitTimer = setTimeout(() => commitIfAny(), 900);
+  }
+
+  function safeStart() {
+    if (!armed || starting) return;
+    starting = true;
+    try { rec.start(); statusEl.textContent = "Mic: listening…"; } catch {}
+    setTimeout(() => { starting = false; }, 450);
+  }
+
+  function safeStop() {
+    armed = false;
+    try { rec.stop(); } catch {}
+    statusEl.textContent = "Mic: stopped.";
+  }
+
+  rec.onresult = (event) => {
+    let interim = "";
+    let final = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const r = event.results[i];
+      const t = (r[0]?.transcript || "");
+      if (r.isFinal) final += t + " ";
+      else interim += t + " ";
+    }
+
+    if (final.trim()) bufferFinal += final;
+    if (interim.trim()) bufferInterim = interim;
+
+    statusEl.textContent = "Mic: hearing…";
+    scheduleCommit();
+  };
+
+  rec.onspeechend = () => commitIfAny();
+
+  rec.onerror = (e) => {
+    lastError = e.error || "unknown";
+    statusEl.textContent = "Mic error: " + lastError;
+  };
+
+  rec.onend = () => {
+    if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
+    if (armed) {
+      const delay = (lastError === "no-speech" || lastError === "aborted") ? 350 : 250;
+      setTimeout(() => safeStart(), delay);
+    }
+  };
+
+  return {
+    start: () => { armed = true; lastError = ""; safeStart(); },
+    stop: () => safeStop(),
+    isArmed: () => armed
+  };
+}
+
+/* =========================
+   WR SMART FILING (THIS FIXES “PARAGRAPH” PROBLEM)
+   ========================= */
+function ensureTemplatePresent() {
+  const v = (wrNote.value || "").trim();
+  if (!v || v.length < 20 || !v.includes("ISSUES:") || !v.includes("==Plan==")) {
+    wrNote.value = WR_TEMPLATE;
+  }
+}
+
+function insertAfterLabel(label, text) {
+  const val = wrNote.value || "";
+  const idx = val.indexOf(label);
+  if (idx === -1) return false;
+
+  const insertPos = idx + label.length;
+  const before = val.slice(0, insertPos);
+  const after = val.slice(insertPos);
+
+  const needsSpace = before && !before.endsWith("\n");
+  const toInsert = (needsSpace ? "\n" : "") + (text.trim() ? (text.trim() + "\n") : "");
+
+  wrNote.value = before + toInsert + after;
+  return true;
+}
+
+function fillNextIssue(issueText) {
+  const val = wrNote.value || "";
+  const lines = val.split("\n");
+  const issueIdx = lines.findIndex(l => l.trim() === "ISSUES:");
+  if (issueIdx === -1) return false;
+
+  // find first "1." "2." "3." "4." that is still empty (just "1." etc)
+  for (let i = issueIdx + 1; i < Math.min(issueIdx + 10, lines.length); i++) {
+    const t = lines[i].trim();
+    if (/^\d\.\s*$/.test(t) || /^\d\.$/.test(t)) {
+      lines[i] = t.replace(/\.$/, ".") + " " + issueText.trim();
+      wrNote.value = lines.join("\n");
+      return true;
+    }
+  }
+
+  // if all filled, append as new numbered line
+  for (let i = issueIdx + 1; i < lines.length; i++) {
+    if (lines[i].includes("==REVIEW==")) {
+      lines.splice(i, 0, "5. " + issueText.trim());
+      wrNote.value = lines.join("\n");
+      return true;
+    }
+  }
+  return false;
+}
+
+function smartFileWrDictation(rawText) {
+  ensureTemplatePresent();
+
+  let text = applyCorrections(STORE_WR_CORR, rawText).trim();
+  if (!text) return;
+
+  const lower = norm(text);
+
+  // simple “commands” you can say naturally:
+  // "patient: ..." -> Pt:
+  // "issues: ..." -> issues
+  // "plan: ..." -> plan
+  // "vitals: ..." etc -> under O/E labels
+  const cmd = (prefix) => {
+    const re = new RegExp("^" + prefix + "\\s*[:\\-]\\s*", "i");
+    if (re.test(text)) return text.replace(re, "").trim();
     return null;
+  };
+
+  const pt = cmd("patient|pt");
+  if (pt) { insertAfterLabel("Pt:", pt); return; }
+
+  const issuesBlock = cmd("issues?|problem list");
+  if (issuesBlock) {
+    // split if user says "one..., two..., three..."
+    const parts = issuesBlock.split(/\s*(?:,|;|\band\b)\s*/).map(s=>s.trim()).filter(Boolean);
+    if (parts.length) parts.forEach(p => fillNextIssue(p));
+    else fillNextIssue(issuesBlock);
+    return;
   }
+
+  const plan = cmd("plan");
+  if (plan) { insertAfterLabel("==Plan==", "- " + plan); return; }
+
+  // O/E single-line filing
+  const vit = cmd("vitals");
+  if (vit) { insertAfterLabel("Vitals:", vit); return; }
+
+  const ao = cmd("alertness|orientation|a and o|a&o");
+  if (ao) { insertAfterLabel("Alertness & Orientation:", ao); return; }
+
+  const fb = cmd("fluid balance|input|output");
+  if (fb) { insertAfterLabel("Fluid Balance:", fb); return; }
+
+  const chest = cmd("chest|resp|respiratory");
+  if (chest) { insertAfterLabel("Chest:", chest); return; }
+
+  const abdo = cmd("abdo|abdomen");
+  if (abdo) { insertAfterLabel("Abdo:", abdo); return; }
+
+  const card = cmd("cardiac|heart");
+  if (card) { insertAfterLabel("Cardiac:", card); return; }
+
+  const neuro = cmd("neuro|neurology");
+  if (neuro) { insertAfterLabel("Neuro:", neuro); return; }
+
+  // Heuristics if no explicit command:
+  if (lower.includes("issue") || lower.includes("problem")) {
+    fillNextIssue(text);
+    return;
+  }
+  if (lower.includes("plan") || lower.startsWith("start") || lower.startsWith("stop") || lower.startsWith("continue")) {
+    insertAfterLabel("==Plan==", "- " + text);
+    return;
+  }
+
+  // default: put into REVIEW section
+  insertAfterLabel("==REVIEW==", text);
 }
 
-async function transcribeBlob(blob) {
-  const form = new FormData();
-  form.append("audio", blob, "speech.webm");
-  const res = await fetch("/api/transcribe", { method: "POST", body: form });
-  const raw = await res.text();
-  let data = {};
-  try { data = JSON.parse(raw); } catch {}
-  if (!res.ok) {
-    throw new Error(data.error || raw || ("HTTP " + res.status));
-  }
-  return (data.text || "").trim();
-}
-
-/**
- * Dictation controller:
- * - Press Dictate to start
- * - Press Stop to finish -> sends ONE transcription request
- * - No 3–4 second cut-off
- */
-function makeWhisperDictation({ statusEl, onFinalText }) {
-  let stream = null;
-  let recorder = null;
-  let chunks = [];
-  let recording = false;
-  let mime = "";
-
-  async function start() {
-    if (recording) return;
-    chunks = [];
-
-    stream = await ensureMic(statusEl);
-    if (!stream) return;
-
-    if (!window.MediaRecorder) {
-      setStatus(statusEl, "Mic error: MediaRecorder not supported on this browser.");
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-      return;
-    }
-
-    mime = pickMimeType();
-    try {
-      recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-    } catch (e) {
-      console.warn(e);
-      setStatus(statusEl, "Mic error: could not start recorder.");
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-      return;
-    }
-
-    recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) chunks.push(e.data);
-    };
-
-    recorder.onstop = async () => {
-      try {
-        setStatus(statusEl, "Mic: transcribing…");
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        chunks = [];
-
-        if (!blob || blob.size < 1200) {
-          setStatus(statusEl, "Mic: no audio captured. Try again.");
-          return;
-        }
-
-        const text = await transcribeBlob(blob);
-        if (!text) {
-          setStatus(statusEl, "Mic: no speech detected. Try again.");
-          return;
-        }
-
-        onFinalText(text);
-      } catch (e) {
-        console.warn(e);
-        setStatus(statusEl, "Mic: transcription failed. Check /api/transcribe + Render logs.");
-      } finally {
-        if (stream) {
-          stream.getTracks().forEach(t => t.stop());
-        }
-        stream = null;
-        recorder = null;
-        recording = false;
-      }
-    };
-
-    recorder.start();
-    recording = true;
-    setStatus(statusEl, "Mic: recording… press Stop when finished.");
-  }
-
-  function stop() {
-    if (!recording || !recorder) return;
-    try { recorder.stop(); } catch {}
-    setStatus(statusEl, "Mic: stopping…");
-  }
-
-  function isRecording() { return recording; }
-
-  return { start, stop, isRecording };
-}
-
-/* QUESTION DICTATION: replace textarea, apply corrections, auto-generate */
-const qDict = makeWhisperDictation({
-  statusEl: qStatus,
-  onFinalText: (text) => {
-    const fixed = applyCorrections(STORE_Q_CORR, text).trim();
-    clinicalQuestion.value = fixed;
-    setStatus(qStatus, "Mic: captured question → generating…");
-    setTimeout(() => generateBtn.click(), 150);
-  }
-});
-
-/* WR DICTATION: append into WR note, apply corrections */
-const wrDict = makeWhisperDictation({
-  statusEl: wrStatus,
-  onFinalText: (text) => {
-    const fixed = applyCorrections(STORE_WR_CORR, text).trim();
-    if (!fixed) return;
-
-    const startPos = (wrNote.selectionStart ?? wrNote.value.length);
-    const before = wrNote.value.slice(0, startPos);
-    const after = wrNote.value.slice(startPos);
-
-    const needsNewline = before && !before.endsWith("\n");
-    const insert = (needsNewline ? "\n" : "") + fixed + "\n";
-
-    wrNote.value = before + insert + after;
-    wrNote.selectionStart = wrNote.selectionEnd = (before + insert).length;
-
-    setStatus(wrStatus, "Mic: inserted into WR note.");
-  }
-});
+/* =========================
+   QUESTION DICTATION (replace + auto-generate)
+   ========================= */
+let qRecCtl = null;
+let qOn = false;
 
 dictateQuestionBtn.addEventListener("click", async () => {
-  if (!qDict.isRecording()) {
+  if (!speechSupported) return;
+  const ok = await ensureMic(qStatus);
+  if (!ok) return;
+
+  if (!qRecCtl) {
+    qRecCtl = makeRecognizer({
+      statusEl: qStatus,
+      onCommit: (text) => {
+        const fixed = applyCorrections(STORE_Q_CORR, text).trim();
+        if (!fixed) return;
+        clinicalQuestion.value = fixed;
+        qStatus.textContent = "Mic: captured question → generating…";
+        setTimeout(() => generateBtn.click(), 150);
+      }
+    });
+  }
+
+  if (!qOn) {
+    qOn = true;
     dictateQuestionBtn.textContent = "⏹ Stop";
-    await qDict.start();
+    qRecCtl.start();
   } else {
+    qOn = false;
     dictateQuestionBtn.textContent = "🎙 Dictate";
-    qDict.stop();
+    qRecCtl.stop();
   }
 });
 
+/* =========================
+   WR DICTATION (SMART FILING)
+   ========================= */
+let wrRecCtl = null;
+let wrOn = false;
+
 dictateWrBtn.addEventListener("click", async () => {
-  if (!wrDict.isRecording()) {
+  if (!speechSupported) return;
+  const ok = await ensureMic(wrStatus);
+  if (!ok) return;
+
+  if (!wrRecCtl) {
+    wrRecCtl = makeRecognizer({
+      statusEl: wrStatus,
+      onCommit: (text) => {
+        smartFileWrDictation(text);
+        wrStatus.textContent = "Mic: filed into WR template.";
+      }
+    });
+  }
+
+  if (!wrOn) {
+    wrOn = true;
     dictateWrBtn.textContent = "⏹ Stop";
-    await wrDict.start();
+    wrRecCtl.start();
   } else {
+    wrOn = false;
     dictateWrBtn.textContent = "🎙 Dictate";
-    wrDict.stop();
+    wrRecCtl.stop();
   }
 });
 
@@ -780,8 +897,6 @@ dictateWrBtn.addEventListener("click", async () => {
    ========================= */
 window.addEventListener("DOMContentLoaded", () => {
   renderSidebar();
-  setStatus(qStatus, "Question mic: idle (press Dictate, then Stop when done)");
-  setStatus(wrStatus, "WR mic: idle (press Dictate, then Stop when done)");
 });
 </script>
 
