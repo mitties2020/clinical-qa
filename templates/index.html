@@ -46,7 +46,7 @@
           </div>
         </aside>
 
-        <!-- MAIN REGION -->
+        <!-- MAIN -->
         <div class="main-region">
           <header class="header">
             <h1 class="title">CLINICAL ENGINE</h1>
@@ -55,9 +55,9 @@
             </p>
           </header>
 
-          <!-- TOP: CLINICAL ENGINE -->
+          <!-- TOP ROW -->
           <main class="grid">
-            <!-- QUESTION CARD -->
+            <!-- QUESTION -->
             <section class="card input-card">
               <label class="label" for="clinicalQuestion">Clinical Question</label>
               <textarea
@@ -67,11 +67,12 @@
                 placeholder="Type or dictate a clinical question…"
               ></textarea>
 
-              <div class="actions">
-                <button id="generateBtn" class="btn" type="button">Generate</button>
-                <button id="dictateQuestionBtn" class="btn" type="button">🎙 Dictate Question</button>
-                <button id="incorrectQuestionBtn" class="btn" type="button">Incorrect</button>
-                <button id="copyQuestionBtn" class="btn" type="button">Copy Q</button>
+              <!-- Compact action row (prevents giant button takeover on mobile) -->
+              <div class="actions" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                <button id="generateBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Generate</button>
+                <button id="dictateQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">🎙 Dictate</button>
+                <button id="incorrectQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Incorrect</button>
+                <button id="copyQuestionBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Copy Q</button>
               </div>
 
               <div id="qStatus" style="opacity:.75; font-size:12px; margin-top:8px;">
@@ -79,11 +80,13 @@
               </div>
             </section>
 
-            <!-- ANSWER CARD -->
+            <!-- ANSWER -->
             <section class="card output-card">
-              <div class="output-header">
-                <h2 class="output-title">Answer</h2>
-                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+              <div class="output-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <h2 class="output-title" style="margin:0;">Answer</h2>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">
+                  Copy All
+                </button>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
@@ -99,9 +102,9 @@
             </section>
           </main>
 
-          <!-- BOTTOM: WR -->
           <div style="height: 16px;"></div>
 
+          <!-- WR -->
           <section class="card" style="width: 100%;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
               <div>
@@ -110,12 +113,14 @@
                   Dictation fills WR only. It never triggers the Clinical Engine.
                 </div>
               </div>
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate WR</button>
-                <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
-                <button id="copyWrBtn" class="btn" type="button">Copy WR</button>
-                <button id="saveWrBtn" class="btn" type="button">Save WR</button>
-                <button id="newWrBtn" class="btn" type="button">New WR</button>
+
+              <!-- Compact WR actions -->
+              <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                <button id="dictateWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">🎙 Dictate</button>
+                <button id="incorrectWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Incorrect</button>
+                <button id="copyWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Copy WR</button>
+                <button id="saveWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">Save WR</button>
+                <button id="newWrBtn" class="btn" type="button" style="flex:0 0 auto; width:auto;">New WR</button>
               </div>
             </div>
 
@@ -172,10 +177,10 @@ Drains:
 /* =========================
    STORAGE KEYS
    ========================= */
-const STORE_Q_CORR = "ebm_q_corrections_v2";
-const STORE_WR_CORR = "ebm_wr_corrections_v2";
-const STORE_SAVED_Q = "ebm_saved_questions_v2";
-const STORE_SAVED_WR = "ebm_saved_wr_v2";
+const STORE_Q_CORR = "ebm_q_corrections_v4";
+const STORE_WR_CORR = "ebm_wr_corrections_v4";
+const STORE_SAVED_Q = "ebm_saved_questions_v4";
+const STORE_SAVED_WR = "ebm_saved_wr_v4";
 
 /* =========================
    ELEMENTS
@@ -215,22 +220,148 @@ if (!wrNote.value.trim()) wrNote.value = WR_TEMPLATE;
 function norm(s) {
   return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
-
 function escapeHtml(str) {
   return (str || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
-
 function safeJsonParse(s, fallback) {
   try { return JSON.parse(s); } catch { return fallback; }
 }
-
 async function copyText(text) {
   if (!text) return;
   try { await navigator.clipboard.writeText(text); } catch {}
 }
+
+/* =========================
+   ANSWER: STRUCTURED + EXPANDABLE + COPY PER SECTION
+   ========================= */
+function hasNonEmpty(arr) {
+  return Array.isArray(arr) && arr.some(l => (l || "").trim() !== "");
+}
+
+function buildStructuredHtml(raw) {
+  if (!raw) return "";
+
+  // Strip markdown-ish artefacts (defensive)
+  let text = String(raw)
+    .replace(/\r/g, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/#{1,6}\s*/g, "");
+
+  const sectionOrder = [
+    "Summary",
+    "Assessment",
+    "Diagnosis",
+    "Investigations",
+    "Treatment",
+    "Monitoring",
+    "Follow-up & Safety Netting",
+    "Red Flags",
+    "References",
+  ];
+
+  const lines = text.split("\n");
+  const sections = [];
+  let current = { title: "Summary", content: [] };
+  let seenExplicit = false;
+
+  function isHeading(line) {
+    const t = (line || "").trim().replace(/:$/, "");
+    const match = sectionOrder.find(h => h.toLowerCase() === t.toLowerCase());
+    return match || null;
+  }
+
+  for (const rawLine of lines) {
+    const line = (rawLine || "").trim();
+    if (!line) { current.content.push(""); continue; }
+
+    const heading = isHeading(line);
+    if (heading) {
+      if (hasNonEmpty(current.content)) sections.push(current);
+      current = { title: heading, content: [] };
+      seenExplicit = true;
+    } else {
+      current.content.push(line);
+    }
+  }
+  if (hasNonEmpty(current.content)) sections.push(current);
+
+  if (!sections.length) return escapeHtml(text);
+
+  let html = "";
+  let idx = 0;
+
+  for (const sec of sections) {
+    const title = sec.title;
+    const bodyLines = sec.content || [];
+    if (!hasNonEmpty(bodyLines)) continue;
+
+    const id = `sec-${idx++}`;
+
+    const inner = bodyLines
+      .filter(l => (l || "").trim() !== "")
+      .map(l => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
+      .join("");
+
+    if (!inner.trim()) continue;
+
+    const isAlwaysOpen = (title === "Summary");
+    if (isAlwaysOpen) {
+      html += `
+        <div class="section">
+          <div class="section-header static" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <span>${escapeHtml(title)}</span>
+            <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
+          </div>
+          <div class="section-body static-body" data-section="${id}">
+            ${inner}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="section">
+          <div class="collapsible-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <button class="collapsible" data-target="${id}" type="button">${escapeHtml(title)}</button>
+            <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
+          </div>
+          <div class="collapsible-content" data-section="${id}" style="display:none;">
+            ${inner}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  return html || escapeHtml(text);
+}
+
+/* Click handlers for collapsible + copy-per-section */
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+
+  if (t.classList && t.classList.contains("collapsible")) {
+    const id = t.dataset.target;
+    const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+    if (!content) return;
+    const open = content.style.display === "block";
+    content.style.display = open ? "none" : "block";
+    t.classList.toggle("active", !open);
+    return;
+  }
+
+  if (t.classList && t.classList.contains("section-copy-btn")) {
+    const id = t.dataset.target;
+    const section = document.querySelector(`[data-section="${id}"]`);
+    if (!section) return;
+    const text = (section.innerText || "").trim();
+    if (!text) return;
+    await copyText(text);
+    return;
+  }
+});
 
 /* =========================
    LOCAL LEARNING CORRECTIONS
@@ -238,11 +369,9 @@ async function copyText(text) {
 function loadCorrections(key) {
   return safeJsonParse(localStorage.getItem(key) || "{}", {});
 }
-
 function saveCorrections(key, map) {
   localStorage.setItem(key, JSON.stringify(map || {}));
 }
-
 function applyCorrections(key, text) {
   let out = text || "";
   const map = loadCorrections(key);
@@ -255,15 +384,11 @@ function applyCorrections(key, text) {
   }
   return out;
 }
-
 function addCorrectionFromSelection(textarea, storeKey) {
   const s = textarea.selectionStart;
   const e = textarea.selectionEnd;
   const selected = (textarea.value || "").slice(s, e).trim();
-  if (!selected) {
-    alert("Highlight the incorrect words first, then press Incorrect.");
-    return;
-  }
+  if (!selected) { alert("Highlight the incorrect words first."); return; }
   const correct = prompt("What should it be instead?", selected);
   if (!correct || !correct.trim()) return;
 
@@ -271,60 +396,40 @@ function addCorrectionFromSelection(textarea, storeKey) {
   map[selected] = correct.trim();
   saveCorrections(storeKey, map);
 
-  // Replace immediately
   const before = textarea.value.slice(0, s);
   const after = textarea.value.slice(e);
   textarea.value = before + correct.trim() + after;
   textarea.selectionStart = textarea.selectionEnd = before.length + correct.trim().length;
 }
-
 incorrectQuestionBtn.addEventListener("click", () => addCorrectionFromSelection(clinicalQuestion, STORE_Q_CORR));
 incorrectWrBtn.addEventListener("click", () => addCorrectionFromSelection(wrNote, STORE_WR_CORR));
 
 /* =========================
-   SAVED QUESTIONS (sidebar)
+   SAVED QUESTIONS / WR
    ========================= */
-function loadSavedQuestions() {
-  return safeJsonParse(localStorage.getItem(STORE_SAVED_Q) || "[]", []);
-}
-function saveSavedQuestions(list) {
-  localStorage.setItem(STORE_SAVED_Q, JSON.stringify(list || []));
-}
+function loadSavedQuestions() { return safeJsonParse(localStorage.getItem(STORE_SAVED_Q) || "[]", []); }
+function saveSavedQuestions(list) { localStorage.setItem(STORE_SAVED_Q, JSON.stringify(list || [])); }
 function addSavedQuestion(query) {
   const list = loadSavedQuestions();
   const title = query.length > 60 ? query.slice(0, 60).trim() + "…" : query.trim();
   list.unshift({ id: Date.now(), title, query, ts: Date.now() });
-  saveSavedQuestions(list.slice(0, 60));
+  saveSavedQuestions(list.slice(0, 80));
 }
-
-/* =========================
-   SAVED WR NOTES (sidebar)
-   ========================= */
-function loadSavedWR() {
-  return safeJsonParse(localStorage.getItem(STORE_SAVED_WR) || "[]", []);
-}
-function saveSavedWR(list) {
-  localStorage.setItem(STORE_SAVED_WR, JSON.stringify(list || []));
-}
+function loadSavedWR() { return safeJsonParse(localStorage.getItem(STORE_SAVED_WR) || "[]", []); }
+function saveSavedWR(list) { localStorage.setItem(STORE_SAVED_WR, JSON.stringify(list || [])); }
 function saveCurrentWR(forceTitle) {
   const content = (wrNote.value || "").trim();
   if (!content) return;
-
   const list = loadSavedWR();
   const title = forceTitle || ("WR " + new Date().toLocaleTimeString());
   list.unshift({ id: Date.now(), title, content, ts: Date.now() });
-
-  saveSavedWR(list.slice(0, 40));
+  saveSavedWR(list.slice(0, 50));
   renderSidebar();
 }
 
-/* =========================
-   RENDER SIDEBAR
-   ========================= */
 function renderSidebar() {
   const term = norm(sidebarSearch.value || "");
 
-  // Questions
   const qList = loadSavedQuestions();
   savedQuestionsList.innerHTML = "";
   if (!qList.length) {
@@ -365,7 +470,6 @@ function renderSidebar() {
     });
   }
 
-  // WR notes
   const wrList = loadSavedWR();
   savedWrList.innerHTML = "";
   if (!wrList.length) {
@@ -406,11 +510,10 @@ function renderSidebar() {
     });
   }
 }
-
 sidebarSearch.addEventListener("input", renderSidebar);
 
 /* =========================
-   CLINICAL ENGINE GENERATE
+   GENERATE ANSWER (NOW STRUCTURED + EXPANDABLE)
    ========================= */
 async function generate() {
   const query = (clinicalQuestion.value || "").trim();
@@ -420,7 +523,7 @@ async function generate() {
   copyAllBtn.disabled = true;
   answerLoader.classList.remove("hidden");
   answerEl.classList.remove("placeholder");
-  answerEl.textContent = "";
+  answerEl.innerHTML = "";
 
   try {
     const res = await fetch("/api/generate", {
@@ -429,13 +532,19 @@ async function generate() {
       body: JSON.stringify({ query })
     });
     const data = await res.json();
-    const out = (data.answer || data.error || "No response.").trim();
-    answerEl.textContent = out;
-    copyAllBtn.disabled = !out;
 
     if (data.answer) {
+      const html = buildStructuredHtml(data.answer);
+      answerEl.innerHTML = html;
+      const has = !!(answerEl.innerText || "").trim();
+      copyAllBtn.disabled = !has;
+
       addSavedQuestion(query);
       renderSidebar();
+    } else {
+      const err = (data.error || "No response.").trim();
+      answerEl.textContent = err;
+      copyAllBtn.disabled = true;
     }
   } catch (e) {
     console.error(e);
@@ -446,11 +555,10 @@ async function generate() {
     generateBtn.disabled = false;
   }
 }
-
 generateBtn.addEventListener("click", generate);
 
 copyAllBtn.addEventListener("click", async () => {
-  const text = (answerEl.textContent || "").trim();
+  const text = (answerEl.innerText || "").trim();
   if (!text) return;
   await copyText(text);
 });
@@ -467,13 +575,12 @@ copyWrBtn.addEventListener("click", async () => {
   await copyText(text);
 });
 
-saveWrBtn.addEventListener("click", () => {
-  saveCurrentWR();
-});
+saveWrBtn.addEventListener("click", () => saveCurrentWR());
 
 newWrBtn.addEventListener("click", () => {
-  const hasText = (wrNote.value || "").trim() && (wrNote.value || "").trim() !== WR_TEMPLATE.trim();
-  if (hasText) {
+  const current = (wrNote.value || "").trim();
+  const hasContent = current && current !== WR_TEMPLATE.trim();
+  if (hasContent) {
     const save = confirm("Save this WR note before starting a new one?");
     if (save) saveCurrentWR();
   }
@@ -504,9 +611,7 @@ async function ensureMic(statusEl) {
 }
 
 /* =========================
-   ANDROID-FRIENDLY DICTATION
-   - uses interim + commits on speech pause
-   - does NOT rely on isFinal (often broken on Android)
+   ANDROID FIX: AUTO-RESTART SpeechRecognition
    ========================= */
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const speechSupported = !!SpeechRecognition;
@@ -516,8 +621,6 @@ if (!speechSupported) {
   wrStatus.textContent = "WR mic: SpeechRecognition NOT supported on this browser.";
   dictateQuestionBtn.disabled = true;
   dictateWrBtn.disabled = true;
-  dictateQuestionBtn.textContent = "🎙 Not supported";
-  dictateWrBtn.textContent = "🎙 Not supported";
 }
 
 function makeRecognizer({ statusEl, onCommit }) {
@@ -528,8 +631,10 @@ function makeRecognizer({ statusEl, onCommit }) {
 
   let bufferFinal = "";
   let bufferInterim = "";
-  let listening = false;
-  let speechTimer = null;
+  let armed = false;
+  let starting = false;
+  let commitTimer = null;
+  let lastError = "";
 
   function commitIfAny() {
     const combined = (bufferFinal || bufferInterim || "").trim();
@@ -537,20 +642,25 @@ function makeRecognizer({ statusEl, onCommit }) {
     bufferInterim = "";
     if (!combined) return;
     onCommit(combined);
-    statusEl.textContent = "Mic: inserted.";
   }
 
-  function resetCommitTimer() {
-    if (speechTimer) clearTimeout(speechTimer);
-    // if Android never sets isFinal, this commits shortly after you stop speaking
-    speechTimer = setTimeout(() => {
-      commitIfAny();
-    }, 900);
+  function scheduleCommit() {
+    if (commitTimer) clearTimeout(commitTimer);
+    commitTimer = setTimeout(() => commitIfAny(), 900);
   }
 
-  rec.onstart = () => statusEl.textContent = "Mic: listening…";
-  rec.onaudiostart = () => statusEl.textContent = "Mic: audio started…";
-  rec.onspeechstart = () => statusEl.textContent = "Mic: speech detected…";
+  function safeStart() {
+    if (!armed || starting) return;
+    starting = true;
+    try { rec.start(); statusEl.textContent = "Mic: listening…"; } catch {}
+    setTimeout(() => { starting = false; }, 450);
+  }
+
+  function safeStop() {
+    armed = false;
+    try { rec.stop(); } catch {}
+    statusEl.textContent = "Mic: stopped.";
+  }
 
   rec.onresult = (event) => {
     let interim = "";
@@ -564,40 +674,33 @@ function makeRecognizer({ statusEl, onCommit }) {
     }
 
     if (final.trim()) bufferFinal += final;
-    if (interim.trim()) bufferInterim = interim; // replace interim with latest
+    if (interim.trim()) bufferInterim = interim;
 
     statusEl.textContent = "Mic: hearing…";
-    resetCommitTimer();
+    scheduleCommit();
   };
 
   rec.onspeechend = () => {
-    // force commit at speech end
     commitIfAny();
   };
 
   rec.onerror = (e) => {
-    console.warn("Speech error:", e);
-    statusEl.textContent = "Mic error: " + (e.error || "unknown");
+    lastError = e.error || "unknown";
+    statusEl.textContent = "Mic error: " + lastError;
   };
 
   rec.onend = () => {
-    if (speechTimer) clearTimeout(speechTimer);
-    speechTimer = null;
-    listening = false;
-    if (!statusEl.textContent.startsWith("Mic error")) {
-      statusEl.textContent = "Mic: stopped.";
+    if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
+    if (armed) {
+      const delay = (lastError === "no-speech" || lastError === "aborted") ? 350 : 250;
+      setTimeout(() => safeStart(), delay);
     }
   };
 
   return {
-    start: () => {
-      if (listening) return;
-      listening = true;
-      try { rec.start(); } catch (e) { console.warn(e); }
-    },
-    stop: () => {
-      try { rec.stop(); } catch (e) { console.warn(e); }
-    }
+    start: () => { armed = true; lastError = ""; safeStart(); },
+    stop: () => safeStop(),
+    isArmed: () => armed
   };
 }
 
@@ -617,6 +720,7 @@ dictateQuestionBtn.addEventListener("click", async () => {
       statusEl: qStatus,
       onCommit: (text) => {
         const fixed = applyCorrections(STORE_Q_CORR, text).trim();
+        if (!fixed) return;
         clinicalQuestion.value = fixed;
         qStatus.textContent = "Mic: captured question → generating…";
         setTimeout(() => generateBtn.click(), 150);
@@ -626,11 +730,11 @@ dictateQuestionBtn.addEventListener("click", async () => {
 
   if (!qOn) {
     qOn = true;
-    dictateQuestionBtn.textContent = "⏹ Stop Question";
+    dictateQuestionBtn.textContent = "⏹ Stop";
     qRecCtl.start();
   } else {
     qOn = false;
-    dictateQuestionBtn.textContent = "🎙 Dictate Question";
+    dictateQuestionBtn.textContent = "🎙 Dictate";
     qRecCtl.stop();
   }
 });
@@ -651,6 +755,7 @@ dictateWrBtn.addEventListener("click", async () => {
       statusEl: wrStatus,
       onCommit: (text) => {
         const fixed = applyCorrections(STORE_WR_CORR, text).trim();
+        if (!fixed) return;
 
         const start = (wrNote.selectionStart ?? wrNote.value.length);
         const before = wrNote.value.slice(0, start);
@@ -669,17 +774,17 @@ dictateWrBtn.addEventListener("click", async () => {
 
   if (!wrOn) {
     wrOn = true;
-    dictateWrBtn.textContent = "⏹ Stop WR";
+    dictateWrBtn.textContent = "⏹ Stop";
     wrRecCtl.start();
   } else {
     wrOn = false;
-    dictateWrBtn.textContent = "🎙 Dictate WR";
+    dictateWrBtn.textContent = "🎙 Dictate";
     wrRecCtl.stop();
   }
 });
 
 /* =========================
-   INIT SIDEBAR
+   INIT
    ========================= */
 window.addEventListener("DOMContentLoaded", () => {
   renderSidebar();
