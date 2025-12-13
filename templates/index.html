@@ -34,7 +34,7 @@
         <div class="main-region">
           <header class="header">
             <h1 class="title">CLINICAL ENGINE</h1>
-            <p class="subtitle">Dictate ward round notes into a template, then generate an answer.</p>
+            <p class="subtitle">Dictate WR notes into your template, then generate an answer.</p>
           </header>
 
           <main class="grid">
@@ -42,12 +42,17 @@
             <!-- INPUT -->
             <section class="card input-card">
               <label class="label" for="question">WR Note (Smart Dictation)</label>
-
               <textarea id="question" class="textarea" rows="18"></textarea>
 
               <div class="actions">
                 <button id="generateBtn" class="btn" type="button">Generate</button>
                 <button id="dictateBtn" class="btn" type="button">🎙 Dictate</button>
+                <button id="incorrectBtn" class="btn" type="button">Incorrect</button>
+              </div>
+
+              <!-- tiny helper text only; uses no new CSS classes -->
+              <div style="opacity:.7; font-size:12px; margin-top:8px;">
+                Tip: highlight the wrong words in the WR note → tap “Incorrect” → enter the correct phrase. Learns on this device.
               </div>
             </section>
 
@@ -55,6 +60,7 @@
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answer</h2>
+                <button id="copyAnswerBtn" class="copy-btn main-copy-btn" type="button" disabled>Copy</button>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
@@ -113,13 +119,15 @@ Drains:
     const textarea = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
     const dictateBtn = document.getElementById("dictateBtn");
+    const incorrectBtn = document.getElementById("incorrectBtn");
     const answerEl = document.getElementById("answer");
     const answerLoader = document.getElementById("answerLoader");
+    const copyAnswerBtn = document.getElementById("copyAnswerBtn");
 
     if (!textarea.value.trim()) textarea.value = WR_TEMPLATE;
 
     /* ===============================
-       GENERATE (unchanged behaviour)
+       GENERATE (same endpoint)
        =============================== */
     async function generate() {
       const query = textarea.value.trim();
@@ -128,6 +136,7 @@ Drains:
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
       answerEl.textContent = "";
+      copyAnswerBtn.disabled = true;
 
       try {
         const res = await fetch("/api/generate", {
@@ -136,42 +145,125 @@ Drains:
           body: JSON.stringify({ query })
         });
         const data = await res.json();
-        answerEl.textContent = data.answer || data.error || "No response.";
+        const out = (data.answer || data.error || "No response.").trim();
+        answerEl.textContent = out;
+        copyAnswerBtn.disabled = !out;
       } catch (e) {
         console.error(e);
         answerEl.textContent = "Error generating answer.";
+        copyAnswerBtn.disabled = true;
       } finally {
         answerLoader.classList.add("hidden");
       }
     }
     generateBtn.addEventListener("click", generate);
 
+    textarea.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
+      }
+    });
+
+    copyAnswerBtn.addEventListener("click", async () => {
+      const text = (answerEl.textContent || "").trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        // quick feedback without changing UI
+        const old = copyAnswerBtn.textContent;
+        copyAnswerBtn.textContent = "Copied";
+        setTimeout(() => (copyAnswerBtn.textContent = old), 900);
+      } catch (e) {
+        console.warn(e);
+        alert("Copy blocked by browser. On Android: long-press the answer and copy.");
+      }
+    });
+
+    /* =========================================================
+       LOCAL “LEARNING” FOR MISHEARS (no backend)
+       - Stores replacements in localStorage
+       - Applies them to future dictation before routing
+       ========================================================= */
+    const LEARN_KEY = "ebm_speech_corrections_v1";
+
+    function loadCorrections() {
+      try {
+        const obj = JSON.parse(localStorage.getItem(LEARN_KEY) || "{}");
+        return (obj && typeof obj === "object") ? obj : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveCorrections(map) {
+      try {
+        localStorage.setItem(LEARN_KEY, JSON.stringify(map || {}));
+      } catch {}
+    }
+
+    function applyCorrections(text) {
+      let out = text || "";
+      const map = loadCorrections();
+
+      // Replace longest keys first (reduces partial collisions)
+      const keys = Object.keys(map).sort((a, b) => b.length - a.length);
+
+      for (const k of keys) {
+        const v = map[k];
+        if (!k || !v) continue;
+        // whole-word-ish replacement (case-insensitive), but still works for phrases
+        const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+        out = out.replace(re, v);
+      }
+      return out;
+    }
+
+    incorrectBtn.addEventListener("click", () => {
+      const selStart = textarea.selectionStart;
+      const selEnd = textarea.selectionEnd;
+      const selected = (textarea.value || "").slice(selStart, selEnd).trim();
+
+      if (!selected) {
+        alert("Highlight the incorrect words in the WR note first, then press Incorrect.");
+        return;
+      }
+
+      const correct = prompt("What should it be instead?", selected);
+      if (!correct || !correct.trim()) return;
+
+      const map = loadCorrections();
+      // store exact phrase as keyed pattern (works well clinically)
+      map[selected] = correct.trim();
+      saveCorrections(map);
+
+      // immediately apply in the current note as well (nice UX)
+      const before = textarea.value.slice(0, selStart);
+      const after = textarea.value.slice(selEnd);
+      textarea.value = before + correct.trim() + after;
+      textarea.selectionStart = textarea.selectionEnd = before.length + correct.trim().length;
+    });
+
     /* =========================================================
        SMART DICTATION ROUTING
        Speak like:
-       - "Patient: John Smith, 65, pneumonia"
-       - "Issues: hypoxia, AKI, delirium"
-       - "Vitals: afebrile, sats 92% on 2 litres"
-       - "Chest: bibasal crackles"
-       - "Plan: repeat UEC, continue antibiotics"
+       - "Patient: 31-year-old female anorexia nervosa"
+       - "Issues: malnutrition, epilepsy"
+       - "Vitals: afebrile, sats 96 on room air"
+       - "Plan: check lamotrigine level, neuro review"
        ========================================================= */
-
     function norm(s) {
       return (s || "").toLowerCase().replace(/[^\w\s&/:-]/g, " ").replace(/\s+/g, " ").trim();
     }
 
     function stripLeadingLabel(text) {
       return (text || "")
-        .replace(/^\s*(patient|pt|issues?|review|o\/e|exam|examination|vitals?|chest|lungs?|resp|abdo|abdomen|cardiac|heart|neuro|neurology|wounds?|drains?|plan|fluids?|bowel|orientation|alertness)\s*[:\-]\s*/i, "")
+        .replace(/^\s*(patient|pt|issues?|review|o\/e|exam|examination|vitals?|alertness|orientation|fluid|bowel|chest|lungs?|resp|abdo|abdomen|cardiac|heart|lower limbs?|upper limbs?|neuro|neurology|wounds?|drains?|plan)\s*[:\-]\s*/i, "")
         .trim();
     }
 
-    function getLines() {
-      return textarea.value.replace(/\r/g, "").split("\n");
-    }
-    function setLines(lines) {
-      textarea.value = lines.join("\n");
-    }
+    function getLines() { return textarea.value.replace(/\r/g, "").split("\n"); }
+    function setLines(lines) { textarea.value = lines.join("\n"); }
 
     function findLineIndex(lines, startsWith) {
       const key = startsWith.toLowerCase();
@@ -187,78 +279,57 @@ Drains:
       if (idx === -1) return false;
 
       const existing = (lines[idx] || "").slice(label.length).trim();
-      const cleaned = content.trim();
+      const cleaned = (content || "").trim();
       if (!cleaned) return true;
 
       if (!existing) {
         lines[idx] = label + " " + cleaned;
       } else {
-        // avoid duplicate punctuation
-        const sep = existing.endsWith(",") || existing.endsWith(";") ? " " : ", ";
+        const sep = (existing.endsWith(",") || existing.endsWith(";")) ? " " : ", ";
         lines[idx] = label + " " + existing + sep + cleaned;
       }
       setLines(lines);
       return true;
     }
 
-    function fillPt(content) {
-      // Prefer writing on the Pt: line
-      return appendToLabelLine("Pt:", content);
-    }
+    function fillPt(content) { return appendToLabelLine("Pt:", content); }
 
     function fillIssues(content) {
-      // Split by "and" / commas if it sounds like a list
-      const raw = content.trim();
+      const raw = (content || "").trim();
       if (!raw) return true;
 
-      const parts = raw
-        .split(/\s*(?:,|;|\band\b)\s*/i)
-        .map(s => s.trim())
-        .filter(Boolean);
+      const parts = raw.split(/\s*(?:,|;|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
 
       const lines = getLines();
       const issuesHeader = findLineIndex(lines, "ISSUES:");
       if (issuesHeader === -1) return false;
 
-      // Issue lines expected to be 1.-4.
-      const issueSlots = [];
+      const slots = [];
       for (let i = issuesHeader + 1; i < lines.length; i++) {
-        if (lines[i].startsWith("==")) break;
-        if (/^\s*\d\.\s*/.test(lines[i])) issueSlots.push(i);
-        if (issueSlots.length >= 10) break;
+        if ((lines[i] || "").startsWith("==")) break;
+        if (/^\s*\d\.\s*/.test(lines[i])) slots.push(i);
+        if (slots.length > 30) break;
       }
-      if (!issueSlots.length) return false;
+      if (!slots.length) return false;
 
       let p = 0;
-      for (const slotIdx of issueSlots) {
+      // fill empty slots first
+      for (const idx of slots) {
         if (p >= parts.length) break;
-        const line = lines[slotIdx];
-        const m = line.match(/^(\s*\d\.\s*)(.*)$/);
+        const m = (lines[idx] || "").match(/^(\s*\d\.\s*)(.*)$/);
         if (!m) continue;
-
         const prefix = m[1];
         const existing = (m[2] || "").trim();
-
-        // If empty placeholder, replace; otherwise append
-        if (!existing || existing === "." ) {
-          lines[slotIdx] = prefix + parts[p];
+        if (!existing || existing === ".") {
+          lines[idx] = prefix + parts[p];
           p++;
-        } else {
-          // If we already have text, append the entire remainder into the next empty slot instead of bloating
-          continue;
         }
       }
 
-      // If still remaining parts, append to next empty issue slot if any
+      // append extras as new numbered lines if needed
       while (p < parts.length) {
-        const emptySlot = issueSlots.find(i => {
-          const m = (lines[i] || "").match(/^\s*\d\.\s*(.*)$/);
-          const existing = (m?.[1] || "").trim();
-          return !existing || existing === ".";
-        });
-        if (!emptySlot) break;
-        const prefix = (lines[emptySlot].match(/^(\s*\d\.\s*)/) || ["", ""])[1];
-        lines[emptySlot] = prefix + parts[p];
+        const nextNum = slots.length + (p - (parts.length - 1)) + 1;
+        lines.splice(slots[slots.length - 1] + 1, 0, `${nextNum}. ${parts[p]}`);
         p++;
       }
 
@@ -267,51 +338,41 @@ Drains:
     }
 
     function fillPlan(content) {
-      const raw = content.trim();
+      const raw = (content || "").trim();
       if (!raw) return true;
 
-      const parts = raw
-        .split(/\s*(?:,|;|\band\b)\s*/i)
-        .map(s => s.trim())
-        .filter(Boolean);
+      const parts = raw.split(/\s*(?:,|;|\band\b)\s*/i).map(s => s.trim()).filter(Boolean);
 
       const lines = getLines();
       const planHeader = findLineIndex(lines, "==Plan==");
       if (planHeader === -1) return false;
 
-      // Collect "-" bullet slots until end or another section marker
       const slots = [];
       for (let i = planHeader + 1; i < lines.length; i++) {
-        if (lines[i].startsWith("==") && i !== planHeader) break;
+        if ((lines[i] || "").startsWith("==") && i !== planHeader) break;
         if (/^\s*-\s*/.test(lines[i])) slots.push(i);
-        // stop if huge
-        if (slots.length > 30) break;
+        if (slots.length > 60) break;
       }
       if (!slots.length) return false;
 
       let p = 0;
-      for (const slotIdx of slots) {
+      for (const idx of slots) {
         if (p >= parts.length) break;
-        const line = lines[slotIdx];
-        const m = line.match(/^(\s*-\s*)(.*)$/);
+        const m = (lines[idx] || "").match(/^(\s*-\s*)(.*)$/);
         if (!m) continue;
         const prefix = m[1];
         const existing = (m[2] || "").trim();
-
         if (!existing) {
-          lines[slotIdx] = prefix + parts[p];
+          lines[idx] = prefix + parts[p];
           p++;
         }
       }
 
-      // If still parts left, append extra bullets after last slot
+      // add more bullets if overflow
       if (p < parts.length) {
         const insertAt = slots[slots.length - 1] + 1;
         const extras = [];
-        while (p < parts.length) {
-          extras.push("- " + parts[p]);
-          p++;
-        }
+        while (p < parts.length) extras.push("- " + parts[p++]);
         lines.splice(insertAt, 0, ...extras);
       }
 
@@ -319,29 +380,29 @@ Drains:
       return true;
     }
 
-    function fillOEField(label, content) {
-      // labels in template include:
-      // Vitals:, Alertness & Orientation:, Fluid Balance:, Bowel chart:, Chest:, Abdo:, Cardiac:, Lower limbs:, Upper limbs:, Neuro:, Wounds:, Drains:
-      return appendToLabelLine(label, content);
+    function fillOEField(label, content) { return appendToLabelLine(label, content); }
+
+    function insertAtCursor(text) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = before + text + after;
+      textarea.selectionStart = textarea.selectionEnd = start + text.length;
     }
 
     function routeDictation(finalText) {
-      const t = finalText.trim();
-      if (!t) return;
+      const t0 = (finalText || "").trim();
+      if (!t0) return;
 
+      // Apply local correction map first
+      const t = applyCorrections(t0);
       const n = norm(t);
 
-      // Route by explicit label at the start
-      // Patient / Pt
       if (/^(patient|pt)\b/.test(n)) return fillPt(stripLeadingLabel(t));
-
-      // Issues
       if (/^issues?\b/.test(n)) return fillIssues(stripLeadingLabel(t));
-
-      // Plan
       if (/^plan\b/.test(n)) return fillPlan(stripLeadingLabel(t));
 
-      // O/E fields
       if (/^vitals?\b/.test(n)) return fillOEField("Vitals:", stripLeadingLabel(t));
       if (/^(alertness|orientation|alertness & orientation)\b/.test(n)) return fillOEField("Alertness & Orientation:", stripLeadingLabel(t));
       if (/^fluid\b/.test(n)) return fillOEField("Fluid Balance:", stripLeadingLabel(t));
@@ -355,25 +416,15 @@ Drains:
       if (/^wounds?\b/.test(n)) return fillOEField("Wounds:", stripLeadingLabel(t));
       if (/^drains?\b/.test(n)) return fillOEField("Drains:", stripLeadingLabel(t));
 
-      // If no label recognised: put it where your cursor currently is (safe fallback)
+      // fallback: cursor
       insertAtCursor(" " + t + "\n");
       return true;
     }
 
-    function insertAtCursor(text) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const before = textarea.value.slice(0, start);
-      const after = textarea.value.slice(end);
-      textarea.value = before + text + after;
-      textarea.selectionStart = textarea.selectionEnd = start + text.length;
-    }
-
     /* ===============================
-       SpeechRecognition wiring
+       SpeechRecognition
        =============================== */
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       dictateBtn.disabled = true;
@@ -392,18 +443,15 @@ Drains:
       recognition.onresult = (event) => {
         let finalText = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalText += event.results[i][0].transcript + " ";
-          }
+          if (event.results[i].isFinal) finalText += event.results[i][0].transcript + " ";
         }
+
         finalText = finalText.trim();
         if (!finalText) return;
 
-        // Prevent duplicate same final results
         if (norm(finalText) === norm(lastFinal)) return;
         lastFinal = finalText;
 
-        // Route
         routeDictation(finalText);
       };
 
@@ -418,12 +466,9 @@ Drains:
       if (!recognition) return;
 
       if (!listening) {
-        try {
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch {
-          alert("Microphone permission required.");
-          return;
-        }
+        try { await navigator.mediaDevices.getUserMedia({ audio: true }); }
+        catch { alert("Microphone permission required."); return; }
+
         listening = true;
         dictateBtn.textContent = "⏹ Stop";
         try { recognition.start(); } catch {}
