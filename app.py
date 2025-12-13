@@ -1,5 +1,6 @@
 import os
 import tempfile
+import threading
 import requests
 from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
@@ -7,39 +8,42 @@ from faster_whisper import WhisperModel
 
 load_dotenv()
 
+# -------------------- DeepSeek config --------------------
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
-# Whisper config (local transcription)
-# Options: tiny, base, small, medium, large-v3
-# Default to tiny to reduce RAM and prevent Render restarts.
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
-
 if not DEEPSEEK_API_KEY:
     raise RuntimeError("Missing DEEPSEEK_API_KEY environment variable.")
 
+# -------------------- Whisper config ---------------------
+# Options: tiny, base, small, medium, large-v3
+# Default to tiny for stability; increase later if you want.
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
+
+# -------------------- App setup --------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 session = requests.Session()
 
-# Lazy-loaded Whisper model to avoid boot-time memory spikes / double-loads
+# Lazy-loaded Whisper model (avoid boot RAM spike)
 _whisper_model = None
+
+# Hard concurrency limit for transcribe to prevent overlap spikes
+_transcribe_lock = threading.Lock()
 
 
 def get_whisper_model() -> WhisperModel:
-    """
-    Create Whisper model once per process. Using lazy init helps on Render.
-    compute_type=int8 is RAM/CPU friendly on CPU.
-    """
+    """Initialise Whisper model once per process."""
     global _whisper_model
     if _whisper_model is None:
         size = os.getenv("WHISPER_MODEL_SIZE", WHISPER_MODEL_SIZE)
-        print(f"Loading Whisper model: {size}")
+        print(f"[whisper] loading model={size} device=cpu compute_type=int8")
         _whisper_model = WhisperModel(
             size,
             device="cpu",
             compute_type="int8"
         )
+        print("[whisper] model loaded")
     return _whisper_model
 
 
@@ -61,30 +65,40 @@ def transcribe():
     if not f:
         return jsonify({"error": "Empty audio upload."}), 400
 
-    # Save to a temp file. MediaRecorder commonly sends webm/ogg.
-    # NOTE: Decoding webm/ogg typically requires ffmpeg in the runtime.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
-        tmp_path = tmp.name
-        f.save(tmp_path)
+    # Allow only ONE transcribe at a time (prevents memory spikes)
+    if not _transcribe_lock.acquire(blocking=False):
+        return jsonify({"error": "Server busy, try again."}), 429
 
+    tmp_path = None
     try:
+        # Save upload to temp file. MediaRecorder commonly sends webm/ogg.
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+            tmp_path = tmp.name
+            f.save(tmp_path)
+
         model = get_whisper_model()
+
         segments, info = model.transcribe(
             tmp_path,
             language="en",
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 250}
         )
+
         text = " ".join(seg.text.strip() for seg in segments).strip()
         return jsonify({"text": text})
+
     except Exception as e:
-        print("TRANSCRIBE ERROR:", repr(e))
+        print("[transcribe] ERROR:", repr(e))
         return jsonify({"error": "Transcription failed on server."}), 502
+
     finally:
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
+        _transcribe_lock.release()
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 
 @app.route("/api/generate", methods=["POST"])
@@ -94,7 +108,6 @@ def generate():
     if not query:
         return jsonify({"error": "No query provided."}), 400
 
-    # System prompt: Australian, educational, structured, legally safe
     system_prompt = (
         "You are an AI clinical education assistant for qualified clinicians and doctors "
         "in training working in Australian hospitals.\n\n"
@@ -176,7 +189,7 @@ def generate():
 
     try:
         resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
-        print("DeepSeek status:", resp.status_code)
+        print("[deepseek] status:", resp.status_code)
         resp.raise_for_status()
         data = resp.json()
         answer = (
@@ -189,11 +202,11 @@ def generate():
             return jsonify({"error": "Empty response from model."}), 502
         return jsonify({"answer": answer})
     except Exception as e:
-        print("DeepSeek API error:", repr(e))
+        print("[deepseek] ERROR:", repr(e))
         return jsonify({"error": "Error contacting DeepSeek API."}), 502
 
 
 if __name__ == "__main__":
-    # IMPORTANT: never run debug/reloader on Render (it can double-load Whisper and exceed RAM)
+    # Never run debug/reloader in production (can double-load Whisper)
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
