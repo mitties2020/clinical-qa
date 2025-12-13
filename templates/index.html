@@ -8,97 +8,141 @@
 </head>
 
 <body>
-<div class="app-root">
-  <div class="shell">
-    <div class="layout">
+  <div class="app-root">
+    <div class="shell">
+      <div class="layout">
 
-      <!-- ================= SIDEBAR ================= -->
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-brand">
-            <div class="brand-logo"></div>
-            <div class="brand-text">
-              <div class="brand-title">EBM</div>
-              <div class="sidebar-title">EBM Session</div>
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-brand">
+              <div class="brand-logo"></div>
+              <div class="brand-text">
+                <div class="brand-title">EBM</div>
+                <div class="sidebar-title">EBM Session</div>
+              </div>
             </div>
+
+            <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
           </div>
-          <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved…" />
-        </div>
 
-        <div style="padding:8px 6px; font-size:12px; opacity:.75;">Clinical Questions</div>
-        <div id="savedQuestionsList" class="conversation-list"></div>
+          <div class="sidebar-section-title">Saved Clinical Questions</div>
+          <div id="savedQuestionsList" class="conversation-list"></div>
 
-        <div style="padding:12px 6px 6px; font-size:12px; opacity:.75;">Ward Round Notes</div>
-        <div id="savedWrList" class="conversation-list"></div>
+          <div class="sidebar-section-title">Ward Round Notes (saved)</div>
+          <div id="savedWrList" class="conversation-list"></div>
 
-        <div class="sidebar-footer">Locally stored • Per device</div>
-      </aside>
+          <div class="sidebar-footer">
+            <span class="sidebar-hint">Locally stored • Per device</span>
+          </div>
+        </aside>
 
-      <!-- ================= MAIN ================= -->
-      <div class="main-region">
-        <header class="header">
-          <h1 class="title">CLINICAL ENGINE</h1>
-          <p class="subtitle">Clinical questions (top) • Ward round dictation (below)</p>
-        </header>
+        <!-- MAIN -->
+        <div class="main-region">
+          <header class="header">
+            <h1 class="title">CLINICAL ENGINE</h1>
+            <p class="subtitle">
+              Clinical questions (top) + ward round dictation (below). Dictation separated.
+            </p>
+          </header>
 
-        <!-- ================= CLINICAL ENGINE ================= -->
-        <main class="grid">
-          <section class="card input-card">
-            <label class="label">Clinical Question</label>
-            <textarea id="clinicalQuestion" class="textarea" rows="6"
-              placeholder="Type or dictate a clinical question…"></textarea>
+          <!-- TOP ROW -->
+          <main class="grid">
 
-            <div class="actions" style="gap:8px;">
-              <button id="generateBtn" class="btn" type="button">Generate</button>
-              <button id="dictateQuestionBtn" class="btn" type="button">🎙 Dictate</button>
-              <button id="incorrectQuestionBtn" class="btn" type="button">Incorrect</button>
-              <button id="clearQuestionBtn" class="btn" type="button">Clear</button>
+            <!-- QUESTION -->
+            <section class="card input-card">
+              <label class="label" for="clinicalQuestion">Clinical Question</label>
+              <textarea
+                id="clinicalQuestion"
+                class="textarea"
+                rows="6"
+                placeholder="Type or dictate a clinical question…"
+              ></textarea>
+
+              <div class="actions actions-compact">
+                <button id="generateBtn" class="btn btn-metal" type="button">Generate</button>
+
+                <button id="dictateQuestionBtn" class="btn btn-metal" type="button">🎙 Dictate</button>
+
+                <button id="incorrectQuestionBtn" class="btn btn-metal btn-ghost" type="button">Incorrect</button>
+
+                <button id="clearQuestionBtn" class="btn btn-metal btn-ghost" type="button">Clear</button>
+              </div>
+
+              <div id="qStatus" class="mic-status">Question mic: idle</div>
+            </section>
+
+            <!-- ANSWER -->
+            <section class="card output-card">
+              <div class="output-header">
+                <h2 class="output-title">Answer</h2>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+              </div>
+
+              <div id="answerLoader" class="answer-loader hidden">
+                <div class="loader"></div>
+                <div class="loader-text">Generating structured answer…</div>
+              </div>
+
+              <div class="output-body">
+                <div id="answer" class="answer placeholder">
+                  Your structured response will appear here.
+                </div>
+              </div>
+            </section>
+
+          </main>
+
+          <!-- WR -->
+          <section class="card wr-card">
+            <div class="wr-head">
+              <div>
+                <div class="label wr-label">Ward Round Notes</div>
+                <div class="wr-subtitle">
+                  Dictation routes into template headings automatically. Use the selector if needed.
+                </div>
+              </div>
+
+              <div class="wr-actions-right">
+                <button id="dictateWrBtn" class="btn btn-metal" type="button">🎙 Dictate</button>
+                <button id="incorrectWrBtn" class="btn btn-metal btn-ghost" type="button">Incorrect</button>
+                <button id="copyWrBtn" class="btn btn-metal btn-ghost" type="button">Copy WR</button>
+                <button id="saveWrBtn" class="btn btn-metal" type="button">Save WR</button>
+                <button id="newWrBtn" class="btn btn-metal btn-ghost" type="button">New WR</button>
+              </div>
             </div>
 
-            <div id="qStatus" style="font-size:12px; opacity:.75;">Question mic: idle</div>
-          </section>
-
-          <section class="card output-card">
-            <div class="output-header">
-              <h2 class="output-title">Answer</h2>
-              <button id="copyAllBtn" class="copy-btn" disabled>Copy All</button>
+            <!-- WR Target Selector -->
+            <div class="wr-target-row">
+              <div class="wr-target-label">Dictation target:</div>
+              <div class="wr-targets">
+                <button class="pill" data-target="issues" type="button">Issues</button>
+                <button class="pill" data-target="review" type="button">Review</button>
+                <button class="pill" data-target="oe" type="button">O/E</button>
+                <button class="pill" data-target="plan" type="button">Plan</button>
+                <button class="pill pill-ghost" data-target="auto" type="button">Auto</button>
+              </div>
             </div>
 
-            <div id="answerLoader" class="answer-loader hidden">
-              <div class="loader"></div>
-              <div class="loader-text">Generating…</div>
-            </div>
+            <textarea id="wrNote" class="textarea wr-textarea" rows="16"></textarea>
 
-            <div class="output-body">
-              <div id="answer" class="answer placeholder">
-                Your structured answer will appear here.
+            <div class="wr-foot">
+              <div id="wrStatus" class="mic-status">WR mic: idle</div>
+              <div class="wr-tip">
+                Tip: Say “Plan …” / “Issues …” / “On exam …” to help auto routing.
               </div>
             </div>
           </section>
-        </main>
 
-        <!-- ================= WARD ROUND ================= -->
-        <section class="card" style="margin-top:14px;">
-          <label class="label">Ward Round Notes</label>
-
-          <div class="actions" style="gap:8px;">
-            <button id="dictateWrBtn" class="btn">🎙 Dictate</button>
-            <button id="incorrectWrBtn" class="btn">Incorrect</button>
-            <button id="saveWrBtn" class="btn">Save</button>
-            <button id="newWrBtn" class="btn">New</button>
-          </div>
-
-          <textarea id="wrNote" class="textarea" rows="16"></textarea>
-          <div id="wrStatus" style="font-size:12px; opacity:.75;">WR mic: idle</div>
-        </section>
-
+        </div>
       </div>
     </div>
   </div>
-</div>
 
 <script>
-/* ===================== WR TEMPLATE ===================== */
+/* =========================
+   DEFAULT WR TEMPLATE
+   ========================= */
 const WR_TEMPLATE = `WR:
 
 Pt:
@@ -110,6 +154,7 @@ ISSUES:
 4.
 
 ==REVIEW==
+
 
 ==O/E==
 Vitals:
@@ -130,117 +175,691 @@ Drains:
 -
 -`;
 
-const STORE_Q = "ebm_saved_q_v1";
-const STORE_WR = "ebm_saved_wr_v1";
-const STORE_Q_CORR = "ebm_q_corr_v1";
-const STORE_WR_CORR = "ebm_wr_corr_v1";
+/* =========================
+   STORAGE KEYS
+   ========================= */
+const STORE_Q_CORR = "ebm_q_corrections_v5";
+const STORE_WR_CORR = "ebm_wr_corrections_v5";
+const STORE_SAVED_Q = "ebm_saved_questions_v5";
+const STORE_SAVED_WR = "ebm_saved_wr_v5";
 
-/* ===================== ELEMENTS ===================== */
+/* =========================
+   ELEMENTS
+   ========================= */
 const clinicalQuestion = document.getElementById("clinicalQuestion");
+const generateBtn = document.getElementById("generateBtn");
+const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
+const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
+const clearQuestionBtn = document.getElementById("clearQuestionBtn");
+
 const wrNote = document.getElementById("wrNote");
+const dictateWrBtn = document.getElementById("dictateWrBtn");
+const incorrectWrBtn = document.getElementById("incorrectWrBtn");
+const copyWrBtn = document.getElementById("copyWrBtn");
+const saveWrBtn = document.getElementById("saveWrBtn");
+const newWrBtn = document.getElementById("newWrBtn");
+
 const answerEl = document.getElementById("answer");
 const answerLoader = document.getElementById("answerLoader");
 const copyAllBtn = document.getElementById("copyAllBtn");
+
 const qStatus = document.getElementById("qStatus");
 const wrStatus = document.getElementById("wrStatus");
 
-/* ===================== INIT ===================== */
-if (!wrNote.value) wrNote.value = WR_TEMPLATE;
+const savedQuestionsList = document.getElementById("savedQuestionsList");
+const savedWrList = document.getElementById("savedWrList");
+const sidebarSearch = document.getElementById("sidebarSearch");
 
-/* ===================== STORAGE ===================== */
-const load = k => JSON.parse(localStorage.getItem(k)||"[]");
-const save = (k,v) => localStorage.setItem(k,JSON.stringify(v));
+/* =========================
+   INIT WR TEMPLATE
+   ========================= */
+if (!wrNote.value.trim()) wrNote.value = WR_TEMPLATE;
 
-/* ===================== SIDEBAR ===================== */
-function renderSidebar() {
-  const qList = load(STORE_Q);
-  const wList = load(STORE_WR);
-
-  const qEl = document.getElementById("savedQuestionsList");
-  const wEl = document.getElementById("savedWrList");
-
-  qEl.innerHTML = qList.map(q =>
-    `<div class="conversation-item"><div class="conv-title"
-      onclick="document.getElementById('clinicalQuestion').value=${JSON.stringify(q)}">${q}</div></div>`
-  ).join("") || '<div class="conv-empty">None</div>';
-
-  wEl.innerHTML = wList.map(w =>
-    `<div class="conversation-item"><div class="conv-title"
-      onclick="document.getElementById('wrNote').value=${JSON.stringify(w)}">${w.slice(0,40)}…</div></div>`
-  ).join("") || '<div class="conv-empty">None</div>';
+/* =========================
+   UTILS
+   ========================= */
+function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
+function escapeHtml(str) {
+  return (str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
-renderSidebar();
+function safeJsonParse(s, fallback) { try { return JSON.parse(s); } catch { return fallback; } }
+async function copyText(text) { if (!text) return; try { await navigator.clipboard.writeText(text); } catch {} }
 
-/* ===================== GENERATE ===================== */
+/* =========================
+   LOCAL LEARNING CORRECTIONS
+   ========================= */
+function loadCorrections(key) { return safeJsonParse(localStorage.getItem(key) || "{}", {}); }
+function saveCorrections(key, map) { localStorage.setItem(key, JSON.stringify(map || {})); }
+function applyCorrections(key, text) {
+  let out = text || "";
+  const map = loadCorrections(key);
+  const keys = Object.keys(map).sort((a,b)=>b.length-a.length);
+  for (const k of keys) {
+    const v = map[k];
+    if (!k || !v) continue;
+    const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    out = out.replace(re, v);
+  }
+  return out;
+}
+function addCorrectionFromSelection(textarea, storeKey) {
+  const s = textarea.selectionStart;
+  const e = textarea.selectionEnd;
+  const selected = (textarea.value || "").slice(s, e).trim();
+  if (!selected) { alert("Highlight the incorrect words first."); return; }
+  const correct = prompt("What should it be instead?", selected);
+  if (!correct || !correct.trim()) return;
+
+  const map = loadCorrections(storeKey);
+  map[selected] = correct.trim();
+  saveCorrections(storeKey, map);
+
+  const before = textarea.value.slice(0, s);
+  const after = textarea.value.slice(e);
+  textarea.value = before + correct.trim() + after;
+  textarea.selectionStart = textarea.selectionEnd = before.length + correct.trim().length;
+}
+incorrectQuestionBtn.addEventListener("click", () => addCorrectionFromSelection(clinicalQuestion, STORE_Q_CORR));
+incorrectWrBtn.addEventListener("click", () => addCorrectionFromSelection(wrNote, STORE_WR_CORR));
+
+/* =========================
+   SIDEBAR STORAGE
+   ========================= */
+function loadSavedQuestions() { return safeJsonParse(localStorage.getItem(STORE_SAVED_Q) || "[]", []); }
+function saveSavedQuestions(list) { localStorage.setItem(STORE_SAVED_Q, JSON.stringify(list || [])); }
+function addSavedQuestion(query) {
+  const list = loadSavedQuestions();
+  const title = query.length > 60 ? query.slice(0, 60).trim() + "…" : query.trim();
+  list.unshift({ id: Date.now(), title, query, ts: Date.now() });
+  saveSavedQuestions(list.slice(0, 80));
+}
+
+function loadSavedWR() { return safeJsonParse(localStorage.getItem(STORE_SAVED_WR) || "[]", []); }
+function saveSavedWR(list) { localStorage.setItem(STORE_SAVED_WR, JSON.stringify(list || [])); }
+
+function saveCurrentWR() {
+  const content = (wrNote.value || "").trim();
+  if (!content) return;
+  const list = loadSavedWR();
+  const title = "WR " + new Date().toLocaleString();
+  list.unshift({ id: Date.now(), title, content, ts: Date.now() });
+  saveSavedWR(list.slice(0, 80));
+  renderSidebar();
+}
+
+function renderSidebar() {
+  const term = norm(sidebarSearch.value || "");
+
+  const qList = loadSavedQuestions();
+  savedQuestionsList.innerHTML = "";
+  if (!qList.length) {
+    savedQuestionsList.innerHTML = '<div class="conv-empty">No saved questions yet.</div>';
+  } else {
+    qList.forEach((item, idx) => {
+      const show = !term || norm(item.title).includes(term) || norm(item.query).includes(term);
+      if (!show) return;
+
+      const row = document.createElement("div");
+      row.className = "conversation-item";
+
+      const main = document.createElement("div");
+      main.className = "conv-main";
+      main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Question")}</div>`;
+
+      const del = document.createElement("button");
+      del.className = "conv-delete";
+      del.textContent = "✕";
+      del.title = "Remove";
+
+      main.addEventListener("click", () => {
+        clinicalQuestion.value = item.query || "";
+        clinicalQuestion.focus();
+      });
+
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const list = loadSavedQuestions();
+        list.splice(idx, 1);
+        saveSavedQuestions(list);
+        renderSidebar();
+      });
+
+      row.appendChild(main);
+      row.appendChild(del);
+      savedQuestionsList.appendChild(row);
+    });
+  }
+
+  const wrList = loadSavedWR();
+  savedWrList.innerHTML = "";
+  if (!wrList.length) {
+    savedWrList.innerHTML = '<div class="conv-empty">No saved WR notes yet.</div>';
+  } else {
+    wrList.forEach((item, idx) => {
+      const show = !term || norm(item.title).includes(term) || norm(item.content).includes(term);
+      if (!show) return;
+
+      const row = document.createElement("div");
+      row.className = "conversation-item";
+
+      const main = document.createElement("div");
+      main.className = "conv-main";
+      main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "WR")}</div>`;
+
+      const del = document.createElement("button");
+      del.className = "conv-delete";
+      del.textContent = "✕";
+      del.title = "Remove";
+
+      main.addEventListener("click", () => {
+        wrNote.value = item.content || WR_TEMPLATE;
+        wrNote.focus();
+      });
+
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const list = loadSavedWR();
+        list.splice(idx, 1);
+        saveSavedWR(list);
+        renderSidebar();
+      });
+
+      row.appendChild(main);
+      row.appendChild(del);
+      savedWrList.appendChild(row);
+    });
+  }
+}
+sidebarSearch.addEventListener("input", renderSidebar);
+
+/* =========================
+   ANSWER: EXPANDABLE SECTIONS + COPY PER SECTION
+   ========================= */
+const SECTION_ORDER = [
+  "Summary",
+  "Assessment",
+  "Diagnosis",
+  "Investigations",
+  "Treatment",
+  "Monitoring",
+  "Follow-up & Safety Netting",
+  "Red Flags",
+  "References",
+];
+
+function isHeadingLine(line) {
+  const t = (line || "").trim().replace(/:$/, "");
+  const match = SECTION_ORDER.find(h => h.toLowerCase() === t.toLowerCase());
+  return match || null;
+}
+
+function buildStructuredHtml(raw) {
+  if (!raw) return "";
+  let text = String(raw).replace(/\r/g, "");
+
+  // strip markdown decoration if model ever leaks it
+  text = text.replace(/\*\*(.*?)\*\*/g, "$1");
+
+  const lines = text.split("\n");
+  const sections = [];
+  let current = { title: "Summary", content: [] };
+
+  for (const rawLine of lines) {
+    const line = (rawLine || "").trim();
+    if (!line) { current.content.push(""); continue; }
+
+    const heading = isHeadingLine(line);
+    if (heading) {
+      if (current.content.some(x => (x || "").trim())) sections.push(current);
+      current = { title: heading, content: [] };
+    } else {
+      current.content.push(line);
+    }
+  }
+  if (current.content.some(x => (x || "").trim())) sections.push(current);
+
+  if (!sections.length) {
+    return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
+  }
+
+  let html = "";
+  let idx = 0;
+
+  for (const sec of sections) {
+    const id = `sec-${idx++}`;
+    const title = sec.title;
+    const body = (sec.content || []).filter(l => (l || "").trim()).map(l =>
+      `<div class="answer-line">${escapeHtml(l)}</div>`
+    ).join("");
+
+    if (!body) continue;
+
+    const alwaysOpen = (title === "Summary");
+
+    if (alwaysOpen) {
+      html += `
+        <div class="section">
+          <div class="section-header static">
+            <span>${escapeHtml(title)}</span>
+            <button class="copy-btn section-copy" data-copy="${id}" type="button">Copy</button>
+          </div>
+          <div class="section-body" data-sec="${id}">
+            ${body}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="section">
+          <div class="section-header collapsible-head">
+            <button class="collapsible" data-toggle="${id}" type="button">${escapeHtml(title)}</button>
+            <button class="copy-btn section-copy" data-copy="${id}" type="button">Copy</button>
+          </div>
+          <div class="collapsible-content" data-sec="${id}" style="display:none;">
+            ${body}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  return html;
+}
+
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+
+  if (t.classList && t.classList.contains("collapsible")) {
+    const id = t.dataset.toggle;
+    const panel = document.querySelector(`.collapsible-content[data-sec="${id}"]`);
+    if (!panel) return;
+    const open = panel.style.display === "block";
+    panel.style.display = open ? "none" : "block";
+    t.classList.toggle("active", !open);
+    return;
+  }
+
+  if (t.classList && t.classList.contains("section-copy")) {
+    const id = t.dataset.copy;
+    const panel = document.querySelector(`[data-sec="${id}"]`);
+    if (!panel) return;
+    const text = (panel.innerText || "").trim();
+    if (!text) return;
+    await copyText(text);
+    t.classList.add("copied");
+    setTimeout(() => t.classList.remove("copied"), 700);
+    return;
+  }
+});
+
+/* =========================
+   GENERATE ANSWER
+   ========================= */
 async function generate() {
-  const q = clinicalQuestion.value.trim();
-  if (!q) return;
+  const query = (clinicalQuestion.value || "").trim();
+  if (!query) return;
 
+  generateBtn.disabled = true;
+  copyAllBtn.disabled = true;
   answerLoader.classList.remove("hidden");
+  answerEl.classList.remove("placeholder");
   answerEl.innerHTML = "";
 
-  const res = await fetch("/api/generate", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ query:q })
-  });
-  const data = await res.json();
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+    const data = await res.json();
 
-  answerLoader.classList.add("hidden");
+    if (data.answer) {
+      answerEl.innerHTML = buildStructuredHtml(data.answer);
+      const has = !!(answerEl.innerText || "").trim();
+      copyAllBtn.disabled = !has;
 
-  if (data.answer) {
-    answerEl.innerText = data.answer;
-    copyAllBtn.disabled = false;
-    save(STORE_Q, [q, ...load(STORE_Q)].slice(0,50));
-    renderSidebar();
-  } else {
-    answerEl.innerText = data.error || "Error.";
+      addSavedQuestion(query);
+      renderSidebar();
+    } else {
+      answerEl.textContent = (data.error || "No response.").trim();
+      copyAllBtn.disabled = true;
+    }
+  } catch (e) {
+    console.error(e);
+    answerEl.textContent = "Error generating answer.";
+    copyAllBtn.disabled = true;
+  } finally {
+    answerLoader.classList.add("hidden");
+    generateBtn.disabled = false;
+  }
+}
+generateBtn.addEventListener("click", generate);
+
+copyAllBtn.addEventListener("click", async () => {
+  const text = (answerEl.innerText || "").trim();
+  if (!text) return;
+  await copyText(text);
+  copyAllBtn.classList.add("copied");
+  setTimeout(() => copyAllBtn.classList.remove("copied"), 700);
+});
+
+clearQuestionBtn.addEventListener("click", () => {
+  clinicalQuestion.value = "";
+  clinicalQuestion.focus();
+});
+
+/* =========================
+   WR SAVE / NEW / COPY
+   ========================= */
+copyWrBtn.addEventListener("click", async () => {
+  const text = (wrNote.value || "").trim();
+  if (!text) return;
+  await copyText(text);
+  copyWrBtn.classList.add("copied");
+  setTimeout(() => copyWrBtn.classList.remove("copied"), 700);
+});
+
+saveWrBtn.addEventListener("click", () => saveCurrentWR());
+
+newWrBtn.addEventListener("click", () => {
+  const current = (wrNote.value || "").trim();
+  const hasContent = current && current !== WR_TEMPLATE.trim();
+  if (hasContent) {
+    const saveIt = confirm("Save this WR note before starting a new one?");
+    if (saveIt) saveCurrentWR();
+  }
+  wrNote.value = WR_TEMPLATE;
+  wrStatus.textContent = "WR reset. Ready for next patient.";
+});
+
+/* =========================
+   MIC SUPPORT CHECK
+   ========================= */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speechSupported = !!SpeechRecognition;
+
+function setBtnText(btn, on, labelOn, labelOff) {
+  btn.textContent = on ? labelOn : labelOff;
+}
+
+async function ensureMic(statusEl) {
+  if (!window.isSecureContext) {
+    statusEl.textContent = "Mic error: site must be HTTPS.";
+    return false;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusEl.textContent = "Mic error: microphone not supported in this browser.";
+    return false;
+  }
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    return true;
+  } catch (e) {
+    console.warn(e);
+    statusEl.textContent = "Mic blocked: allow microphone permission in browser settings.";
+    return false;
   }
 }
 
-document.getElementById("generateBtn").onclick = generate;
-document.getElementById("clearQuestionBtn").onclick = () => clinicalQuestion.value = "";
-copyAllBtn.onclick = () => navigator.clipboard.writeText(answerEl.innerText);
-
-/* ===================== DICTATION ===================== */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-function makeRec(statusEl, cb) {
-  const r = new SR();
-  r.lang = "en-AU";
-  r.continuous = true;
-  r.interimResults = false;
-  r.onresult = e => cb(e.results[e.results.length-1][0].transcript);
-  r.onstart = () => statusEl.textContent = "Mic: listening…";
-  r.onend = () => statusEl.textContent = "Mic: stopped.";
-  return r;
+if (!speechSupported) {
+  qStatus.textContent = "Question mic: SpeechRecognition NOT supported on this browser.";
+  wrStatus.textContent = "WR mic: SpeechRecognition NOT supported on this browser.";
+  dictateQuestionBtn.disabled = true;
+  dictateWrBtn.disabled = true;
 }
 
-/* Question dictation */
-let qRec;
-document.getElementById("dictateQuestionBtn").onclick = () => {
-  if (!qRec) qRec = makeRec(qStatus, t => {
-    clinicalQuestion.value = t;
-    generate();
-  });
-  qRec.start();
-};
+/* =========================
+   ANDROID/CHROME FIX:
+   Keep recogniser ARMED and auto-restart onend
+   ========================= */
+function makeArmedRecognizer({ statusEl, onFinalText }) {
+  const rec = new SpeechRecognition();
+  rec.lang = "en-AU";
+  rec.interimResults = true;
+  rec.continuous = true;
 
-/* WR dictation */
-let wRec;
-document.getElementById("dictateWrBtn").onclick = () => {
-  if (!wRec) wRec = makeRec(wrStatus, t => {
-    wrNote.value += "\n" + t;
-  });
-  wRec.start();
-};
+  let armed = false;
+  let starting = false;
+  let lastError = "";
+  let finalBuffer = "";
+  let interimBuffer = "";
+  let commitTimer = null;
 
-/* ===================== WR ACTIONS ===================== */
-document.getElementById("saveWrBtn").onclick = () => {
-  save(STORE_WR, [wrNote.value, ...load(STORE_WR)].slice(0,50));
-  renderSidebar();
-};
-document.getElementById("newWrBtn").onclick = () => wrNote.value = WR_TEMPLATE;
+  function commit() {
+    const text = (finalBuffer || interimBuffer || "").trim();
+    finalBuffer = "";
+    interimBuffer = "";
+    if (!text) return;
+    onFinalText(text);
+  }
+
+  function scheduleCommit() {
+    if (commitTimer) clearTimeout(commitTimer);
+    commitTimer = setTimeout(() => commit(), 900);
+  }
+
+  function safeStart() {
+    if (!armed || starting) return;
+    starting = true;
+    try {
+      rec.start();
+      statusEl.textContent = "Mic: listening…";
+    } catch {}
+    setTimeout(() => { starting = false; }, 450);
+  }
+
+  function safeStop() {
+    armed = false;
+    try { rec.stop(); } catch {}
+    statusEl.textContent = "Mic: stopped.";
+    if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
+    commit();
+  }
+
+  rec.onresult = (event) => {
+    let interim = "";
+    let final = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const r = event.results[i];
+      const t = (r[0]?.transcript || "");
+      if (r.isFinal) final += t + " ";
+      else interim += t + " ";
+    }
+
+    if (final.trim()) finalBuffer += final;
+    if (interim.trim()) interimBuffer = interim;
+
+    statusEl.textContent = "Mic: hearing…";
+    scheduleCommit();
+  };
+
+  rec.onerror = (e) => {
+    lastError = e.error || "unknown";
+    statusEl.textContent = "Mic error: " + lastError;
+  };
+
+  rec.onend = () => {
+    // Android often ends after ~10–30s; keep it alive if armed
+    if (!armed) return;
+    const delay = (lastError === "no-speech" || lastError === "aborted") ? 450 : 250;
+    setTimeout(() => safeStart(), delay);
+  };
+
+  return {
+    start: () => { armed = true; lastError = ""; safeStart(); },
+    stop: () => safeStop(),
+    isOn: () => armed
+  };
+}
+
+/* =========================
+   QUESTION DICTATION
+   - replaces question with the latest phrase
+   - auto-generates after commit
+   ========================= */
+let qCtl = null;
+let qOn = false;
+
+dictateQuestionBtn.addEventListener("click", async () => {
+  if (!speechSupported) return;
+  const ok = await ensureMic(qStatus);
+  if (!ok) return;
+
+  if (!qCtl) {
+    qCtl = makeArmedRecognizer({
+      statusEl: qStatus,
+      onFinalText: (text) => {
+        const fixed = applyCorrections(STORE_Q_CORR, text).trim();
+        if (!fixed) return;
+        clinicalQuestion.value = fixed;
+        qStatus.textContent = "Mic: captured question → generating…";
+        setTimeout(() => generateBtn.click(), 120);
+      }
+    });
+  }
+
+  qOn = !qOn;
+  setBtnText(dictateQuestionBtn, qOn, "⏹ Stop", "🎙 Dictate");
+  if (qOn) qCtl.start(); else qCtl.stop();
+});
+
+/* =========================
+   WR SMART ROUTER
+   - keyword routes into Issues/Review/OE/Plan sections
+   - also supports manual target selection
+   ========================= */
+let wrTarget = "auto";
+const pillButtons = Array.from(document.querySelectorAll(".pill"));
+function setActivePill(target) {
+  wrTarget = target;
+  pillButtons.forEach(b => b.classList.toggle("active", b.dataset.target === target));
+}
+pillButtons.forEach(b => b.addEventListener("click", () => setActivePill(b.dataset.target)));
+setActivePill("auto");
+
+function findSectionIndices(text) {
+  const src = text || "";
+  const idxIssues = src.indexOf("ISSUES:");
+  const idxReview = src.indexOf("==REVIEW==");
+  const idxOE = src.indexOf("==O/E==");
+  const idxPlan = src.indexOf("==Plan==");
+  return { idxIssues, idxReview, idxOE, idxPlan };
+}
+
+function insertIntoAfterLabel(label, insertText) {
+  // Insert on a new line after "label:" within WR template
+  const src = wrNote.value || "";
+  const pos = src.indexOf(label);
+  if (pos === -1) {
+    // fallback: append
+    wrNote.value = (src.trimEnd() + "\n" + insertText.trim() + "\n");
+    return;
+  }
+  const lineEnd = src.indexOf("\n", pos);
+  const insertPos = (lineEnd === -1) ? src.length : (lineEnd + 1);
+  const before = src.slice(0, insertPos);
+  const after = src.slice(insertPos);
+
+  const chunk = insertText.trim();
+  const needsNL = before && !before.endsWith("\n");
+  const payload = (needsNL ? "\n" : "") + chunk + "\n";
+
+  wrNote.value = before + payload + after;
+}
+
+function routeWrTextAuto(text) {
+  const t = norm(text);
+
+  // Strong cues
+  if (t.startsWith("plan ") || t.startsWith("plan:") || t.includes(" plan ")) return "plan";
+  if (t.startsWith("issues ") || t.startsWith("issues:") || t.includes(" issues ")) return "issues";
+  if (t.startsWith("review ") || t.startsWith("review:") || t.includes(" review ")) return "review";
+  if (t.startsWith("on exam") || t.startsWith("o/e") || t.startsWith("exam ") || t.includes(" on exam ")) return "oe";
+
+  // Sub cues (put into O/E by default)
+  const oeKeys = ["vitals", "chest", "abdo", "abdomen", "cardiac", "neuro", "wounds", "drains", "fluid balance", "bowel"];
+  for (const k of oeKeys) {
+    if (t.startsWith(k) || t.includes(" " + k)) return "oe";
+  }
+
+  // default: review (most narrative fits here)
+  return "review";
+}
+
+function writeWr(text) {
+  const fixed = applyCorrections(STORE_WR_CORR, text).trim();
+  if (!fixed) return;
+
+  const target = (wrTarget === "auto") ? routeWrTextAuto(fixed) : wrTarget;
+
+  // Keep template shape: put text immediately under the correct heading label
+  if (target === "issues") {
+    insertIntoAfterLabel("ISSUES:", fixed);
+  } else if (target === "review") {
+    // Insert after ==REVIEW==
+    const src = wrNote.value || "";
+    const idx = src.indexOf("==REVIEW==");
+    if (idx === -1) return insertIntoAfterLabel("ISSUES:", fixed);
+    const insertPos = src.indexOf("\n", idx);
+    const pos2 = (insertPos === -1) ? src.length : (insertPos + 1);
+    wrNote.value = src.slice(0, pos2) + fixed + "\n" + src.slice(pos2);
+  } else if (target === "oe") {
+    // Insert after ==O/E==
+    const src = wrNote.value || "";
+    const idx = src.indexOf("==O/E==");
+    if (idx === -1) return insertIntoAfterLabel("ISSUES:", fixed);
+    const insertPos = src.indexOf("\n", idx);
+    const pos2 = (insertPos === -1) ? src.length : (insertPos + 1);
+    wrNote.value = src.slice(0, pos2) + fixed + "\n" + src.slice(pos2);
+  } else if (target === "plan") {
+    // Insert after ==Plan==
+    const src = wrNote.value || "";
+    const idx = src.indexOf("==Plan==");
+    if (idx === -1) return insertIntoAfterLabel("ISSUES:", fixed);
+    const insertPos = src.indexOf("\n", idx);
+    const pos2 = (insertPos === -1) ? src.length : (insertPos + 1);
+    wrNote.value = src.slice(0, pos2) + fixed + "\n" + src.slice(pos2);
+  } else {
+    // fallback append
+    wrNote.value = (wrNote.value.trimEnd() + "\n" + fixed + "\n");
+  }
+
+  wrStatus.textContent = "Mic: inserted into WR (" + target.toUpperCase() + ").";
+}
+
+/* =========================
+   WR DICTATION (armed + restart)
+   ========================= */
+let wrCtl = null;
+let wrOn = false;
+
+dictateWrBtn.addEventListener("click", async () => {
+  if (!speechSupported) return;
+  const ok = await ensureMic(wrStatus);
+  if (!ok) return;
+
+  if (!wrCtl) {
+    wrCtl = makeArmedRecognizer({
+      statusEl: wrStatus,
+      onFinalText: (text) => writeWr(text)
+    });
+  }
+
+  wrOn = !wrOn;
+  setBtnText(dictateWrBtn, wrOn, "⏹ Stop", "🎙 Dictate");
+  if (wrOn) wrCtl.start(); else wrCtl.stop();
+});
+
+/* =========================
+   COPY / INIT
+   ========================= */
+window.addEventListener("DOMContentLoaded", () => renderSidebar());
+
 </script>
 
 </body>
-</html>
+  </html>
