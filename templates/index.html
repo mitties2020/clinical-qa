@@ -34,14 +34,14 @@
         <div class="main-region">
           <header class="header">
             <h1 class="title">CLINICAL ENGINE</h1>
-            <p class="subtitle">Dictate or type ward round notes, then generate evidence-based answers.</p>
+            <p class="subtitle">Dictate ward round notes into a template, then generate an answer.</p>
           </header>
 
           <main class="grid">
 
             <!-- INPUT -->
             <section class="card input-card">
-              <label class="label" for="question">WR Note (Speech-enabled)</label>
+              <label class="label" for="question">WR Note (Smart Dictation)</label>
 
               <textarea id="question" class="textarea" rows="18"></textarea>
 
@@ -116,9 +116,7 @@ Drains:
     const answerEl = document.getElementById("answer");
     const answerLoader = document.getElementById("answerLoader");
 
-    if (!textarea.value.trim()) {
-      textarea.value = WR_TEMPLATE;
-    }
+    if (!textarea.value.trim()) textarea.value = WR_TEMPLATE;
 
     /* ===============================
        GENERATE (unchanged behaviour)
@@ -146,11 +144,233 @@ Drains:
         answerLoader.classList.add("hidden");
       }
     }
-
     generateBtn.addEventListener("click", generate);
 
+    /* =========================================================
+       SMART DICTATION ROUTING
+       Speak like:
+       - "Patient: John Smith, 65, pneumonia"
+       - "Issues: hypoxia, AKI, delirium"
+       - "Vitals: afebrile, sats 92% on 2 litres"
+       - "Chest: bibasal crackles"
+       - "Plan: repeat UEC, continue antibiotics"
+       ========================================================= */
+
+    function norm(s) {
+      return (s || "").toLowerCase().replace(/[^\w\s&/:-]/g, " ").replace(/\s+/g, " ").trim();
+    }
+
+    function stripLeadingLabel(text) {
+      return (text || "")
+        .replace(/^\s*(patient|pt|issues?|review|o\/e|exam|examination|vitals?|chest|lungs?|resp|abdo|abdomen|cardiac|heart|neuro|neurology|wounds?|drains?|plan|fluids?|bowel|orientation|alertness)\s*[:\-]\s*/i, "")
+        .trim();
+    }
+
+    function getLines() {
+      return textarea.value.replace(/\r/g, "").split("\n");
+    }
+    function setLines(lines) {
+      textarea.value = lines.join("\n");
+    }
+
+    function findLineIndex(lines, startsWith) {
+      const key = startsWith.toLowerCase();
+      for (let i = 0; i < lines.length; i++) {
+        if ((lines[i] || "").toLowerCase().startsWith(key)) return i;
+      }
+      return -1;
+    }
+
+    function appendToLabelLine(label, content) {
+      const lines = getLines();
+      const idx = findLineIndex(lines, label);
+      if (idx === -1) return false;
+
+      const existing = (lines[idx] || "").slice(label.length).trim();
+      const cleaned = content.trim();
+      if (!cleaned) return true;
+
+      if (!existing) {
+        lines[idx] = label + " " + cleaned;
+      } else {
+        // avoid duplicate punctuation
+        const sep = existing.endsWith(",") || existing.endsWith(";") ? " " : ", ";
+        lines[idx] = label + " " + existing + sep + cleaned;
+      }
+      setLines(lines);
+      return true;
+    }
+
+    function fillPt(content) {
+      // Prefer writing on the Pt: line
+      return appendToLabelLine("Pt:", content);
+    }
+
+    function fillIssues(content) {
+      // Split by "and" / commas if it sounds like a list
+      const raw = content.trim();
+      if (!raw) return true;
+
+      const parts = raw
+        .split(/\s*(?:,|;|\band\b)\s*/i)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const lines = getLines();
+      const issuesHeader = findLineIndex(lines, "ISSUES:");
+      if (issuesHeader === -1) return false;
+
+      // Issue lines expected to be 1.-4.
+      const issueSlots = [];
+      for (let i = issuesHeader + 1; i < lines.length; i++) {
+        if (lines[i].startsWith("==")) break;
+        if (/^\s*\d\.\s*/.test(lines[i])) issueSlots.push(i);
+        if (issueSlots.length >= 10) break;
+      }
+      if (!issueSlots.length) return false;
+
+      let p = 0;
+      for (const slotIdx of issueSlots) {
+        if (p >= parts.length) break;
+        const line = lines[slotIdx];
+        const m = line.match(/^(\s*\d\.\s*)(.*)$/);
+        if (!m) continue;
+
+        const prefix = m[1];
+        const existing = (m[2] || "").trim();
+
+        // If empty placeholder, replace; otherwise append
+        if (!existing || existing === "." ) {
+          lines[slotIdx] = prefix + parts[p];
+          p++;
+        } else {
+          // If we already have text, append the entire remainder into the next empty slot instead of bloating
+          continue;
+        }
+      }
+
+      // If still remaining parts, append to next empty issue slot if any
+      while (p < parts.length) {
+        const emptySlot = issueSlots.find(i => {
+          const m = (lines[i] || "").match(/^\s*\d\.\s*(.*)$/);
+          const existing = (m?.[1] || "").trim();
+          return !existing || existing === ".";
+        });
+        if (!emptySlot) break;
+        const prefix = (lines[emptySlot].match(/^(\s*\d\.\s*)/) || ["", ""])[1];
+        lines[emptySlot] = prefix + parts[p];
+        p++;
+      }
+
+      setLines(lines);
+      return true;
+    }
+
+    function fillPlan(content) {
+      const raw = content.trim();
+      if (!raw) return true;
+
+      const parts = raw
+        .split(/\s*(?:,|;|\band\b)\s*/i)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const lines = getLines();
+      const planHeader = findLineIndex(lines, "==Plan==");
+      if (planHeader === -1) return false;
+
+      // Collect "-" bullet slots until end or another section marker
+      const slots = [];
+      for (let i = planHeader + 1; i < lines.length; i++) {
+        if (lines[i].startsWith("==") && i !== planHeader) break;
+        if (/^\s*-\s*/.test(lines[i])) slots.push(i);
+        // stop if huge
+        if (slots.length > 30) break;
+      }
+      if (!slots.length) return false;
+
+      let p = 0;
+      for (const slotIdx of slots) {
+        if (p >= parts.length) break;
+        const line = lines[slotIdx];
+        const m = line.match(/^(\s*-\s*)(.*)$/);
+        if (!m) continue;
+        const prefix = m[1];
+        const existing = (m[2] || "").trim();
+
+        if (!existing) {
+          lines[slotIdx] = prefix + parts[p];
+          p++;
+        }
+      }
+
+      // If still parts left, append extra bullets after last slot
+      if (p < parts.length) {
+        const insertAt = slots[slots.length - 1] + 1;
+        const extras = [];
+        while (p < parts.length) {
+          extras.push("- " + parts[p]);
+          p++;
+        }
+        lines.splice(insertAt, 0, ...extras);
+      }
+
+      setLines(lines);
+      return true;
+    }
+
+    function fillOEField(label, content) {
+      // labels in template include:
+      // Vitals:, Alertness & Orientation:, Fluid Balance:, Bowel chart:, Chest:, Abdo:, Cardiac:, Lower limbs:, Upper limbs:, Neuro:, Wounds:, Drains:
+      return appendToLabelLine(label, content);
+    }
+
+    function routeDictation(finalText) {
+      const t = finalText.trim();
+      if (!t) return;
+
+      const n = norm(t);
+
+      // Route by explicit label at the start
+      // Patient / Pt
+      if (/^(patient|pt)\b/.test(n)) return fillPt(stripLeadingLabel(t));
+
+      // Issues
+      if (/^issues?\b/.test(n)) return fillIssues(stripLeadingLabel(t));
+
+      // Plan
+      if (/^plan\b/.test(n)) return fillPlan(stripLeadingLabel(t));
+
+      // O/E fields
+      if (/^vitals?\b/.test(n)) return fillOEField("Vitals:", stripLeadingLabel(t));
+      if (/^(alertness|orientation|alertness & orientation)\b/.test(n)) return fillOEField("Alertness & Orientation:", stripLeadingLabel(t));
+      if (/^fluid\b/.test(n)) return fillOEField("Fluid Balance:", stripLeadingLabel(t));
+      if (/^bowel\b/.test(n)) return fillOEField("Bowel chart:", stripLeadingLabel(t));
+      if (/^(chest|lungs?|resp)\b/.test(n)) return fillOEField("Chest:", stripLeadingLabel(t));
+      if (/^(abdo|abdomen)\b/.test(n)) return fillOEField("Abdo:", stripLeadingLabel(t));
+      if (/^(cardiac|heart)\b/.test(n)) return fillOEField("Cardiac:", stripLeadingLabel(t));
+      if (/^(lower limbs?|legs?)\b/.test(n)) return fillOEField("Lower limbs:", stripLeadingLabel(t));
+      if (/^(upper limbs?|arms?)\b/.test(n)) return fillOEField("Upper limbs:", stripLeadingLabel(t));
+      if (/^(neuro|neurology)\b/.test(n)) return fillOEField("Neuro:", stripLeadingLabel(t));
+      if (/^wounds?\b/.test(n)) return fillOEField("Wounds:", stripLeadingLabel(t));
+      if (/^drains?\b/.test(n)) return fillOEField("Drains:", stripLeadingLabel(t));
+
+      // If no label recognised: put it where your cursor currently is (safe fallback)
+      insertAtCursor(" " + t + "\n");
+      return true;
+    }
+
+    function insertAtCursor(text) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = textarea.value.slice(0, start);
+      const after = textarea.value.slice(end);
+      textarea.value = before + text + after;
+      textarea.selectionStart = textarea.selectionEnd = start + text.length;
+    }
+
     /* ===============================
-       SPEECH → TEMPLATE DICTATION
+       SpeechRecognition wiring
        =============================== */
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -171,20 +391,20 @@ Drains:
 
       recognition.onresult = (event) => {
         let finalText = "";
-
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
-            finalText += event.results[i][0].transcript;
+            finalText += event.results[i][0].transcript + " ";
           }
         }
-
         finalText = finalText.trim();
-        if (!finalText || finalText === lastFinal) return;
+        if (!finalText) return;
+
+        // Prevent duplicate same final results
+        if (norm(finalText) === norm(lastFinal)) return;
         lastFinal = finalText;
 
-        if (!finalText.endsWith(".")) finalText += ".";
-
-        insertAtCursor(" " + finalText + "\n");
+        // Route
+        routeDictation(finalText);
       };
 
       recognition.onend = () => {
@@ -192,15 +412,6 @@ Drains:
           try { recognition.start(); } catch {}
         }
       };
-    }
-
-    function insertAtCursor(text) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const before = textarea.value.slice(0, start);
-      const after = textarea.value.slice(end);
-      textarea.value = before + text + after;
-      textarea.selectionStart = textarea.selectionEnd = start + text.length;
     }
 
     dictateBtn.addEventListener("click", async () => {
@@ -215,11 +426,11 @@ Drains:
         }
         listening = true;
         dictateBtn.textContent = "⏹ Stop";
-        recognition.start();
+        try { recognition.start(); } catch {}
       } else {
         listening = false;
         dictateBtn.textContent = "🎙 Dictate";
-        recognition.stop();
+        try { recognition.stop(); } catch {}
       }
     });
   </script>
