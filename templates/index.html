@@ -46,7 +46,6 @@
             <section class="card output-card">
               <div class="output-header">
                 <h2 class="output-title">Answers</h2>
-                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
@@ -55,7 +54,9 @@
               </div>
 
               <div class="output-body">
-                <div id="answer" class="answer placeholder">Your structured response will appear here.</div>
+                <div id="answer" class="answer placeholder">
+                  Tap anywhere to enable voice, or hold SPACE to speak.
+                </div>
               </div>
             </section>
           </main>
@@ -64,31 +65,145 @@
     </div>
   </div>
 
-  <script>
-    // ---------------- BASIC GENERATE ----------------
-    const questionInput = document.getElementById("question");
-    const generateBtn = document.getElementById("generateBtn");
-    const answerEl = document.getElementById("answer");
-    const answerLoader = document.getElementById("answerLoader");
+<script>
+/* =========================================================
+   CORE GENERATE
+   ========================================================= */
+const questionInput = document.getElementById("question");
+const generateBtn = document.getElementById("generateBtn");
+const answerEl = document.getElementById("answer");
+const answerLoader = document.getElementById("answerLoader");
 
-    function setStatus(msg) {
-      answerEl.classList.remove("placeholder");
-      answerEl.textContent = msg;
-    }
+function setStatus(msg) {
+  answerEl.classList.remove("placeholder");
+  answerEl.textContent = msg;
+}
 
-    async function generate() {
-      const query = questionInput.value.trim();
-      if (!query) return;
+async function generate() {
+  const query = questionInput.value.trim();
+  if (!query) return;
 
-      answerLoader.classList.remove("hidden");
-      answerEl.classList.remove("placeholder");
-      answerEl.textContent = "";
+  answerLoader.classList.remove("hidden");
+  answerEl.textContent = "";
+
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+    const data = await res.json();
+    answerEl.textContent = data.answer || data.error || "No response.";
+  } catch {
+    answerEl.textContent = "Error generating answer.";
+  } finally {
+    answerLoader.classList.add("hidden");
+  }
+}
+
+generateBtn.onclick = generate;
+
+/* =========================================================
+   VOICE INPUT (RELIABLE PUSH-TO-TALK)
+   Hold SPACE → speak → release → transcribe → generate
+   ========================================================= */
+let mediaRecorder = null;
+let audioChunks = [];
+let recording = false;
+
+async function startRecording() {
+  if (recording) return;
+  recording = true;
+  audioChunks = [];
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      setStatus("Voice: transcribing…");
+
+      const blob = new Blob(audioChunks, { type: "audio/webm" });
+      const form = new FormData();
+      form.append("audio", blob, "speech.webm");
 
       try {
-        const res = await fetch("/api/generate", {
+        const res = await fetch("/api/transcribe", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query })
+          body: form
         });
         const data = await res.json();
-        answerEl
+
+        if (data.text) {
+          questionInput.value = data.text.trim();
+          setStatus("Voice captured — generating…");
+          setTimeout(generate, 150);
+        } else {
+          setStatus("Voice heard but no text recognised.");
+        }
+      } catch {
+        setStatus("Voice transcription failed.");
+      }
+
+      stream.getTracks().forEach(t => t.stop());
+      recording = false;
+    };
+
+    mediaRecorder.start();
+    setStatus("Recording… release SPACE to send");
+
+  } catch {
+    recording = false;
+    setStatus("Microphone blocked. Enable mic permission and refresh.");
+  }
+}
+
+function stopRecording() {
+  if (recording && mediaRecorder) {
+    mediaRecorder.stop();
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && document.activeElement !== questionInput) {
+    e.preventDefault();
+    startRecording();
+  }
+});
+
+document.addEventListener("keyup", e => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    stopRecording();
+  }
+});
+
+/* =========================================================
+   WAKE WORD (LIGHTWEIGHT, SAFE)
+   ========================================================= */
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  const rec = new SpeechRecognition();
+  rec.lang = "en-AU";
+  rec.continuous = true;
+  rec.interimResults = false;
+
+  rec.onresult = e => {
+    const t = e.results[e.results.length - 1][0].transcript.toLowerCase();
+    if (t.includes("hi ebm") || t.includes("hey ebm") || t.includes("okay ebm")) {
+      setStatus("Wake word detected — speak your question.");
+    }
+  };
+
+  document.addEventListener("click", () => {
+    try { rec.start(); } catch {}
+  }, { once: true });
+}
+</script>
+
+</body>
+</html>
