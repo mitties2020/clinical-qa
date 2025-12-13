@@ -55,7 +55,7 @@
 
               <div class="output-body">
                 <div id="answer" class="answer placeholder">
-                  Tap anywhere to enable voice, or hold SPACE to speak.
+                  Hold the mic button to speak.
                 </div>
               </div>
             </section>
@@ -64,6 +64,27 @@
       </div>
     </div>
   </div>
+
+  <!-- Floating mic button (hold to record) -->
+  <button id="micBtn" aria-label="Hold to record" type="button"
+    style="
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      z-index: 9999;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      font-size: 26px;
+      line-height: 64px;
+      text-align: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    ">🎙️</button>
 
 <script>
 /* =========================================================
@@ -94,115 +115,181 @@ async function generate() {
     });
     const data = await res.json();
     answerEl.textContent = data.answer || data.error || "No response.";
-  } catch {
+  } catch (e) {
+    console.error(e);
     answerEl.textContent = "Error generating answer.";
   } finally {
     answerLoader.classList.add("hidden");
   }
 }
 
-generateBtn.onclick = generate;
+generateBtn.addEventListener("click", generate);
+
+questionInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    generate();
+  }
+});
 
 /* =========================================================
-   VOICE INPUT (RELIABLE PUSH-TO-TALK)
-   Hold SPACE → speak → release → transcribe → generate
+   MOBILE + DESKTOP HOLD-TO-TALK
    ========================================================= */
+const micBtn = document.getElementById("micBtn");
+
+let stream = null;
 let mediaRecorder = null;
 let audioChunks = [];
 let recording = false;
+let startAt = 0;
+
+function pickMimeType() {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/ogg"
+  ];
+  for (const t of candidates) {
+    if (window.MediaRecorder && window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t)) {
+      return t;
+    }
+  }
+  return "";
+}
 
 async function startRecording() {
   if (recording) return;
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("Voice: your browser does not support microphone recording.");
+    return;
+  }
+  if (!window.MediaRecorder) {
+    setStatus("Voice: MediaRecorder not supported. (Some iPhones/iOS versions.)");
+    return;
+  }
+
   recording = true;
   audioChunks = [];
+  startAt = Date.now();
+
+  micBtn.textContent = "🔴";
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
+    setStatus("Voice: requesting microphone permission…");
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    mediaRecorder.ondataavailable = e => {
-      if (e.data.size > 0) audioChunks.push(e.data);
+    const mt = pickMimeType();
+    mediaRecorder = mt ? new MediaRecorder(stream, { mimeType: mt }) : new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
     };
 
     mediaRecorder.onstop = async () => {
-      setStatus("Voice: transcribing…");
-
-      const blob = new Blob(audioChunks, { type: "audio/webm" });
-      const form = new FormData();
-      form.append("audio", blob, "speech.webm");
-
       try {
-        const res = await fetch("/api/transcribe", {
-          method: "POST",
-          body: form
-        });
+        micBtn.textContent = "🎙️";
+
+        // stop tracks
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        stream = null;
+
+        const durationMs = Date.now() - startAt;
+        if (durationMs < 350) {
+          setStatus("Voice: too short. Hold the mic button and speak, then release.");
+          return;
+        }
+
+        const blob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
+        audioChunks = [];
+        mediaRecorder = null;
+
+        if (!blob || blob.size < 2500) {
+          setStatus("Voice: too quiet/short. Try again closer to the mic.");
+          return;
+        }
+
+        setStatus("Voice: transcribing…");
+
+        const form = new FormData();
+        form.append("audio", blob, "speech.webm");
+
+        const res = await fetch("/api/transcribe", { method: "POST", body: form });
         const data = await res.json();
 
-        if (data.text) {
-          questionInput.value = data.text.trim();
-          setStatus("Voice captured — generating…");
-          setTimeout(generate, 150);
-        } else {
-          setStatus("Voice heard but no text recognised.");
+        const text = (data.text || "").trim();
+        if (!text) {
+          setStatus("Voice: no text recognised. Try again.");
+          return;
         }
-      } catch {
-        setStatus("Voice transcription failed.");
-      }
 
-      stream.getTracks().forEach(t => t.stop());
-      recording = false;
+        questionInput.value = text;
+        setStatus("Voice captured — generating…");
+        setTimeout(() => generateBtn.click(), 150);
+
+      } catch (e) {
+        console.error(e);
+        setStatus("Voice: transcription failed.");
+      } finally {
+        recording = false;
+        micBtn.textContent = "🎙️";
+      }
     };
 
     mediaRecorder.start();
-    setStatus("Recording… release SPACE to send");
+    setStatus("Voice: recording… release to send");
 
-  } catch {
+  } catch (e) {
+    console.warn(e);
     recording = false;
-    setStatus("Microphone blocked. Enable mic permission and refresh.");
+    micBtn.textContent = "🎙️";
+    setStatus("Voice: microphone blocked. Enable mic permission for this site and refresh.");
   }
 }
 
 function stopRecording() {
-  if (recording && mediaRecorder) {
-    mediaRecorder.stop();
-  }
-}
-
-document.addEventListener("keydown", e => {
-  if (e.code === "Space" && document.activeElement !== questionInput) {
-    e.preventDefault();
-    startRecording();
-  }
-});
-
-document.addEventListener("keyup", e => {
-  if (e.code === "Space") {
-    e.preventDefault();
-    stopRecording();
-  }
-});
-
-/* =========================================================
-   WAKE WORD (LIGHTWEIGHT, SAFE)
-   ========================================================= */
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SpeechRecognition) {
-  const rec = new SpeechRecognition();
-  rec.lang = "en-AU";
-  rec.continuous = true;
-  rec.interimResults = false;
-
-  rec.onresult = e => {
-    const t = e.results[e.results.length - 1][0].transcript.toLowerCase();
-    if (t.includes("hi ebm") || t.includes("hey ebm") || t.includes("okay ebm")) {
-      setStatus("Wake word detected — speak your question.");
+  if (!recording) return;
+  try {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
     }
-  };
-
-  document.addEventListener("click", () => {
-    try { rec.start(); } catch {}
-  }, { once: true });
+  } catch (e) {
+    console.warn(e);
+    recording = false;
+    micBtn.textContent = "🎙️";
+    setStatus("Voice: stop failed. Try again.");
+  }
 }
+
+/* ---- Desktop (mouse) ---- */
+micBtn.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  startRecording();
+});
+document.addEventListener("mouseup", (e) => {
+  if (recording) stopRecording();
+});
+
+/* ---- Mobile (touch) ---- */
+micBtn.addEventListener("touchstart", (e) => {
+  e.preventDefault(); // prevents long-press menu + scrolling issues
+  startRecording();
+}, { passive: false });
+
+micBtn.addEventListener("touchend", (e) => {
+  e.preventDefault();
+  stopRecording();
+}, { passive: false });
+
+micBtn.addEventListener("touchcancel", (e) => {
+  e.preventDefault();
+  stopRecording();
+}, { passive: false });
+
+window.addEventListener("DOMContentLoaded", () => {
+  setStatus("Hold the mic button, speak, then release.");
+});
 </script>
 
 </body>
