@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-  <!-- Layout expansion overrides (no redesign, just bigger/wider) -->
+  <!-- Wider + larger (no redesign) -->
   <style>
     .shell { width: 96vw; max-width: 1700px; }
     .main-region { width: 100%; }
@@ -17,6 +17,11 @@
     .section { margin-bottom: 14px; }
     .output-title { font-size: 18px; }
     .btn, .copy-btn, .section-copy-btn { font-size: 14px; }
+
+    /* Minimal button styling without changing your aesthetic system */
+    .btn-secondary {
+      opacity: 0.92;
+    }
   </style>
 </head>
 
@@ -63,6 +68,9 @@
               ></textarea>
               <div class="actions">
                 <button id="generateBtn" class="btn">Generate</button>
+                <button id="incorrectBtn" class="btn btn-secondary" style="margin-left:10px; display:none;">
+                  Incorrect – repeat
+                </button>
               </div>
             </section>
 
@@ -115,12 +123,18 @@
     // ---------- ELEMENTS ----------
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
+    const incorrectBtn = document.getElementById("incorrectBtn");
     const answerEl = document.getElementById("answer");
     const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
     const conversationListEl = document.getElementById("conversationList");
     const topicSearch = document.getElementById("topicSearch");
     const micBtn = document.getElementById("micBtn");
+
+    // Stores last transcription for learning
+    let lastVoiceRaw = "";
+    let lastVoiceText = "";
+    let lastWasVoice = false;
 
     // ---------- HELPERS ----------
     function escapeHtml(str) {
@@ -142,6 +156,10 @@
         btn.textContent = t;
         btn.classList.remove("copied");
       }, 900);
+    }
+
+    function showIncorrectButton(show) {
+      incorrectBtn.style.display = show ? "" : "none";
     }
 
     // ---------- STRUCTURED RENDER (COLLAPSIBLE) ----------
@@ -332,7 +350,6 @@
         item.style.display = !term || title.includes(term) ? "" : "none";
       });
     }
-
     topicSearch.addEventListener("input", filterTopics);
 
     // ---------- GENERATE ----------
@@ -410,12 +427,15 @@
       }
     });
 
-    // ---------- VOICE: HOLD-TO-RECORD FLOATING MIC (AUTO-GENERATE) ----------
+    // ---------- VOICE RECORDING ----------
     let stream = null;
     let mediaRecorder = null;
     let audioChunks = [];
     let recording = false;
     let startAt = 0;
+
+    // learning mode state
+    let learningMode = false; // when true, we will call /api/learn_correction after transcribe
 
     function pickMimeType() {
       const candidates = [
@@ -432,7 +452,7 @@
       return "";
     }
 
-    async function startRecording() {
+    async function startRecording(modeLearn=false) {
       if (recording) return;
 
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -446,6 +466,7 @@
         return;
       }
 
+      learningMode = modeLearn;
       recording = true;
       audioChunks = [];
       startAt = Date.now();
@@ -471,6 +492,7 @@
             if (durationMs < 350) {
               answerEl.classList.remove("placeholder");
               answerEl.textContent = "Voice: too short. Hold the mic and speak, then release.";
+              learningMode = false;
               return;
             }
 
@@ -481,11 +503,12 @@
             if (!blob || blob.size < 2500) {
               answerEl.classList.remove("placeholder");
               answerEl.textContent = "Voice: too quiet/short. Try again closer to the mic.";
+              learningMode = false;
               return;
             }
 
             answerEl.classList.remove("placeholder");
-            answerEl.textContent = "Voice: transcribing…";
+            answerEl.textContent = learningMode ? "Voice: re-listening to learn correction…" : "Voice: transcribing…";
 
             const form = new FormData();
             form.append("audio", blob, "speech.webm");
@@ -493,22 +516,52 @@
             const res = await fetch("/api/transcribe", { method: "POST", body: form });
             const data = await res.json();
 
+            const raw = (data.raw || "").trim();
             const text = (data.text || "").trim();
+
             if (!text) {
               answerEl.textContent = "Voice: no text recognised. Try again.";
+              learningMode = false;
               return;
             }
 
-            questionInput.value = text;
+            // Save last voice info so user can press Incorrect–repeat
+            lastWasVoice = true;
+            lastVoiceRaw = raw;
+            lastVoiceText = text;
+            showIncorrectButton(true);
 
-            // ALWAYS auto-generate after transcription
-            answerEl.textContent = "Voice captured — generating…";
-            setTimeout(() => generate(), 50);
+            if (!learningMode) {
+              questionInput.value = text;
+              answerEl.textContent = "Voice captured — generating…";
+              setTimeout(() => generate(), 50);
+              return;
+            }
+
+            // LEARNING MODE: compare old_raw vs new_raw and learn rule
+            if (!lastVoiceRaw || !lastVoiceText) {
+              // Shouldn't happen, but safe fallback
+              questionInput.value = text;
+              answerEl.textContent = "Voice captured — generating…";
+              learningMode = false;
+              setTimeout(() => generate(), 50);
+              return;
+            }
+
+            // lastVoiceRaw currently holds the *new* raw if we overwrite too early.
+            // We need to preserve the previous raw BEFORE starting learning mode.
+            // We store that in learningOldRaw when button is pressed.
+            // (see button handler below)
+
+            // This block replaced by button handler which supplies old_raw.
+            // So here, just set values from response of learn call.
+            learningMode = false;
 
           } catch (e) {
             console.error(e);
             answerEl.classList.remove("placeholder");
             answerEl.textContent = "Voice: transcription failed.";
+            learningMode = false;
           } finally {
             recording = false;
             micBtn.textContent = "🎙️";
@@ -517,7 +570,7 @@
 
         mediaRecorder.start();
         answerEl.classList.remove("placeholder");
-        answerEl.textContent = "Voice: recording… release to send";
+        answerEl.textContent = learningMode ? "Voice: repeat now… release to learn" : "Voice: recording… release to send";
 
       } catch (e) {
         console.warn(e);
@@ -525,6 +578,7 @@
         micBtn.textContent = "🎙️";
         answerEl.classList.remove("placeholder");
         answerEl.textContent = "Voice: microphone blocked. Allow mic permission for this site and refresh.";
+        learningMode = false;
       }
     }
 
@@ -540,22 +594,22 @@
         micBtn.textContent = "🎙️";
         answerEl.classList.remove("placeholder");
         answerEl.textContent = "Voice: stop failed. Try again.";
+        learningMode = false;
       }
     }
 
-    // Desktop mouse
+    // Floating mic (normal dictation)
     micBtn.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      startRecording();
+      startRecording(false);
     });
     document.addEventListener("mouseup", () => {
       if (recording) stopRecording();
     });
 
-    // Mobile touch
     micBtn.addEventListener("touchstart", (e) => {
       e.preventDefault();
-      startRecording();
+      startRecording(false);
     }, { passive: false });
 
     micBtn.addEventListener("touchend", (e) => {
@@ -568,9 +622,89 @@
       stopRecording();
     }, { passive: false });
 
+    // ---------- INCORRECT → REPEAT → LEARN ----------
+    let learningOldRaw = "";
+
+    incorrectBtn.addEventListener("click", async () => {
+      if (!lastWasVoice || !lastVoiceRaw) {
+        answerEl.classList.remove("placeholder");
+        answerEl.textContent = "Learning: no previous voice transcript to correct.";
+        return;
+      }
+
+      // Preserve the old transcript before re-recording
+      learningOldRaw = lastVoiceRaw;
+
+      answerEl.classList.remove("placeholder");
+      answerEl.textContent = "Learning: press and hold the mic, repeat the same question clearly, then release.";
+
+      // Start recording in learning mode (we'll call /api/learn_correction after new transcribe returns)
+      // We do it by temporarily wrapping mediaRecorder.onstop behaviour:
+      // simplest: start a learning recording, then after it finishes, do a learn call using learningOldRaw + new_raw
+
+      // We'll record using the mic button flow by simulating "learn mode" via a dedicated record:
+      // Use the same recorder, but we need to handle the post-stop ourselves:
+      // To avoid duplicating code, we just start recording as normal and after it stops we will learn in the next step.
+      // So: we start a learning recording and set a flag.
+      startRecording(true);
+
+      // After stop/transcribe finishes, we need to call learn endpoint.
+      // We hook it by polling for the next voice transcript change:
+      const prevRaw = learningOldRaw;
+      const startTs = Date.now();
+
+      const timer = setInterval(async () => {
+        // wait up to 20s
+        if (Date.now() - startTs > 20000) {
+          clearInterval(timer);
+          return;
+        }
+        // once lastVoiceRaw changes from prevRaw, it means we got the new transcription
+        if (lastVoiceRaw && lastVoiceRaw !== prevRaw) {
+          clearInterval(timer);
+
+          try {
+            answerEl.textContent = "Learning: updating your personal corrections…";
+
+            const res = await fetch("/api/learn_correction", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                old_raw: prevRaw,
+                new_raw: lastVoiceRaw
+              })
+            });
+            const out = await res.json();
+
+            if (!res.ok || !out.ok) {
+              answerEl.textContent = out.error || "Learning failed.";
+              return;
+            }
+
+            // Use server-returned corrected text
+            const learnedText = (out.text || "").trim();
+            if (learnedText) {
+              questionInput.value = learnedText;
+              answerEl.textContent = "Learned — generating…";
+              setTimeout(() => generate(), 50);
+            } else {
+              questionInput.value = (lastVoiceText || "").trim();
+              answerEl.textContent = "Learned — generating…";
+              setTimeout(() => generate(), 50);
+            }
+
+          } catch (e) {
+            console.error(e);
+            answerEl.textContent = "Learning error (network/server).";
+          }
+        }
+      }, 250);
+    });
+
     // ---------- INIT ----------
     window.addEventListener("DOMContentLoaded", () => {
       loadConversations();
+      showIncorrectButton(false);
     });
   </script>
 </body>
