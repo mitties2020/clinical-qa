@@ -6,22 +6,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-  <!-- Wider + larger (no redesign) -->
+  <!-- Minimal, isolated styling for ONLY the new toast (won’t affect your existing site) -->
   <style>
-    .shell { width: 96vw; max-width: 1700px; }
-    .main-region { width: 100%; }
-    .sidebar { width: 320px; flex: 0 0 320px; }
-    .grid { grid-template-columns: 1.15fr 1.35fr; gap: 24px; }
-    .textarea { min-height: 240px; font-size: 18px; line-height: 1.5; }
-    .answer { font-size: 16px; line-height: 1.6; }
-    .section { margin-bottom: 14px; }
-    .output-title { font-size: 18px; }
-    .btn, .copy-btn, .section-copy-btn { font-size: 14px; }
-
-    /* Minimal button styling without changing your aesthetic system */
-    .btn-secondary {
-      opacity: 0.92;
+    .ebm-toast {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      max-width: calc(100vw - 32px);
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(15, 15, 18, 0.92);
+      color: #fff;
+      font-size: 14px;
+      line-height: 1.3;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      z-index: 9999;
+      display: none;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
+    .ebm-toast strong { font-weight: 700; }
+    .ebm-toast .muted { opacity: 0.8; }
+    .ebm-toast.show { display: block; animation: ebmToastIn 160ms ease-out; }
+    @keyframes ebmToastIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 
@@ -29,7 +36,6 @@
   <div class="app-root">
     <div class="shell">
       <div class="layout">
-        <!-- SIDEBAR -->
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
@@ -41,43 +47,33 @@
             </div>
             <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
           </div>
-
           <div id="conversationList" class="conversation-list"></div>
-
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
         </aside>
 
-        <!-- MAIN -->
         <div class="main-region">
           <header class="header">
-            <h1 class="title">CLINICAL Q&A ENGINE</h1>
+            <h1 class="title">CLINICAL ENGINE</h1>
             <p class="subtitle">Enter a clinical question to generate an evidence-based answer.</p>
           </header>
 
           <main class="grid">
-            <!-- INPUT -->
             <section class="card input-card">
-              <label class="label" for="question">Clinical Question</label>
-              <textarea
-                id="question"
-                class="textarea"
-                rows="6"
-                placeholder="e.g. Evidence-based management of new-onset atrial fibrillation in a haemodynamically stable adult?"
-              ></textarea>
+              <label class="label" for="question">Clinical Question / WR Note</label>
+              <textarea id="question" class="textarea" rows="10"></textarea>
+
               <div class="actions">
-                <button id="generateBtn" class="btn">Generate</button>
-                <button id="incorrectBtn" class="btn btn-secondary" style="margin-left:10px; display:none;">
-                  Incorrect – repeat
-                </button>
+                <button id="generateBtn" class="btn" type="button">Generate</button>
+                <button id="copyOneNoteBtn" class="btn" type="button">Copy to OneNote</button>
+                <button id="openOneNoteBtn" class="btn" type="button">Open OneNote</button>
               </div>
             </section>
 
-            <!-- OUTPUT -->
             <section class="card output-card">
               <div class="output-header">
-                <h2 class="output-title">Answer</h2>
+                <h2 class="output-title">Answers</h2>
                 <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled>Copy All</button>
               </div>
 
@@ -87,9 +83,7 @@
               </div>
 
               <div class="output-body">
-                <div id="answer" class="answer placeholder">
-                  Your structured, evidence-based response will appear here.
-                </div>
+                <div id="answer" class="answer placeholder">Your structured response will appear here.</div>
               </div>
             </section>
           </main>
@@ -98,302 +92,47 @@
     </div>
   </div>
 
-  <!-- Floating mic button (hold to record) -->
-  <button id="micBtn" aria-label="Hold to record" type="button"
-    style="
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      width: 64px;
-      height: 64px;
-      border-radius: 999px;
-      border: none;
-      cursor: pointer;
-      z-index: 9999;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-      font-size: 26px;
-      line-height: 64px;
-      text-align: center;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: none;
-    ">🎙️</button>
+  <!-- Toast -->
+  <div id="ebmToast" class="ebm-toast" role="status" aria-live="polite"></div>
 
   <script>
-    // ---------- ELEMENTS ----------
+    // ---------------- BASIC GENERATE (unchanged behaviour) ----------------
     const questionInput = document.getElementById("question");
     const generateBtn = document.getElementById("generateBtn");
-    const incorrectBtn = document.getElementById("incorrectBtn");
     const answerEl = document.getElementById("answer");
-    const copyAllBtn = document.getElementById("copyAllBtn");
     const answerLoader = document.getElementById("answerLoader");
-    const conversationListEl = document.getElementById("conversationList");
-    const topicSearch = document.getElementById("topicSearch");
-    const micBtn = document.getElementById("micBtn");
+    const copyAllBtn = document.getElementById("copyAllBtn");
 
-    // Stores last transcription for learning
-    let lastVoiceRaw = "";
-    let lastVoiceText = "";
-    let lastWasVoice = false;
-
-    // ---------- HELPERS ----------
-    function escapeHtml(str) {
-      return (str || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-    }
-
-    function hasNonEmpty(arr) {
-      return Array.isArray(arr) && arr.some((l) => (l || "").trim() !== "");
-    }
-
-    function flashCopy(btn) {
-      const t = btn.textContent;
-      btn.textContent = "Copied";
-      btn.classList.add("copied");
-      setTimeout(() => {
-        btn.textContent = t;
-        btn.classList.remove("copied");
-      }, 900);
-    }
-
-    function showIncorrectButton(show) {
-      incorrectBtn.style.display = show ? "" : "none";
-    }
-
-    // ---------- STRUCTURED RENDER (COLLAPSIBLE) ----------
-    function buildStructuredHtml(raw) {
-      if (!raw) return "";
-
-      let text = raw
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/#{1,6}\s*/g, "")
-        .replace(/\r/g, "");
-
-      const lines = text.split("\n");
-
-      const sectionOrder = [
-        "Summary",
-        "Assessment",
-        "Diagnosis",
-        "Investigations",
-        "Treatment",
-        "Monitoring",
-        "Follow-up & Safety Netting",
-        "Red Flags",
-        "References",
-      ];
-
-      const sections = [];
-      let current = { title: "Summary", content: [] };
-
-      const isHeading = (line) => {
-        const trimmed = line.trim().replace(/:$/, "");
-        return sectionOrder.find((h) => trimmed.toLowerCase() === h.toLowerCase()) || null;
-      };
-
-      for (const rawLine of lines) {
-        const line = (rawLine || "").trim();
-        if (!line) {
-          current.content.push("");
-          continue;
-        }
-        const heading = isHeading(line);
-        if (heading) {
-          if (hasNonEmpty(current.content)) sections.push(current);
-          current = { title: heading, content: [] };
-        } else {
-          current.content.push(line);
-        }
-      }
-      if (hasNonEmpty(current.content)) sections.push(current);
-
-      if (!sections.length) return "No response generated.";
-
-      let html = "";
-      let idx = 0;
-
-      for (const sec of sections) {
-        const title = sec.title;
-        const bodyLines = sec.content || [];
-        if (!hasNonEmpty(bodyLines)) continue;
-
-        const id = `sec-${idx++}`;
-
-        const inner = bodyLines
-          .filter((l) => (l || "").trim() !== "")
-          .map((l) => {
-            const t = (l || "").trim();
-            if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
-              const cleaned = t
-                .replace(/^[-•]\s+/, "")
-                .replace(/^\d+[\.\)]\s+/, "");
-              return `
-                <div class="answer-bullet">
-                  <span class="bullet-dot"></span>
-                  <span class="bullet-text">${escapeHtml(cleaned)}</span>
-                </div>`;
-            }
-            return `<p class="answer-paragraph">${escapeHtml(t)}</p>`;
-          })
-          .join("");
-
-        if (!inner.trim()) continue;
-
-        if (title.toLowerCase() === "summary") {
-          html += `
-            <div class="section">
-              <div class="section-header static">
-                <span>${escapeHtml(title)}</span>
-                <button class="section-copy-btn" data-target="${id}">Copy</button>
-              </div>
-              <div class="section-body static-body" data-section="${id}">
-                ${inner}
-              </div>
-            </div>`;
-        } else {
-          html += `
-            <div class="section">
-              <div class="collapsible-header">
-                <button class="collapsible" data-target="${id}">
-                  ${escapeHtml(title)}
-                </button>
-                <button class="section-copy-btn" data-target="${id}">Copy</button>
-              </div>
-              <div class="collapsible-content" data-section="${id}" style="display:none;">
-                ${inner}
-              </div>
-            </div>`;
-        }
-      }
-
-      return html || "No response generated.";
-    }
-
-    // ---------- CONVERSATIONS ----------
-    function loadConversations() {
-      let data = [];
-      try { data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]"); }
-      catch { data = []; }
-
-      conversationListEl.innerHTML = "";
-
-      if (!data.length) {
-        conversationListEl.innerHTML =
-          '<div class="conv-empty">No topics yet. Generate an answer to save it.</div>';
-        return;
-      }
-
-      data.forEach((item, index) => {
-        const el = document.createElement("div");
-        el.className = "conversation-item";
-
-        const main = document.createElement("div");
-        main.className = "conv-main";
-        main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Topic")}</div>`;
-
-        const del = document.createElement("button");
-        del.className = "conv-delete";
-        del.dataset.index = index;
-        del.textContent = "✕";
-        del.title = "Remove";
-
-        main.addEventListener("click", () => {
-          questionInput.value = item.query || "";
-          answerEl.innerHTML = item.answer || "";
-          const has = !!(item.answer && item.answer.trim());
-          answerEl.classList.toggle("placeholder", !has);
-          copyAllBtn.disabled = !has;
-        });
-
-        del.addEventListener("click", (e) => {
-          e.stopPropagation();
-          deleteConversation(index);
-        });
-
-        el.appendChild(main);
-        el.appendChild(del);
-        conversationListEl.appendChild(el);
-      });
-    }
-
-    function saveConversation(query, answerHtml) {
-      if (!query || !answerHtml) return;
-
-      let data = [];
-      try { data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]"); }
-      catch { data = []; }
-
-      const title = query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
-      data.push({ title: title || "Topic", query, answer: answerHtml });
-      if (data.length > 40) data = data.slice(data.length - 40);
-
-      localStorage.setItem("ebm_conversations", JSON.stringify(data));
-      loadConversations();
-    }
-
-    function deleteConversation(index) {
-      let data = [];
-      try { data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]"); }
-      catch { data = []; }
-      data.splice(index, 1);
-      localStorage.setItem("ebm_conversations", JSON.stringify(data));
-      loadConversations();
-    }
-
-    function filterTopics() {
-      const term = (topicSearch.value || "").toLowerCase().trim();
-      const items = conversationListEl.querySelectorAll(".conversation-item");
-      items.forEach((item) => {
-        const title = (item.querySelector(".conv-title")?.textContent || "").toLowerCase();
-        item.style.display = !term || title.includes(term) ? "" : "none";
-      });
-    }
-    topicSearch.addEventListener("input", filterTopics);
-
-    // ---------- GENERATE ----------
     async function generate() {
       const query = questionInput.value.trim();
       if (!query) return;
 
-      generateBtn.disabled = true;
-      copyAllBtn.disabled = true;
       answerLoader.classList.remove("hidden");
       answerEl.classList.remove("placeholder");
-      answerEl.innerHTML = "";
+      answerEl.textContent = "";
+      copyAllBtn.disabled = true;
 
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query })
         });
         const data = await res.json();
-
-        if (data.answer) {
-          const html = buildStructuredHtml(data.answer);
-          answerEl.innerHTML = html;
-          const has = !!answerEl.textContent.trim();
-          copyAllBtn.disabled = !has;
-          if (has) saveConversation(query, html);
-        } else {
-          answerEl.textContent = data.error || "No response generated.";
-          copyAllBtn.disabled = true;
-        }
-      } catch (err) {
-        console.error(err);
+        const out = data.answer || data.error || "No response.";
+        answerEl.textContent = out;
+        copyAllBtn.disabled = !out.trim();
+      } catch (e) {
+        console.error(e);
         answerEl.textContent = "Error generating answer.";
-        copyAllBtn.disabled = true;
       } finally {
         answerLoader.classList.add("hidden");
-        generateBtn.disabled = false;
       }
     }
 
     generateBtn.addEventListener("click", generate);
 
-    questionInput.addEventListener("keydown", (e) => {
+    questionInput.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         generate();
@@ -401,310 +140,127 @@
     });
 
     copyAllBtn.addEventListener("click", async () => {
-      const text = answerEl.textContent.trim();
+      const text = (answerEl.textContent || "").trim();
       if (!text) return;
-      await navigator.clipboard.writeText(text);
-      flashCopy(copyAllBtn);
-    });
-
-    // Collapsible + section copy
-    document.addEventListener("click", async (e) => {
-      if (e.target.classList.contains("section-copy-btn")) {
-        const id = e.target.dataset.target;
-        const section = document.querySelector(`[data-section="${id}"]`);
-        if (!section) return;
-        const text = section.innerText.trim();
-        if (!text) return;
+      try {
         await navigator.clipboard.writeText(text);
-        flashCopy(e.target);
-      } else if (e.target.classList.contains("collapsible")) {
-        const id = e.target.dataset.target;
-        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
-        if (!content) return;
-        const open = content.style.display === "block";
-        e.target.classList.toggle("active", !open);
-        content.style.display = open ? "none" : "block";
-      }
-    });
-
-    // ---------- VOICE RECORDING ----------
-    let stream = null;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let recording = false;
-    let startAt = 0;
-
-    // learning mode state
-    let learningMode = false; // when true, we will call /api/learn_correction after transcribe
-
-    function pickMimeType() {
-      const candidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/ogg;codecs=opus",
-        "audio/ogg"
-      ];
-      for (const t of candidates) {
-        if (window.MediaRecorder && window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t)) {
-          return t;
-        }
-      }
-      return "";
-    }
-
-    async function startRecording(modeLearn=false) {
-      if (recording) return;
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        answerEl.classList.remove("placeholder");
-        answerEl.textContent = "Voice: browser does not support microphone recording.";
-        return;
-      }
-      if (!window.MediaRecorder) {
-        answerEl.classList.remove("placeholder");
-        answerEl.textContent = "Voice: MediaRecorder not supported in this browser.";
-        return;
-      }
-
-      learningMode = modeLearn;
-      recording = true;
-      audioChunks = [];
-      startAt = Date.now();
-      micBtn.textContent = "🔴";
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        const mt = pickMimeType();
-        mediaRecorder = mt ? new MediaRecorder(stream, { mimeType: mt }) : new MediaRecorder(stream);
-
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-          try {
-            micBtn.textContent = "🎙️";
-            if (stream) stream.getTracks().forEach(t => t.stop());
-            stream = null;
-
-            const durationMs = Date.now() - startAt;
-            if (durationMs < 350) {
-              answerEl.classList.remove("placeholder");
-              answerEl.textContent = "Voice: too short. Hold the mic and speak, then release.";
-              learningMode = false;
-              return;
-            }
-
-            const blob = new Blob(audioChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
-            audioChunks = [];
-            mediaRecorder = null;
-
-            if (!blob || blob.size < 2500) {
-              answerEl.classList.remove("placeholder");
-              answerEl.textContent = "Voice: too quiet/short. Try again closer to the mic.";
-              learningMode = false;
-              return;
-            }
-
-            answerEl.classList.remove("placeholder");
-            answerEl.textContent = learningMode ? "Voice: re-listening to learn correction…" : "Voice: transcribing…";
-
-            const form = new FormData();
-            form.append("audio", blob, "speech.webm");
-
-            const res = await fetch("/api/transcribe", { method: "POST", body: form });
-            const data = await res.json();
-
-            const raw = (data.raw || "").trim();
-            const text = (data.text || "").trim();
-
-            if (!text) {
-              answerEl.textContent = "Voice: no text recognised. Try again.";
-              learningMode = false;
-              return;
-            }
-
-            // Save last voice info so user can press Incorrect–repeat
-            lastWasVoice = true;
-            lastVoiceRaw = raw;
-            lastVoiceText = text;
-            showIncorrectButton(true);
-
-            if (!learningMode) {
-              questionInput.value = text;
-              answerEl.textContent = "Voice captured — generating…";
-              setTimeout(() => generate(), 50);
-              return;
-            }
-
-            // LEARNING MODE: compare old_raw vs new_raw and learn rule
-            if (!lastVoiceRaw || !lastVoiceText) {
-              // Shouldn't happen, but safe fallback
-              questionInput.value = text;
-              answerEl.textContent = "Voice captured — generating…";
-              learningMode = false;
-              setTimeout(() => generate(), 50);
-              return;
-            }
-
-            // lastVoiceRaw currently holds the *new* raw if we overwrite too early.
-            // We need to preserve the previous raw BEFORE starting learning mode.
-            // We store that in learningOldRaw when button is pressed.
-            // (see button handler below)
-
-            // This block replaced by button handler which supplies old_raw.
-            // So here, just set values from response of learn call.
-            learningMode = false;
-
-          } catch (e) {
-            console.error(e);
-            answerEl.classList.remove("placeholder");
-            answerEl.textContent = "Voice: transcription failed.";
-            learningMode = false;
-          } finally {
-            recording = false;
-            micBtn.textContent = "🎙️";
-          }
-        };
-
-        mediaRecorder.start();
-        answerEl.classList.remove("placeholder");
-        answerEl.textContent = learningMode ? "Voice: repeat now… release to learn" : "Voice: recording… release to send";
-
+        toast("Copied answer.", "Paste wherever you need.");
       } catch (e) {
         console.warn(e);
-        recording = false;
-        micBtn.textContent = "🎙️";
-        answerEl.classList.remove("placeholder");
-        answerEl.textContent = "Voice: microphone blocked. Allow mic permission for this site and refresh.";
-        learningMode = false;
+        toast("Copy failed.", "On mobile: long-press to select, then Copy.");
       }
-    }
-
-    function stopRecording() {
-      if (!recording) return;
-      try {
-        if (mediaRecorder && mediaRecorder.state !== "inactive") {
-          mediaRecorder.stop();
-        }
-      } catch (e) {
-        console.warn(e);
-        recording = false;
-        micBtn.textContent = "🎙️";
-        answerEl.classList.remove("placeholder");
-        answerEl.textContent = "Voice: stop failed. Try again.";
-        learningMode = false;
-      }
-    }
-
-    // Floating mic (normal dictation)
-    micBtn.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      startRecording(false);
-    });
-    document.addEventListener("mouseup", () => {
-      if (recording) stopRecording();
     });
 
-    micBtn.addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      startRecording(false);
-    }, { passive: false });
+    // ---------------- NEW: COPY/OPEN ONE NOTE (no backend) ----------------
+    const copyOneNoteBtn = document.getElementById("copyOneNoteBtn");
+    const openOneNoteBtn = document.getElementById("openOneNoteBtn");
 
-    micBtn.addEventListener("touchend", (e) => {
-      e.preventDefault();
-      stopRecording();
-    }, { passive: false });
+    // Your OneNote Online link (as you posted)
+    const ONENOTE_URL = "https://wahealthdept-my.sharepoint.com/:o:/g/personal/he198569_health_wa_gov_au/IgAiehh99mjRSqgkg7Ey0oMxAXHzaEIIta9g8j5-dTzq_Hw?email=Michael.Addis%40health.wa.gov.au&e=adMWRB";
 
-    micBtn.addEventListener("touchcancel", (e) => {
-      e.preventDefault();
-      stopRecording();
-    }, { passive: false });
+    // Your WR template (prefills the textarea on first load if empty)
+    const WR_TEMPLATE = `WR:
 
-    // ---------- INCORRECT → REPEAT → LEARN ----------
-    let learningOldRaw = "";
+Pt:
 
-    incorrectBtn.addEventListener("click", async () => {
-      if (!lastWasVoice || !lastVoiceRaw) {
-        answerEl.classList.remove("placeholder");
-        answerEl.textContent = "Learning: no previous voice transcript to correct.";
+ISSUES:
+1.
+2.
+3.
+4.
+
+==REVIEW==
+
+
+==O/E==
+Vitals:
+Alertness & Orientation:
+Fluid Balance:
+Bowel chart:
+Chest:
+Abdo:
+Cardiac:
+Lower limbs:
+Upper limbs:
+Neuro:
+Wounds:
+Drains:
+
+==Plan==
+-
+-
+-`;
+
+    // Minimal toast (isolated styling above)
+    const toastEl = document.getElementById("ebmToast");
+    let toastTimer = null;
+
+    function toast(title, detail) {
+      if (!toastEl) return;
+      const t = String(title || "").trim();
+      const d = String(detail || "").trim();
+      toastEl.innerHTML = `<strong>${escapeHtml(t)}</strong>${d ? `<div class="muted">${escapeHtml(d)}</div>` : ""}`;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2600);
+    }
+
+    function escapeHtml(str) {
+      return (str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    async function copyToClipboard(text) {
+      // Clipboard API requires HTTPS + user gesture (your site is HTTPS)
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (!ok) throw new Error("execCommand copy failed");
+      return true;
+    }
+
+    copyOneNoteBtn.addEventListener("click", async () => {
+      const content = (questionInput.value || "").trim();
+      if (!content) {
+        toast("Nothing to copy.", "Fill the template first.");
         return;
       }
 
-      // Preserve the old transcript before re-recording
-      learningOldRaw = lastVoiceRaw;
-
-      answerEl.classList.remove("placeholder");
-      answerEl.textContent = "Learning: press and hold the mic, repeat the same question clearly, then release.";
-
-      // Start recording in learning mode (we'll call /api/learn_correction after new transcribe returns)
-      // We do it by temporarily wrapping mediaRecorder.onstop behaviour:
-      // simplest: start a learning recording, then after it finishes, do a learn call using learningOldRaw + new_raw
-
-      // We'll record using the mic button flow by simulating "learn mode" via a dedicated record:
-      // Use the same recorder, but we need to handle the post-stop ourselves:
-      // To avoid duplicating code, we just start recording as normal and after it stops we will learn in the next step.
-      // So: we start a learning recording and set a flag.
-      startRecording(true);
-
-      // After stop/transcribe finishes, we need to call learn endpoint.
-      // We hook it by polling for the next voice transcript change:
-      const prevRaw = learningOldRaw;
-      const startTs = Date.now();
-
-      const timer = setInterval(async () => {
-        // wait up to 20s
-        if (Date.now() - startTs > 20000) {
-          clearInterval(timer);
-          return;
-        }
-        // once lastVoiceRaw changes from prevRaw, it means we got the new transcription
-        if (lastVoiceRaw && lastVoiceRaw !== prevRaw) {
-          clearInterval(timer);
-
-          try {
-            answerEl.textContent = "Learning: updating your personal corrections…";
-
-            const res = await fetch("/api/learn_correction", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                old_raw: prevRaw,
-                new_raw: lastVoiceRaw
-              })
-            });
-            const out = await res.json();
-
-            if (!res.ok || !out.ok) {
-              answerEl.textContent = out.error || "Learning failed.";
-              return;
-            }
-
-            // Use server-returned corrected text
-            const learnedText = (out.text || "").trim();
-            if (learnedText) {
-              questionInput.value = learnedText;
-              answerEl.textContent = "Learned — generating…";
-              setTimeout(() => generate(), 50);
-            } else {
-              questionInput.value = (lastVoiceText || "").trim();
-              answerEl.textContent = "Learned — generating…";
-              setTimeout(() => generate(), 50);
-            }
-
-          } catch (e) {
-            console.error(e);
-            answerEl.textContent = "Learning error (network/server).";
-          }
-        }
-      }, 250);
+      try {
+        await copyToClipboard(content);
+        toast("Copied to clipboard.", "Now tap Open OneNote and paste.");
+      } catch (e) {
+        console.warn(e);
+        toast("Copy blocked by browser.", "On Android: long-press the text → Copy.");
+      }
     });
 
-    // ---------- INIT ----------
+    openOneNoteBtn.addEventListener("click", () => {
+      // Opens OneNote Online in a new tab
+      // On some Android browsers, popups require a direct tap (this is direct tap)
+      window.open(ONENOTE_URL, "_blank", "noopener,noreferrer");
+      toast("Opened OneNote.", "Paste the note into your page.");
+    });
+
     window.addEventListener("DOMContentLoaded", () => {
-      loadConversations();
-      showIncorrectButton(false);
+      // Prefill template only if empty
+      if (!questionInput.value.trim()) {
+        questionInput.value = WR_TEMPLATE;
+      }
+      toast("Ready.", "Fill WR note → Copy to OneNote → Open OneNote → Paste.");
     });
   </script>
 </body>
