@@ -422,3 +422,98 @@ body {
   .conversation-list { max-height: 200px; }
   .btn-row { justify-content: flex-start; }
   }
+/* =========================
+   PATCH: smaller metallic buttons + clearer text
+   (paste at END of your existing CSS)
+   ========================= */
+
+.sidebar-subhead {
+  padding: 10px 14px 6px;
+  opacity: 0.85;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.actions-compact {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.btn-compact {
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(34,197,94,0.35);
+}
+
+/* Metallic look: keep your green brand but add a steel-like sheen */
+.btn {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02)) ,
+    linear-gradient(90deg, #22c55e, #4ade80);
+  color: #04110b;
+  text-shadow: none;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.btn:hover {
+  box-shadow: 0 0 26px rgba(34,197,94,0.65);
+}
+
+/* Improve label contrast */
+.label, .output-title, .sidebar-title {
+  color: rgba(255,255,255,0.96);
+  text-shadow: 0 0 10px rgba(34,197,94,0.10);
+}
+
+.answer {
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* Keep answer area from “taking over” visually */
+.output-body {
+  max-height: 520px;
+}
+
+/* Ensure collapsible headings look like tabs again */
+.collapsible {
+  border: 1px solid rgba(148,163,253,0.18);
+}
+
+.collapsible.active {
+  background: rgba(22,163,74,0.28);
+  box-shadow: 0 0 16px rgba(34,197,94,0.35);
+}
+
+.mic-status {
+  opacity: 0.80;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.divider-spacer { height: 14px; }
+
+.wr-card { width: 100%; }
+.wr-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wr-label { margin-bottom: 6px; }
+.wr-sub { opacity: 0.75; font-size: 12px; }
+
+/* Mobile: prevent buttons getting huge */
+@media (max-width: 900px) {
+  .btn-compact { padding: 7px 12px; font-size: 13px; }
+  .output-title { position: static; transform: none; }
+  .output-header { min-height: 34px; }
+}
