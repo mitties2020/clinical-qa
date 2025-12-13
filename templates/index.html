@@ -5,6 +5,19 @@
   <title>Clinical Engine | EBM Session</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- Layout expansion overrides (no redesign, just bigger/wider) -->
+  <style>
+    .shell { width: 96vw; max-width: 1700px; }
+    .main-region { width: 100%; }
+    .sidebar { width: 320px; flex: 0 0 320px; }
+    .grid { grid-template-columns: 1.15fr 1.35fr; gap: 24px; }
+    .textarea { min-height: 240px; font-size: 18px; line-height: 1.5; }
+    .answer { font-size: 16px; line-height: 1.6; }
+    .section { margin-bottom: 14px; }
+    .output-title { font-size: 18px; }
+    .btn, .copy-btn, .section-copy-btn { font-size: 14px; }
+  </style>
 </head>
 
 <body>
@@ -21,12 +34,7 @@
                 <div class="sidebar-title">EBM Session</div>
               </div>
             </div>
-            <input
-              id="topicSearch"
-              class="topic-search"
-              type="text"
-              placeholder="Search topics..."
-            />
+            <input id="topicSearch" class="topic-search" type="text" placeholder="Search topics..." />
           </div>
 
           <div id="conversationList" class="conversation-list"></div>
@@ -140,7 +148,6 @@
     function buildStructuredHtml(raw) {
       if (!raw) return "";
 
-      // Strip markdown-ish chars if any slip through
       let text = raw
         .replace(/\*\*(.*?)\*\*/g, "$1")
         .replace(/#{1,6}\s*/g, "")
@@ -162,7 +169,6 @@
 
       const sections = [];
       let current = { title: "Summary", content: [] };
-      let seenExplicit = false;
 
       const isHeading = (line) => {
         const trimmed = line.trim().replace(/:$/, "");
@@ -179,7 +185,6 @@
         if (heading) {
           if (hasNonEmpty(current.content)) sections.push(current);
           current = { title: heading, content: [] };
-          seenExplicit = true;
         } else {
           current.content.push(line);
         }
@@ -202,7 +207,6 @@
           .filter((l) => (l || "").trim() !== "")
           .map((l) => {
             const t = (l || "").trim();
-            // bullet-like lines
             if (/^[-•]\s+/.test(t) || /^\d+[\.\)]\s+/.test(t)) {
               const cleaned = t
                 .replace(/^[-•]\s+/, "")
@@ -219,7 +223,6 @@
 
         if (!inner.trim()) continue;
 
-        // Summary shown open by default; others collapsible
         if (title.toLowerCase() === "summary") {
           html += `
             <div class="section">
@@ -250,14 +253,11 @@
       return html || "No response generated.";
     }
 
-    // ---------- CONVERSATIONS (LOCAL STORAGE) ----------
+    // ---------- CONVERSATIONS ----------
     function loadConversations() {
       let data = [];
-      try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
+      try { data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]"); }
+      catch { data = []; }
 
       conversationListEl.innerHTML = "";
 
@@ -304,11 +304,8 @@
       if (!query || !answerHtml) return;
 
       let data = [];
-      try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
+      try { data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]"); }
+      catch { data = []; }
 
       const title = query.length > 80 ? query.slice(0, 80).trim() + "…" : query.trim();
       data.push({ title: title || "Topic", query, answer: answerHtml });
@@ -320,11 +317,8 @@
 
     function deleteConversation(index) {
       let data = [];
-      try {
-        data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]");
-      } catch {
-        data = [];
-      }
+      try { data = JSON.parse(localStorage.getItem("ebm_conversations") || "[]"); }
+      catch { data = []; }
       data.splice(index, 1);
       localStorage.setItem("ebm_conversations", JSON.stringify(data));
       loadConversations();
@@ -338,6 +332,8 @@
         item.style.display = !term || title.includes(term) ? "" : "none";
       });
     }
+
+    topicSearch.addEventListener("input", filterTopics);
 
     // ---------- GENERATE ----------
     async function generate() {
@@ -414,9 +410,7 @@
       }
     });
 
-    topicSearch.addEventListener("input", filterTopics);
-
-    // ---------- VOICE: HOLD-TO-RECORD FLOATING MIC ----------
+    // ---------- VOICE: HOLD-TO-RECORD FLOATING MIC (AUTO-GENERATE) ----------
     let stream = null;
     let mediaRecorder = null;
     let audioChunks = [];
@@ -507,13 +501,9 @@
 
             questionInput.value = text;
 
-            // Only auto-generate if it looks like a full question
-            if (text.split(/\s+/).length >= 4) {
-              answerEl.textContent = "Voice captured — generating…";
-              setTimeout(() => generateBtn.click(), 150);
-            } else {
-              answerEl.textContent = "Voice captured. Please check the text then press Generate.";
-            }
+            // ALWAYS auto-generate after transcription
+            answerEl.textContent = "Voice captured — generating…";
+            setTimeout(() => generate(), 50);
 
           } catch (e) {
             console.error(e);
