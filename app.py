@@ -1,51 +1,69 @@
 import os
-import json
 import time
+import uuid
+import json
 import tempfile
 import threading
 import requests
-from flask import Flask, request, jsonify, render_template
+
+from flask import Flask, request, jsonify, render_template, redirect, session as flask_session
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
 
-# --------------------------------------------------
-# ENV
-# --------------------------------------------------
+# NEW: Microsoft auth
+import msal
+
 load_dotenv()
 
+# -------------------------
+# DeepSeek config (unchanged)
+# -------------------------
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")  # base or small recommended
+# -------------------------
+# Whisper config (unchanged)
+# -------------------------
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 
-# Where to store learned corrections
-# If you attach a Render Persistent Disk, set:
-#   CORRECTIONS_PATH=/var/data/corrections.json
-CORRECTIONS_PATH = os.getenv("CORRECTIONS_PATH", "corrections.json")
+# -------------------------
+# NEW: OneNote / Microsoft Graph config
+# -------------------------
+MS_CLIENT_ID = os.getenv("MS_CLIENT_ID")
+MS_CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
+MS_TENANT_ID = os.getenv("MS_TENANT_ID")
+MS_REDIRECT_URI = os.getenv("MS_REDIRECT_URI")  # e.g. https://ebm.freeflowingysystems.com/auth/callback
+
+# Optional: force a section (recommended once you know it)
+ONENOTE_SECTION_ID = (os.getenv("ONENOTE_SECTION_ID") or "").strip()
+
+GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+AUTHORITY = f"https://login.microsoftonline.com/{MS_TENANT_ID}" if MS_TENANT_ID else None
+
+# Keep least privilege to create pages
+SCOPES = ["User.Read", "Notes.Create"]
 
 if not DEEPSEEK_API_KEY:
-    raise RuntimeError("Missing DEEPSEEK_API_KEY")
+    raise RuntimeError("Missing DEEPSEEK_API_KEY environment variable.")
 
-# --------------------------------------------------
-# APP
-# --------------------------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
-http = requests.Session()
+app.secret_key = os.getenv("SESSION_SECRET", "dev_only_change_me")  # REQUIRED for login session
 
-# --------------------------------------------------
-# WHISPER (LOAD ONCE)
-# --------------------------------------------------
+session = requests.Session()
+
+# -------------------------
+# Whisper model load-once + locks (prevents memory spikes)
+# -------------------------
 _whisper_model = None
-_whisper_lock = threading.Lock()
+_whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
 
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
-        with _whisper_lock:
+        with _whisper_init_lock:
             if _whisper_model is None:
-                print(f"[INIT] Loading Whisper model: {WHISPER_MODEL_SIZE}")
                 _whisper_model = WhisperModel(
                     WHISPER_MODEL_SIZE,
                     device="cpu",
@@ -53,138 +71,82 @@ def get_whisper_model():
                 )
     return _whisper_model
 
-# --------------------------------------------------
-# CORRECTIONS (LEARNING LAYER)
-# --------------------------------------------------
-_corrections_lock = threading.Lock()
-
-def _load_corrections():
-    if not os.path.exists(CORRECTIONS_PATH):
-        return {"rules": []}
-    try:
-        with open(CORRECTIONS_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, dict) or "rules" not in data:
-            return {"rules": []}
-        if not isinstance(data["rules"], list):
-            data["rules"] = []
-        return data
-    except Exception:
-        return {"rules": []}
-
-def _save_corrections(data):
-    tmp = CORRECTIONS_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, CORRECTIONS_PATH)
-
-def _norm(s: str) -> str:
-    return " ".join((s or "").lower().strip().split())
-
-def _apply_rules(raw_text: str, rules):
-    """
-    Apply learned replacements to raw_text (case-insensitive).
-    We keep it conservative: only replace full phrase occurrences.
-    """
-    text = raw_text
-    low = raw_text.lower()
-    for r in rules:
-        wrong = (r.get("wrong") or "").strip()
-        correct = (r.get("correct") or "").strip()
-        if not wrong or not correct:
-            continue
-        # phrase match (case-insensitive)
-        if wrong.lower() in low:
-            # replace all occurrences, case-insensitive
-            # simple safe approach: operate on lowercase copy then reassign
-            low = low.replace(wrong.lower(), correct)
-            text = low  # we return normalised lower text (consistent for queries)
-    return text.strip()
-
-def _derive_rule(old_raw: str, new_raw: str):
-    """
-    Create a rule mapping the older transcript (likely wrong) to the newer (likely correct).
-    Conservative:
-    - We only learn if both are non-empty and different.
-    - We learn phrase-level replacement using the whole old -> new (works best for repeatable confusions).
-    """
-    o = _norm(old_raw)
-    n = _norm(new_raw)
-    if not o or not n:
+# -------------------------
+# NEW: MSAL helpers
+# -------------------------
+def _msal_app():
+    if not (MS_CLIENT_ID and MS_CLIENT_SECRET and MS_TENANT_ID and MS_REDIRECT_URI and AUTHORITY):
         return None
-    if o == n:
-        return None
+    return msal.ConfidentialClientApplication(
+        MS_CLIENT_ID,
+        authority=AUTHORITY,
+        client_credential=MS_CLIENT_SECRET
+    )
 
-    # Heuristic: assume older is wrong, newer is correct (user repeated carefully)
-    # Keep rule short to avoid over-broad replacements.
-    # If old is very long, learning it as a whole phrase could be risky; cap it.
-    if len(o) > 120 or len(n) > 160:
-        # try to learn only the differing "core" by taking last 12 words
-        o = " ".join(o.split()[-12:])
-        n = " ".join(n.split()[-16:])
+def _get_access_token():
+    tok = flask_session.get("ms_token")
+    if isinstance(tok, dict) and tok.get("access_token"):
+        return tok["access_token"]
+    return None
 
-    return {"wrong": o, "correct": n, "count": 1, "last_seen": int(time.time())}
+def _onenote_html_page(title: str, body_text: str) -> str:
+    # OneNote create-page expects HTML request body.
+    safe_title = (title or "WR Note").replace("&", "and").strip()
+    safe_body = (body_text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    created = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>{safe_title}</title>
+  <meta name="created" content="{created}" />
+</head>
+<body>
+  <h1>{safe_title}</h1>
+  <pre>{safe_body}</pre>
+</body>
+</html>"""
 
-def _upsert_rule(data, rule):
-    rules = data.get("rules", [])
-    wrong = rule["wrong"]
-    correct = rule["correct"]
-
-    for r in rules:
-        if _norm(r.get("wrong")) == wrong:
-            # Update existing
-            if _norm(r.get("correct")) == correct:
-                r["count"] = int(r.get("count", 0)) + 1
-                r["last_seen"] = int(time.time())
-                return data
-            else:
-                # same wrong mapped to new correct -> overwrite to latest
-                r["correct"] = correct
-                r["count"] = int(r.get("count", 0)) + 1
-                r["last_seen"] = int(time.time())
-                return data
-
-    rules.append(rule)
-    data["rules"] = rules[-200:]  # cap growth
-    return data
-
-# --------------------------------------------------
-# ROUTES
-# --------------------------------------------------
+# -------------------------
+# Routes (existing)
+# -------------------------
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# --------------------------------------------------
-# TRANSCRIBE
-# --------------------------------------------------
 @app.route("/api/transcribe", methods=["POST"])
 def transcribe():
+    """
+    Receives audio as multipart/form-data with field name 'audio'
+    Returns JSON: { "text": "..." }
+    """
     if "audio" not in request.files:
-        return jsonify({"error": "Missing audio"}), 400
+        return jsonify({"error": "Missing audio field 'audio'."}), 400
 
+    # Prevent overlapping transcribes (CPU/memory protection)
     if not _transcribe_lock.acquire(blocking=False):
-        return jsonify({"error": "Server busy"}), 429
+        return jsonify({"error": "Server busy. Try again."}), 429
+
+    f = request.files["audio"]
+    if not f:
+        _transcribe_lock.release()
+        return jsonify({"error": "Empty audio upload."}), 400
 
     tmp_path = None
     try:
-        audio = request.files["audio"]
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
             tmp_path = tmp.name
-            audio.save(tmp_path)
+            f.save(tmp_path)
 
-        model = get_whisper_model()
+        whisper_model = get_whisper_model()
 
+        # Optional prompt helps medical vocab a bit
         medical_prompt = (
-            "Australian doctor dictation. Common terms: "
-            "morphine, fentanyl, ketamine, ondansetron, metoclopramide, "
-            "paracetamol, ibuprofen, ceftriaxone, amoxicillin, adrenaline, noradrenaline, "
-            "lamotrigine, levetiracetam, sodium valproate, phenytoin, thiamine, Wernicke, "
-            "NG tube, refeeding syndrome, phosphate, magnesium, "
-            "dose, dosage, milligrams, micrograms, per kilogram, over 24 hours."
+            "Australian clinician dictation. Common terms: morphine, fentanyl, ketamine, ondansetron, "
+            "metoclopramide, lamotrigine, levetiracetam, valproate, phenytoin, thiamine, Wernicke, "
+            "re-feeding syndrome, phosphate, magnesium, NG tube, dosage, milligrams, micrograms, per kilogram."
         )
 
-        segments, info = model.transcribe(
+        segments, info = whisper_model.transcribe(
             tmp_path,
             language="en",
             initial_prompt=medical_prompt,
@@ -196,23 +158,12 @@ def transcribe():
             condition_on_previous_text=False
         )
 
-        raw = " ".join(seg.text.strip() for seg in segments).strip()
-
-        with _corrections_lock:
-            data = _load_corrections()
-            rules = data.get("rules", [])
-        corrected = _apply_rules(raw, rules)
-
-        return jsonify({
-            "raw": raw,
-            "text": corrected,
-            "language": getattr(info, "language", "en"),
-            "rules_count": len(rules)
-        })
+        text = " ".join(seg.text.strip() for seg in segments).strip()
+        return jsonify({"text": text})
 
     except Exception as e:
-        print("[TRANSCRIBE ERROR]", repr(e))
-        return jsonify({"error": "Transcription failed"}), 502
+        print("TRANSCRIBE ERROR:", repr(e))
+        return jsonify({"error": "Transcription failed on server."}), 502
 
     finally:
         _transcribe_lock.release()
@@ -222,89 +173,175 @@ def transcribe():
             except Exception:
                 pass
 
-# --------------------------------------------------
-# LEARN CORRECTION (Incorrect → repeat)
-# --------------------------------------------------
-@app.route("/api/learn_correction", methods=["POST"])
-def learn_correction():
-    data_in = request.get_json(silent=True) or {}
-    old_raw = data_in.get("old_raw") or ""
-    new_raw = data_in.get("new_raw") or ""
 
-    rule = _derive_rule(old_raw, new_raw)
-    if not rule:
-        return jsonify({"ok": False, "error": "Nothing to learn"}), 400
-
-    with _corrections_lock:
-        data = _load_corrections()
-        data = _upsert_rule(data, rule)
-        _save_corrections(data)
-        rules = data.get("rules", [])
-
-    # Also return the corrected "new" transcript after applying all rules (including the new one)
-    corrected_new = _apply_rules(new_raw, rules)
-
-    return jsonify({
-        "ok": True,
-        "learned": {"wrong": rule["wrong"], "correct": rule["correct"]},
-        "rules_count": len(rules),
-        "text": corrected_new,
-        "raw": new_raw
-    })
-
-# --------------------------------------------------
-# GENERATE (DEEPSEEK)
-# --------------------------------------------------
 @app.route("/api/generate", methods=["POST"])
 def generate():
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     if not query:
-        return jsonify({"error": "No query provided"}), 400
+        return jsonify({"error": "No query provided."}), 400
 
     system_prompt = (
-        "You are an AI clinical education assistant for Australian clinicians.\n\n"
+        "You are an AI clinical education assistant for qualified clinicians and doctors "
+        "in training working in Australian hospitals.\n\n"
         "Purpose and limits:\n"
-        "Educational only; not real-time patient care.\n"
-        "Use Australian spelling.\n"
-        "Do not issue directives; encourage checking local guidelines.\n\n"
-        "Structure responses using headings in order (only include relevant ones):\n"
-        "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\n"
-        "Follow-up & Safety Netting\nRed Flags\nReferences\n\n"
+        "- Your role is to support STUDY, REVISION and exam-style reasoning.\n"
+        "- You are NOT providing live clinical decision support for real patients.\n"
+        "- Do not present recommendations as orders or directives; instead frame them as "
+        "educational guidance that must be checked against local protocols and senior advice.\n\n"
+        "Jurisdiction and practice context:\n"
+        "- Assume an Australian hospital setting unless clearly stated otherwise.\n"
+        "- Bias your explanations toward what is broadly consistent with contemporary Australian "
+        "practice and guidelines.\n"
+        "- Do NOT name or quote proprietary resources.\n"
+        "- Use Australian spelling.\n\n"
+        "Safety and prescribing:\n"
+        "- When you mention medicines, discuss broad dose ranges only and recommend checking local references.\n\n"
+        "Response structure:\n"
+        "Use plain-text headings (only include relevant ones):\n"
+        "Summary\n"
+        "Assessment\n"
+        "Diagnosis\n"
+        "Investigations\n"
+        "Treatment\n"
+        "Monitoring\n"
+        "Follow-up & Safety Netting\n"
+        "Red Flags\n"
+        "References\n\n"
         "Formatting:\n"
-        "Plain text headings exactly as written. One key point per line. No markdown symbols."
+        "- One key point per line.\n"
+        "- No markdown symbols.\n"
+    )
+
+    user_content = (
+        "This is a hypothetical, de-identified clinical study question for educational purposes only.\n\n"
+        f"Clinical question:\n{query}"
     )
 
     payload = {
-        "model": DEEPSEEK_MODEL,
+        "model": MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query}
+            {"role": "user", "content": user_content},
         ],
         "temperature": 0.25,
-        "max_tokens": 1100
+        "top_p": 0.9,
+        "max_tokens": 1100,
+        "stream": False,
     }
 
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     try:
-        r = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
-        r.raise_for_status()
-        out = r.json()
-        answer = ((out.get("choices") or [{}])[0].get("message") or {}).get("content", "").strip()
+        resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
+        print("DeepSeek status:", resp.status_code)
+        resp.raise_for_status()
+        data = resp.json()
+        answer = (
+            (data.get("choices") or [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
         if not answer:
-            return jsonify({"error": "Empty response"}), 502
+            return jsonify({"error": "Empty response from model."}), 502
         return jsonify({"answer": answer})
     except Exception as e:
-        print("[DEEPSEEK ERROR]", repr(e))
-        return jsonify({"error": "LLM request failed"}), 502
+        print("DeepSeek API error:", repr(e))
+        return jsonify({"error": "Error contacting DeepSeek API."}), 502
 
-# --------------------------------------------------
-# MAIN (LOCAL DEV)
-# --------------------------------------------------
+
+# -------------------------
+# NEW: OneNote Sign-in (adds routes; does not affect existing site)
+# -------------------------
+@app.route("/auth/login")
+def auth_login():
+    app_obj = _msal_app()
+    if not app_obj:
+        return (
+            "Microsoft auth not configured. Set MS_CLIENT_ID, MS_CLIENT_SECRET, MS_TENANT_ID, MS_REDIRECT_URI, SESSION_SECRET.",
+            500,
+        )
+
+    state = str(uuid.uuid4())
+    flask_session["ms_state"] = state
+
+    auth_url = app_obj.get_authorization_request_url(
+        scopes=SCOPES,
+        state=state,
+        redirect_uri=MS_REDIRECT_URI,
+        prompt="select_account",
+    )
+    return redirect(auth_url)
+
+@app.route("/auth/callback")
+def auth_callback():
+    app_obj = _msal_app()
+    if not app_obj:
+        return "Microsoft auth not configured.", 500
+
+    if request.args.get("state") != flask_session.get("ms_state"):
+        return "State mismatch", 400
+
+    code = request.args.get("code")
+    if not code:
+        return "Missing auth code", 400
+
+    result = app_obj.acquire_token_by_authorization_code(
+        code,
+        scopes=SCOPES,
+        redirect_uri=MS_REDIRECT_URI,
+    )
+
+    if "access_token" not in result:
+        return f"Auth failed: {result.get('error_description')}", 400
+
+    flask_session["ms_token"] = result
+    return redirect("/")
+
+
+# -------------------------
+# NEW: Send note to OneNote (backend API; UI button can call this later)
+# -------------------------
+@app.route("/api/onenote/send", methods=["POST"])
+def onenote_send():
+    token = _get_access_token()
+    if not token:
+        return jsonify({"error": "Not signed in. Visit /auth/login first."}), 401
+
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "WR Note").strip()
+    content = (data.get("content") or "").strip()
+
+    if not content:
+        return jsonify({"error": "Empty note content."}), 400
+
+    html = _onenote_html_page(title, content)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "text/html",
+    }
+
+    # If you set ONENOTE_SECTION_ID, it'll always write there.
+    if ONENOTE_SECTION_ID:
+        url = f"{GRAPH_BASE}/me/onenote/sections/{ONENOTE_SECTION_ID}/pages"
+    else:
+        # Writes into a section named "EBM Notes" in your default notebook.
+        url = f"{GRAPH_BASE}/me/onenote/pages?sectionName=EBM%20Notes"
+
+    try:
+        r = requests.post(url, headers=headers, data=html.encode("utf-8"), timeout=40)
+        if r.status_code not in (200, 201):
+            return jsonify({"error": "Graph error", "status": r.status_code, "detail": r.text}), 502
+        return jsonify({"ok": True})
+    except Exception as e:
+        print("ONENOTE SEND ERROR:", repr(e))
+        return jsonify({"error": "Failed to contact Microsoft Graph"}), 502
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)
