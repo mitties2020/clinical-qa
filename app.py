@@ -33,7 +33,7 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 MS_CLIENT_ID = os.getenv("MS_CLIENT_ID")
 MS_CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
 MS_TENANT_ID = os.getenv("MS_TENANT_ID")
-MS_REDIRECT_URI = os.getenv("MS_REDIRECT_URI")  # e.g. https://ebm.freeflowingysystems.com/auth/callback
+MS_REDIRECT_URI = os.getenv("MS_REDIRECT_URI")  # e.g. https://www.clineraclinic.com/
 
 # Optional: force a section (recommended once you know it)
 ONENOTE_SECTION_ID = (os.getenv("ONENOTE_SECTION_ID") or "").strip()
