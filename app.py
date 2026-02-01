@@ -17,13 +17,13 @@ if os.getenv("RENDER") is None:
 # DeepSeek config
 # -----------------------------------
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # -----------------------------------
 # Whisper config
 # -----------------------------------
-WHISPER_MODEL_SIZE = "base"
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 
 # -----------------------------------
 # Flask app
@@ -109,16 +109,17 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
-    # Force a plain-text, sectioned output your UI can parse reliably.
+    # Doctor-level, Australian-context, sectioned plain-text output for your UI parser.
     system_prompt = (
-        "You are an Australian clinical education assistant.\n\n"
-        "IMPORTANT OUTPUT RULES:\n"
-        "- Do NOT use markdown.\n"
-        "- Do NOT use headings like ###.\n"
-        "- Do NOT use bullet symbols such as '-', '*', or '•'.\n"
-        "- Do NOT use bold markers like **.\n"
-        "- Use plain text only.\n\n"
-        "Structure every answer using the following headings EXACTLY, each on its own line:\n"
+        "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
+
+        "ROLE AND CONTEXT:\n"
+        "This system is used by Australian hospital doctors (PGY2+, registrars, consultants).\n"
+        "The purpose is clinical reasoning, safe bedside understanding, and exam-style revision.\n"
+        "This is not patient-facing health education.\n\n"
+
+        "OUTPUT FORMAT (MANDATORY):\n"
+        "You MUST structure every response using the following headings EXACTLY, each on its own line, in this order:\n"
         "Summary\n"
         "Assessment\n"
         "Diagnosis\n"
@@ -128,13 +129,28 @@ def generate():
         "Follow-up & Safety Netting\n"
         "Red Flags\n"
         "References\n\n"
-        "Under each heading, write short paragraphs or single-sentence lines.\n"
-        "If a section is not relevant, write: Not applicable.\n"
-        "Keep it concise, practical, and consistent with Australian practice.\n"
+
+        "FORMAT RULES:\n"
+        "Use plain text only.\n"
+        "Do not use markdown symbols such as ###, **, *, -, or •.\n"
+        "Do not collapse the response into one paragraph.\n"
+        "Under each heading, write multiple short, clinically meaningful lines or paragraphs.\n"
+        "You may use separate lines to convey lists, but without bullet characters.\n"
+        "If a section is not relevant, write: Not applicable.\n\n"
+
+        "CLINICAL STANDARDS:\n"
+        "Align content with contemporary Australian practice.\n"
+        "Do not quote proprietary resources verbatim (e.g. ETG/AMH).\n"
+        "If discussing medicines, provide general approach and typical adult dose ranges only; advise checking local references.\n"
+        "For paediatrics, pregnancy, renal/hepatic impairment, and drug interactions, flag considerations and advise local checking.\n\n"
+
+        "DEPTH REQUIREMENT:\n"
+        "Aim for registrar-level depth by default.\n"
+        "Avoid superficial public-health style explanations.\n"
     )
 
     user_content = (
-        "This is a hypothetical, de-identified clinical study question for educational purposes.\n\n"
+        "This is a hypothetical, de-identified clinical question for educational purposes.\n\n"
         f"Clinical question:\n{query}"
     )
 
@@ -144,9 +160,9 @@ def generate():
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content}
         ],
-        "temperature": 0.2,
+        "temperature": 0.25,
         "top_p": 0.9,
-        "max_tokens": 1100,
+        "max_tokens": 1400,
         "stream": False
     }
 
@@ -156,7 +172,7 @@ def generate():
     }
 
     try:
-        resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
+        resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=60)
         resp.raise_for_status()
         data = resp.json()
 
@@ -167,11 +183,17 @@ def generate():
             .strip()
         )
 
-        # Extra safety: if model still returns markdown, strip common markers.
+        # Post-clean: if model sneaks in markdown, strip common markers safely.
         if answer:
-            answer = answer.replace("###", "").replace("**", "")
-            # Remove leading bullet chars at line start
-            answer = "\n".join([line.lstrip("-•* ").rstrip() for line in answer.splitlines()]).strip()
+            answer = answer.replace("\r", "")
+            answer = answer.replace("###", "")
+            answer = answer.replace("**", "")
+
+            cleaned_lines = []
+            for line in answer.splitlines():
+                # Strip bullet chars at line start (if any)
+                cleaned_lines.append(line.lstrip("-•* ").rstrip())
+            answer = "\n".join(cleaned_lines).strip()
 
         return jsonify({"answer": answer or "No response."})
 
