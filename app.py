@@ -1,286 +1,725 @@
-import os
-import tempfile
-import threading
-import subprocess
-import requests
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Clinical Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
 
-from flask import Flask, request, jsonify, render_template
-from faster_whisper import WhisperModel
+<body>
+  <div class="app-root">
+    <div class="shell">
+      <div class="layout">
 
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-brand">
+              <div class="brand-logo"></div>
+              <div class="brand-text">
+                <div class="brand-title">EBM</div>
+                <div class="sidebar-title">Clinical Engine</div>
+              </div>
+            </div>
 
-# -----------------------------------
-# Load .env locally only (not Render)
-# -----------------------------------
-if os.getenv("RENDER") is None:
-    from dotenv import load_dotenv
-    load_dotenv()
+            <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
+          </div>
 
+          <div class="sidebar-subhead">Saved Clinical Questions</div>
+          <div id="savedQuestionsList" class="conversation-list"></div>
 
-# -----------------------------------
-# DeepSeek config
-# -----------------------------------
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+          <div class="sidebar-subhead">Consultation Notes (saved)</div>
+          <div id="savedWrList" class="conversation-list"></div>
 
+          <div class="sidebar-footer">
+            <span class="sidebar-hint">Locally stored • Per device</span>
+          </div>
+        </aside>
 
-# -----------------------------------
-# Whisper config
-# -----------------------------------
-# "tiny" is far more reliable on free/low-CPU instances.
-# You can change to "base" later if you're on paid Render and want slightly higher accuracy.
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
+        <!-- MAIN -->
+        <div class="main-region">
+          <header class="header">
+            <h1 class="title">CLINICAL ENGINE</h1>
+            <p class="subtitle">Clinical questions (top) + consultation notes (below). Dictation never triggers the Clinical Engine.</p>
+          </header>
 
+          <!-- TOP ROW -->
+          <main class="grid">
+            <!-- QUESTION -->
+            <section class="card input-card">
+              <label class="label" for="clinicalQuestion">Clinical Question</label>
 
-# -----------------------------------
-# Flask app
-# -----------------------------------
-app = Flask(__name__, template_folder="templates", static_folder="static")
-http = requests.Session()
+              <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                <label class="label" style="margin:0;">Mode</label>
+                <select id="modeSelect" class="topic-search" style="max-width:220px;">
+                  <option value="clinical" selected>Clinical</option>
+                  <option value="dva">DVA Referral Check</option>
+                </select>
+              </div>
 
+              <textarea
+                id="clinicalQuestion"
+                class="textarea"
+                rows="7"
+                placeholder="Enter clinical question OR paste DVA patient details. Enter = Generate, Shift+Enter = new line."
+              ></textarea>
 
-# -----------------------------------
-# Whisper model (load once)
-# -----------------------------------
-_whisper_model = None
-_whisper_init_lock = threading.Lock()
-_transcribe_lock = threading.Lock()
+              <div class="actions actions-compact">
+                <button id="generateBtn" class="btn btn-compact" type="button">Generate</button>
+                <button id="dictateQuestionBtn" class="btn btn-compact" type="button">🎙 Dictate</button>
+                <button id="incorrectQuestionBtn" class="btn btn-compact" type="button">Incorrect</button>
+                <button id="clearQuestionBtn" class="btn btn-compact" type="button">Clear</button>
+              </div>
 
-def get_whisper_model():
-    global _whisper_model
-    if _whisper_model is None:
-        with _whisper_init_lock:
-            if _whisper_model is None:
-                _whisper_model = WhisperModel(
-                    WHISPER_MODEL_SIZE,
-                    device="cpu",
-                    compute_type="int8"
-                )
-    return _whisper_model
+              <div id="qStatus" class="mic-status">Question mic: idle</div>
+            </section>
 
+            <!-- ANSWER -->
+            <section class="card output-card">
+              <div class="output-header">
+                <h2 class="output-title">Answers</h2>
+                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+              </div>
 
-# -----------------------------------
-# Prompts
-# -----------------------------------
-CLINICAL_SYSTEM_PROMPT = (
-    "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
-    "Audience and intent:\n"
-    "This is for Australian hospital/GP doctors (PGY2+, registrars, consultants).\n"
-    "This is not patient-facing education.\n\n"
+              <div id="answerLoader" class="answer-loader hidden">
+                <div class="loader"></div>
+                <div class="loader-text">Generating structured answer…</div>
+              </div>
 
-    "OUTPUT FORMAT (MANDATORY):\n"
-    "Use these headings EXACTLY, each on its own line:\n"
-    "Summary\n"
-    "Assessment\n"
-    "Diagnosis\n"
-    "Investigations\n"
-    "Treatment\n"
-    "Monitoring\n"
-    "Follow-up & Safety Netting\n"
-    "Red Flags\n"
-    "References\n\n"
+              <div class="output-body">
+                <div id="answer" class="answer placeholder">Your answer will appear here.</div>
+              </div>
+            </section>
+          </main>
 
-    "STYLE RULES:\n"
-    "Use plain text. Avoid markdown symbols (###, **, *, •).\n"
-    "Do not collapse into one paragraph.\n"
-    "Write at registrar-level depth.\n"
-    "Be clinically practical and Australian-context.\n"
-    "Do not quote proprietary sources verbatim.\n"
-    "References should be general source families only (e.g. Therapeutic Guidelines/eTG, AMH, Australian Immunisation Handbook, local protocols).\n"
-)
+          <div class="divider-spacer"></div>
 
-DVA_SYSTEM_PROMPT = (
-    "You are an Australian medical practitioner assisting other qualified clinicians with DVA-funded care documentation.\n\n"
-    "Purpose:\n"
-    "Assess whether the provided details support a defensible DVA referral request and generate an individualised clinical note.\n"
-    "This is documentation support, not official approval. Do not claim DVA has approved anything.\n\n"
+          <!-- CONSULTATION NOTES -->
+          <section class="card wr-card">
+            <div class="wr-head">
+              <div>
+                <div class="label wr-label">Consultation Notes</div>
+                <div class="wr-sub">Dictation never triggers the Clinical Engine.</div>
+              </div>
 
-    "Key constraints:\n"
-    "Do not invent accepted conditions.\n"
-    "If card type or accepted conditions are missing/unclear, say so.\n"
-    "Do not quote proprietary resources verbatim.\n"
-    "Use Australian spelling.\n"
-    "Make the note sound genuinely patient-specific (vary sentence structure, use the provided details, avoid boilerplate).\n\n"
+              <div class="actions actions-compact">
+                <button id="dictateWrBtn" class="btn btn-compact" type="button">🎙 Dictate</button>
+                <button id="incorrectWrBtn" class="btn btn-compact" type="button">Incorrect</button>
+                <button id="copyWrBtn" class="btn btn-compact" type="button">Copy</button>
+                <button id="saveWrBtn" class="btn btn-compact" type="button">Save</button>
+                <button id="newWrBtn" class="btn btn-compact" type="button">New</button>
+              </div>
+            </div>
 
-    "OUTPUT FORMAT (MANDATORY):\n"
-    "Use these headings EXACTLY, each on its own line:\n"
-    "Patient & DVA Context\n"
-    "Clinical Summary\n"
-    "Referral Assessment\n"
-    "Missing or Weak Elements\n"
-    "Audit Risk Flags\n"
-    "Suggested Improved Clinical Note\n"
-    "Next Steps Checklist\n"
-    "References\n\n"
+            <textarea id="wrNote" class="textarea" rows="16" placeholder="Dictate or type freely here…"></textarea>
+            <div id="wrStatus" class="mic-status">Notes mic: idle</div>
+          </section>
 
-    "Guidance for reasoning:\n"
-    "Link the referral to functional impact and to the most likely accepted condition where applicable.\n"
-    "Flag when the referral looks non-specific, disproportionate, or poorly linked to an accepted condition.\n"
-    "If information is insufficient, explicitly list what is required to make it defensible.\n"
-    "References should mention general Australian/DVA guidance families only (e.g. DVA allied health referral guidance, MBS item notes, local documentation standards).\n"
-)
+        </div>
+      </div>
+    </div>
+  </div>
 
+<script>
+window.addEventListener("DOMContentLoaded", () => {
+  // Storage keys
+  const STORE_Q_CORR = "ebm_q_corrections_v7";
+  const STORE_WR_CORR = "ebm_wr_corrections_v7";
+  const STORE_SAVED_QA = "ebm_saved_qa_v7";
+  const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
 
-# -----------------------------------
-# Routes
-# -----------------------------------
-@app.route("/")
-def index():
-    return render_template("index.html")
+  // Elements
+  const modeSelect = document.getElementById("modeSelect");
 
+  const clinicalQuestion = document.getElementById("clinicalQuestion");
+  const generateBtn = document.getElementById("generateBtn");
+  const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
+  const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
+  const clearQuestionBtn = document.getElementById("clearQuestionBtn");
 
-# ---------- TRANSCRIBE ----------
-@app.route("/api/transcribe", methods=["POST"])
-def transcribe():
-    """
-    Browser uploads audio/webm (opus). Convert to 16kHz mono wav with ffmpeg, then transcribe.
-    This is the most reliable approach on Render.
-    """
-    if "audio" not in request.files:
-        return jsonify({"error": "Missing audio"}), 400
+  const wrNote = document.getElementById("wrNote");
+  const dictateWrBtn = document.getElementById("dictateWrBtn");
+  const incorrectWrBtn = document.getElementById("incorrectWrBtn");
+  const copyWrBtn = document.getElementById("copyWrBtn");
+  const saveWrBtn = document.getElementById("saveWrBtn");
+  const newWrBtn = document.getElementById("newWrBtn");
 
-    if not _transcribe_lock.acquire(blocking=False):
-        return jsonify({"error": "Server busy"}), 429
+  const answerEl = document.getElementById("answer");
+  const answerLoader = document.getElementById("answerLoader");
+  const copyAllBtn = document.getElementById("copyAllBtn");
 
-    tmp_webm = None
-    tmp_wav = None
+  const qStatus = document.getElementById("qStatus");
+  const wrStatus = document.getElementById("wrStatus");
 
-    try:
-        f = request.files["audio"]
+  const savedQuestionsList = document.getElementById("savedQuestionsList");
+  const savedWrList = document.getElementById("savedWrList");
+  const sidebarSearch = document.getElementById("sidebarSearch");
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as t1:
-            tmp_webm = t1.name
-            f.save(tmp_webm)
+  // Utils
+  function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
+  function escapeHtml(str) {
+    return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+  function safeJsonParse(s, fallback){ try { return JSON.parse(s); } catch { return fallback; } }
+  async function copyText(text){ if (!text) return; try { await navigator.clipboard.writeText(text); } catch {} }
+  function flashStatus(el, msg){ if (el) el.textContent = msg; }
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as t2:
-            tmp_wav = t2.name
+  // Structured answer builder (collapsible)
+  function hasNonEmpty(arr){ return Array.isArray(arr) && arr.some(l => (l||"").trim() !== ""); }
 
-        # Convert webm → wav (16kHz mono)
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i", tmp_webm,
-                "-ac", "1",
-                "-ar", "16000",
-                tmp_wav,
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
+  function buildStructuredHtml(raw) {
+    if (!raw) return "";
+    let text = String(raw)
+      .replace(/\r/g, "")
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/#{1,6}\s*/g, "");
 
-        model = get_whisper_model()
-        segments, _ = model.transcribe(
-            tmp_wav,
-            language="en",
-            vad_filter=False,               # VAD often deletes dictation segments
-            temperature=0.0,
-            beam_size=5,
-            condition_on_previous_text=False,
-        )
+    const sectionOrder = [
+      "Summary",
+      "Assessment",
+      "Diagnosis",
+      "Investigations",
+      "Treatment",
+      "Monitoring",
+      "Follow-up & Safety Netting",
+      "Red Flags",
+      "References",
+    ];
 
-        text = " ".join(s.text.strip() for s in segments).strip()
-        return jsonify({"text": text})
+    const lines = text.split("\n");
+    const sections = [];
+    let current = { title: "Summary", content: [] };
+    let seenExplicit = false;
 
-    except Exception as e:
-        # Keep logs server-side
-        print("TRANSCRIBE ERROR:", repr(e))
-        return jsonify({"error": "Transcription failed"}), 502
-
-    finally:
-        _transcribe_lock.release()
-        for p in (tmp_webm, tmp_wav):
-            if p:
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-
-
-# ---------- GENERATE ----------
-@app.route("/api/generate", methods=["POST"])
-def generate():
-    """
-    Request JSON:
-      { "query": "...", "mode": "clinical" | "dva" }
-
-    - mode defaults to "clinical"
-    """
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
-    data = request.get_json(silent=True) or {}
-    query = (data.get("query") or "").strip()
-    mode = (data.get("mode") or "clinical").strip().lower()
-
-    if not query:
-        return jsonify({"error": "Empty query"}), 400
-
-    if mode == "dva":
-        system_prompt = DVA_SYSTEM_PROMPT
-        user_content = (
-            "Use the details below to assess DVA referral justification and write an individualised clinical note.\n\n"
-            "INPUT:\n"
-            f"{query}\n\n"
-            "Remember: do not fabricate accepted conditions. If missing, list what is required."
-        )
-    else:
-        system_prompt = CLINICAL_SYSTEM_PROMPT
-        user_content = (
-            "This is a hypothetical, de-identified clinical question for educational purposes.\n\n"
-            f"Clinical question:\n{query}"
-        )
-
-    payload = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
-        "temperature": 0.25,
-        "top_p": 0.9,
-        "max_tokens": 1400,
-        "stream": False,
+    function isHeading(line){
+      const t = (line||"").trim().replace(/:$/, "");
+      const match = sectionOrder.find(h => h.toLowerCase() === t.toLowerCase());
+      return match || null;
     }
 
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json",
+    for (const rawLine of lines) {
+      const line = (rawLine||"").trim();
+      if (!line) { current.content.push(""); continue; }
+      const heading = isHeading(line);
+      if (heading) {
+        if (hasNonEmpty(current.content)) sections.push(current);
+        current = { title: heading, content: [] };
+        seenExplicit = true;
+      } else {
+        current.content.push(line);
+      }
+    }
+    if (hasNonEmpty(current.content)) sections.push(current);
+
+    if (!seenExplicit) {
+      return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
     }
 
-    try:
-        resp = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=60)
-        resp.raise_for_status()
-        out = resp.json()
+    let html = "";
+    let idx = 0;
 
-        answer = (
-            (out.get("choices") or [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
-        )
+    for (const sec of sections) {
+      if (!hasNonEmpty(sec.content)) continue;
+      const id = `sec-${idx++}`;
+      const inner = sec.content
+        .filter(l => (l||"").trim() !== "")
+        .map(l => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
+        .join("");
 
-        # Light cleanup to keep your UI parser happy if model sneaks markdown in.
-        if answer:
-            answer = answer.replace("\r", "")
-            answer = answer.replace("###", "")
-            answer = answer.replace("**", "")
-            cleaned_lines = []
-            for line in answer.splitlines():
-                cleaned_lines.append(line.lstrip("•*- ").rstrip())
-            answer = "\n".join(cleaned_lines).strip()
+      const alwaysOpen = (sec.title === "Summary");
 
-        return jsonify({"answer": answer or "No response."})
+      if (alwaysOpen) {
+        html += `
+          <div class="section">
+            <div class="section-header static">
+              <span>${escapeHtml(sec.title)}</span>
+              <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
+            </div>
+            <div class="section-body static-body" data-section="${id}">
+              ${inner}
+            </div>
+          </div>`;
+      } else {
+        html += `
+          <div class="section">
+            <div class="collapsible-header">
+              <button class="collapsible" data-target="${id}" type="button">${escapeHtml(sec.title)}</button>
+              <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
+            </div>
+            <div class="collapsible-content" data-section="${id}" style="display:none;">
+              ${inner}
+            </div>
+          </div>`;
+      }
+    }
 
-    except Exception as e:
-        print("DEEPSEEK ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
+    return html || `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
+  }
 
+  document.addEventListener("click", async (e) => {
+    const t = e.target;
 
-# -----------------------------------
-# Local run
-# -----------------------------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    if (t.classList && t.classList.contains("collapsible")) {
+      const id = t.dataset.target;
+      const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+      if (!content) return;
+      const open = content.style.display === "block";
+      content.style.display = open ? "none" : "block";
+      t.classList.toggle("active", !open);
+      return;
+    }
+
+    if (t.classList && t.classList.contains("section-copy-btn")) {
+      const id = t.dataset.target;
+      const section = document.querySelector(`[data-section="${id}"]`);
+      if (!section) return;
+      const text = (section.innerText || "").trim();
+      if (!text) return;
+      await copyText(text);
+      return;
+    }
+  });
+
+  // Corrections
+  function loadCorrections(key){ return safeJsonParse(localStorage.getItem(key) || "{}", {}); }
+  function saveCorrections(key, map){ localStorage.setItem(key, JSON.stringify(map || {})); }
+  function applyCorrections(key, text){
+    let out = text || "";
+    const map = loadCorrections(key);
+    const keys = Object.keys(map).sort((a,b)=>b.length-a.length);
+    for (const k of keys) {
+      const v = map[k];
+      if (!k || !v) continue;
+      const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      out = out.replace(re, v);
+    }
+    return out;
+  }
+  function addCorrectionFromSelection(textarea, storeKey){
+    const s = textarea.selectionStart;
+    const e = textarea.selectionEnd;
+    const selected = (textarea.value || "").slice(s, e).trim();
+    if (!selected) { alert("Highlight the incorrect words first."); return; }
+    const correct = prompt("What should it be instead?", selected);
+    if (!correct || !correct.trim()) return;
+
+    const map = loadCorrections(storeKey);
+    map[selected] = correct.trim();
+    saveCorrections(storeKey, map);
+
+    const before = textarea.value.slice(0, s);
+    const after = textarea.value.slice(e);
+    textarea.value = before + correct.trim() + after;
+  }
+
+  incorrectQuestionBtn.addEventListener("click", () => addCorrectionFromSelection(clinicalQuestion, STORE_Q_CORR));
+  incorrectWrBtn.addEventListener("click", () => addCorrectionFromSelection(wrNote, STORE_WR_CORR));
+
+  // Sidebar saved items
+  function loadSavedQA(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_QA) || "[]", []); }
+  function saveSavedQA(list){ localStorage.setItem(STORE_SAVED_QA, JSON.stringify(list || [])); }
+  function loadSavedNotes(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_NOTES) || "[]", []); }
+  function saveSavedNotes(list){ localStorage.setItem(STORE_SAVED_NOTES, JSON.stringify(list || [])); }
+
+  function addSavedQA(question, answerText){
+    const list = loadSavedQA();
+    const title = question.length > 60 ? question.slice(0, 60).trim() + "…" : question.trim();
+    list.unshift({ id: Date.now(), title, question, answer: answerText || "", ts: Date.now() });
+    saveSavedQA(list.slice(0, 80));
+  }
+
+  function addSavedNote(content){
+    const list = loadSavedNotes();
+    const title = "Notes " + new Date().toLocaleString();
+    list.unshift({ id: Date.now(), title, content, ts: Date.now() });
+    saveSavedNotes(list.slice(0, 80));
+  }
+
+  function renderSidebar(){
+    const term = norm(sidebarSearch.value || "");
+
+    const qa = loadSavedQA();
+    savedQuestionsList.innerHTML = "";
+    if (!qa.length) {
+      savedQuestionsList.innerHTML = '<div class="conv-empty">No saved questions yet.</div>';
+    } else {
+      qa.forEach((item, idx) => {
+        const show = !term || norm(item.title).includes(term) || norm(item.question).includes(term);
+        if (!show) return;
+
+        const row = document.createElement("div");
+        row.className = "conversation-item";
+
+        const main = document.createElement("div");
+        main.className = "conv-main";
+        main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Question")}</div>`;
+
+        const copy = document.createElement("button");
+        copy.className = "conv-delete";
+        copy.textContent = "⧉";
+        copy.title = "Copy Q+A";
+
+        const del = document.createElement("button");
+        del.className = "conv-delete";
+        del.textContent = "✕";
+        del.title = "Remove";
+
+        main.addEventListener("click", () => {
+          clinicalQuestion.value = item.question || "";
+          answerEl.innerHTML = item.answer ? buildStructuredHtml(item.answer) : "Your answer will appear here.";
+          copyAllBtn.disabled = !(item.answer || "").trim();
+          clinicalQuestion.focus();
+        });
+
+        copy.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const out = `Q: ${item.question || ""}\n\nA:\n${item.answer || ""}`.trim();
+          if (out) await copyText(out);
+        });
+
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const list = loadSavedQA();
+          list.splice(idx, 1);
+          saveSavedQA(list);
+          renderSidebar();
+        });
+
+        row.appendChild(main);
+        row.appendChild(copy);
+        row.appendChild(del);
+        savedQuestionsList.appendChild(row);
+      });
+    }
+
+    const notes = loadSavedNotes();
+    savedWrList.innerHTML = "";
+    if (!notes.length) {
+      savedWrList.innerHTML = '<div class="conv-empty">No saved notes yet.</div>';
+    } else {
+      notes.forEach((item, idx) => {
+        const show = !term || norm(item.title).includes(term) || norm(item.content).includes(term);
+        if (!show) return;
+
+        const row = document.createElement("div");
+        row.className = "conversation-item";
+
+        const main = document.createElement("div");
+        main.className = "conv-main";
+        main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Notes")}</div>`;
+
+        const copy = document.createElement("button");
+        copy.className = "conv-delete";
+        copy.textContent = "⧉";
+        copy.title = "Copy note";
+
+        const del = document.createElement("button");
+        del.className = "conv-delete";
+        del.textContent = "✕";
+        del.title = "Remove";
+
+        main.addEventListener("click", () => {
+          wrNote.value = item.content || "";
+          wrNote.focus();
+        });
+
+        copy.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if ((item.content || "").trim()) await copyText(item.content.trim());
+        });
+
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const list = loadSavedNotes();
+          list.splice(idx, 1);
+          saveSavedNotes(list);
+          renderSidebar();
+        });
+
+        row.appendChild(main);
+        row.appendChild(copy);
+        row.appendChild(del);
+        savedWrList.appendChild(row);
+      });
+    }
+  }
+
+  sidebarSearch.addEventListener("input", renderSidebar);
+
+  // Generate
+  async function generate(){
+    const query = (clinicalQuestion.value || "").trim();
+    if (!query) return;
+
+    const mode = (modeSelect && modeSelect.value) ? modeSelect.value : "clinical";
+
+    generateBtn.disabled = true;
+    copyAllBtn.disabled = true;
+    answerLoader.classList.remove("hidden");
+    answerEl.innerHTML = "";
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, mode })
+      });
+
+      const data = await res.json();
+
+      if (data.answer) {
+        answerEl.innerHTML = buildStructuredHtml(data.answer);
+        copyAllBtn.disabled = !(data.answer || "").trim();
+        flashStatus(qStatus, "Generated.");
+      } else {
+        answerEl.textContent = (data.error || "No response.").trim();
+        copyAllBtn.disabled = true;
+        flashStatus(qStatus, "Generate failed.");
+      }
+    } catch (e) {
+      console.error(e);
+      answerEl.textContent = "Error generating answer.";
+      copyAllBtn.disabled = true;
+      flashStatus(qStatus, "Generate error.");
+    } finally {
+      answerLoader.classList.add("hidden");
+      generateBtn.disabled = false;
+    }
+  }
+
+  generateBtn.addEventListener("click", generate);
+
+  // Enter = Generate, Shift+Enter = newline
+  clinicalQuestion.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      generate();
+    }
+  });
+
+  copyAllBtn.addEventListener("click", async () => {
+    const text = (answerEl.innerText || "").trim();
+    if (!text) return;
+    await copyText(text);
+  });
+
+  // Clear saves Q+A to sidebar (if present)
+  clearQuestionBtn.addEventListener("click", () => {
+    const q = (clinicalQuestion.value || "").trim();
+    const a = (answerEl.innerText || "").trim();
+    if (q && a) addSavedQA(q, a);
+
+    clinicalQuestion.value = "";
+    answerEl.innerHTML = "Your answer will appear here.";
+    copyAllBtn.disabled = true;
+    flashStatus(qStatus, "Cleared (saved).");
+    renderSidebar();
+  });
+
+  // Notes buttons
+  copyWrBtn.addEventListener("click", async () => {
+    const text = (wrNote.value || "").trim();
+    if (!text) return;
+    await copyText(text);
+    flashStatus(wrStatus, "Copied.");
+  });
+
+  saveWrBtn.addEventListener("click", () => {
+    const text = (wrNote.value || "").trim();
+    if (!text) return;
+    addSavedNote(text);
+    flashStatus(wrStatus, "Saved.");
+    renderSidebar();
+  });
+
+  newWrBtn.addEventListener("click", () => {
+    const current = (wrNote.value || "").trim();
+    if (current) {
+      const save = confirm("Save this note before starting a new one?");
+      if (save) addSavedNote(current);
+    }
+    wrNote.value = "";
+    flashStatus(wrStatus, "Cleared.");
+    renderSidebar();
+  });
+
+  // Dictation (MediaRecorder → /api/transcribe)
+  function pickMimeType(){
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"];
+    for (const t of candidates) {
+      if (window.MediaRecorder?.isTypeSupported?.(t)) return t;
+    }
+    return "";
+  }
+
+  async function ensureMicPermission(statusEl){
+    if (!window.isSecureContext) {
+      flashStatus(statusEl, "Mic error: must be HTTPS.");
+      return false;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      flashStatus(statusEl, "Mic error: getUserMedia unsupported.");
+      return false;
+    }
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach(t => t.stop());
+      return true;
+    } catch (e) {
+      console.warn(e);
+      flashStatus(statusEl, "Mic blocked: allow microphone permission.");
+      return false;
+    }
+  }
+
+  function dedupeRepeats(text){
+    if (!text) return "";
+    let t = String(text);
+    t = t.replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1");
+    t = t.replace(/\s{2,}/g, " ").trim();
+    return t;
+  }
+  function normaliseDictation(text){
+    let t = dedupeRepeats(text);
+    t = t.replace(/\b(um|uh|like|you know)\b/gi, "");
+    t = t.replace(/\s{2,}/g, " ").trim();
+    return t;
+  }
+
+  async function transcribeBlob(blob){
+    const form = new FormData();
+    form.append("audio", blob, "audio.webm");
+    const res = await fetch("/api/transcribe", { method: "POST", body: form });
+    const raw = await res.text();
+
+    let data = {};
+    try { data = JSON.parse(raw); } catch {}
+    if (!res.ok) throw new Error(data.error || raw || ("HTTP " + res.status));
+    return (data.text || "").trim();
+  }
+
+  function createRecorderController({ statusEl, onText }){
+    let stream = null;
+    let recorder = null;
+    let chunks = [];
+    let recording = false;
+
+    async function start(){
+      if (recording) return;
+      recording = true;
+      chunks = [];
+
+      flashStatus(statusEl, "Mic: starting…");
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const mimeType = pickMimeType();
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstart = () => flashStatus(statusEl, "Mic: recording…");
+
+      recorder.onstop = async () => {
+        try {
+          flashStatus(statusEl, "Mic: transcribing…");
+          const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+          if (!blob || blob.size < 300) {
+            flashStatus(statusEl, "Mic: no audio detected.");
+            return;
+          }
+          const textRaw = await transcribeBlob(blob);
+          const textClean = normaliseDictation(textRaw);
+          if (textClean) onText(textClean);
+          flashStatus(statusEl, "Mic: done.");
+        } catch (e) {
+          console.warn(e);
+          flashStatus(statusEl, "Mic: transcribe failed.");
+        } finally {
+          try { stream?.getTracks()?.forEach(t => t.stop()); } catch {}
+          stream = null;
+          recorder = null;
+          chunks = [];
+          recording = false;
+        }
+      };
+
+      recorder.start();
+    }
+
+    function stop(){
+      if (!recording || !recorder) return;
+      flashStatus(statusEl, "Mic: stopping…");
+      try { recorder.stop(); } catch(e) {}
+    }
+
+    return { start, stop, isRecording: () => recording };
+  }
+
+  let qRecorder = null;
+  let nRecorder = null;
+
+  async function initRecordersIfNeeded(){
+    if (!qRecorder) {
+      qRecorder = createRecorderController({
+        statusEl: qStatus,
+        onText: (text) => {
+          const fixed = applyCorrections(STORE_Q_CORR, text).trim();
+          clinicalQuestion.value = fixed;
+          flashStatus(qStatus, "Question captured.");
+        }
+      });
+    }
+    if (!nRecorder) {
+      nRecorder = createRecorderController({
+        statusEl: wrStatus,
+        onText: (text) => {
+          const fixed = applyCorrections(STORE_WR_CORR, text).trim();
+          if (!fixed) return;
+          const current = (wrNote.value || "").trim();
+          wrNote.value = current ? (current + "\n" + fixed) : fixed;
+          flashStatus(wrStatus, "Notes captured.");
+        }
+      });
+    }
+  }
+
+  dictateQuestionBtn.addEventListener("click", async () => {
+    const ok = await ensureMicPermission(qStatus);
+    if (!ok) return;
+    await initRecordersIfNeeded();
+
+    if (!qRecorder.isRecording()) {
+      dictateQuestionBtn.textContent = "⏹ Stop";
+      qRecorder.start();
+    } else {
+      dictateQuestionBtn.textContent = "🎙 Dictate";
+      qRecorder.stop();
+    }
+  });
+
+  dictateWrBtn.addEventListener("click", async () => {
+    const ok = await ensureMicPermission(wrStatus);
+    if (!ok) return;
+    await initRecordersIfNeeded();
+
+    if (!nRecorder.isRecording()) {
+      dictateWrBtn.textContent = "⏹ Stop";
+      nRecorder.start();
+    } else {
+      dictateWrBtn.textContent = "🎙 Dictate";
+      nRecorder.stop();
+    }
+  });
+
+  // Init
+  renderSidebar();
+  flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
+  flashStatus(wrStatus, "Notes mic: idle.");
+});
+</script>
+
+</body>
+</html>
