@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Clinical Engine | EBM Session</title>
+  <title>Clinical Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -16,26 +16,21 @@
         <aside class="sidebar">
           <div class="sidebar-header">
             <div class="sidebar-brand">
-              <div class="brand-logo"></div>
               <div class="brand-text">
                 <div class="brand-title">EBM</div>
-                <div class="sidebar-title">EBM Session</div>
+                <div class="sidebar-title">Clinical Engine</div>
               </div>
             </div>
 
             <input
-              id="sidebarSearch"
               class="topic-search"
               type="text"
               placeholder="Search saved..."
             />
           </div>
 
-          <div class="sidebar-subhead">Saved Clinical Questions</div>
-          <div id="savedQuestionsList" class="conversation-list"></div>
-
-          <div class="sidebar-subhead">Consultation Notes (saved)</div>
-          <div id="savedWrList" class="conversation-list"></div>
+          <div class="sidebar-subhead">Saved Items</div>
+          <div class="conversation-list"></div>
 
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
@@ -46,47 +41,42 @@
         <div class="main-region">
           <header class="header">
             <h1 class="title">CLINICAL ENGINE</h1>
-            <p class="subtitle">Clinical questions (top) + consultation notes (below). Dictation separated.</p>
+            <p class="subtitle">Clinical questions + free-text consultation notes</p>
           </header>
 
-          <!-- TOP ROW -->
+          <!-- QUESTION + ANSWER -->
           <main class="grid">
-            <!-- QUESTION -->
             <section class="card input-card">
-              <label class="label" for="clinicalQuestion">Clinical Question</label>
+              <label class="label">Clinical Question</label>
+
               <textarea
                 id="clinicalQuestion"
                 class="textarea"
                 rows="6"
-                placeholder="Type or dictate a clinical question…"
+                placeholder="Type a clinical question…"
               ></textarea>
 
               <div class="actions actions-compact">
-                <button id="generateBtn" class="btn btn-compact" type="button">Generate</button>
-                <button id="dictateQuestionBtn" class="btn btn-compact" type="button">🎙 Dictate</button>
-                <button id="incorrectQuestionBtn" class="btn btn-compact" type="button">Incorrect</button>
-                <button id="clearQuestionBtn" class="btn btn-compact" type="button">Clear</button>
+                <button id="generateBtn" class="btn btn-compact">Generate</button>
+                <button class="btn btn-compact" disabled>🎙 Dictate</button>
+                <button id="clearQuestionBtn" class="btn btn-compact">Clear</button>
               </div>
 
-              <div id="qStatus" class="mic-status">Question mic: idle</div>
+              <div id="qStatus" class="mic-status">Ready</div>
             </section>
 
-            <!-- ANSWER -->
             <section class="card output-card">
               <div class="output-header">
-                <h2 class="output-title">Answers</h2>
-                <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+                <h2 class="output-title">Answer</h2>
+                <button id="copyAnswerBtn" class="copy-btn" disabled>Copy</button>
               </div>
 
               <div id="answerLoader" class="answer-loader hidden">
-                <div class="loader"></div>
-                <div class="loader-text">Generating structured answer…</div>
+                Generating…
               </div>
 
               <div class="output-body">
-                <div id="answer" class="answer placeholder">
-                  Your answer will appear here.
-                </div>
+                <pre id="answer" class="answer"></pre>
               </div>
             </section>
           </main>
@@ -97,27 +87,26 @@
           <section class="card wr-card">
             <div class="wr-head">
               <div>
-                <div class="label wr-label">Consultation Notes</div>
+                <div class="label">Consultation Notes</div>
                 <div class="wr-sub">Dictation never triggers the Clinical Engine.</div>
               </div>
 
               <div class="actions actions-compact">
-                <button id="dictateWrBtn" class="btn btn-compact" type="button">🎙 Dictate</button>
-                <button id="incorrectWrBtn" class="btn btn-compact" type="button">Incorrect</button>
-                <button id="copyWrBtn" class="btn btn-compact" type="button">Copy</button>
-                <button id="saveWrBtn" class="btn btn-compact" type="button">Save</button>
-                <button id="newWrBtn" class="btn btn-compact" type="button">New</button>
+                <button class="btn btn-compact" disabled>🎙 Dictate</button>
+                <button id="copyWrBtn" class="btn btn-compact">Copy</button>
+                <button id="saveWrBtn" class="btn btn-compact">Save</button>
+                <button id="newWrBtn" class="btn btn-compact">New</button>
               </div>
             </div>
 
             <textarea
               id="wrNote"
               class="textarea"
-              rows="16"
-              placeholder="Dictate or type freely here…"
+              rows="14"
+              placeholder="Type freely here…"
             ></textarea>
 
-            <div id="wrStatus" class="mic-status">Notes mic: idle</div>
+            <div id="wrStatus" class="mic-status">Ready</div>
           </section>
 
         </div>
@@ -125,9 +114,88 @@
     </div>
   </div>
 
-<!-- JS unchanged -->
 <script>
-/* your existing JS continues exactly as before */
+window.addEventListener("DOMContentLoaded", () => {
+
+  const clinicalQuestion = document.getElementById("clinicalQuestion");
+  const generateBtn = document.getElementById("generateBtn");
+  const clearQuestionBtn = document.getElementById("clearQuestionBtn");
+  const answerEl = document.getElementById("answer");
+  const answerLoader = document.getElementById("answerLoader");
+  const copyAnswerBtn = document.getElementById("copyAnswerBtn");
+  const qStatus = document.getElementById("qStatus");
+
+  const wrNote = document.getElementById("wrNote");
+  const copyWrBtn = document.getElementById("copyWrBtn");
+  const saveWrBtn = document.getElementById("saveWrBtn");
+  const newWrBtn = document.getElementById("newWrBtn");
+  const wrStatus = document.getElementById("wrStatus");
+
+  async function generate() {
+    const query = clinicalQuestion.value.trim();
+    if (!query) return;
+
+    generateBtn.disabled = true;
+    answerLoader.classList.remove("hidden");
+    answerEl.textContent = "";
+    copyAnswerBtn.disabled = true;
+    qStatus.textContent = "Generating…";
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query })
+      });
+
+      const data = await res.json();
+      answerEl.textContent = data.answer || data.error || "No response";
+      copyAnswerBtn.disabled = !data.answer;
+      qStatus.textContent = "Done";
+    } catch {
+      answerEl.textContent = "Error contacting server.";
+      qStatus.textContent = "Error";
+    } finally {
+      answerLoader.classList.add("hidden");
+      generateBtn.disabled = false;
+    }
+  }
+
+  generateBtn.addEventListener("click", generate);
+
+  clinicalQuestion.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      generate();
+    }
+  });
+
+  clearQuestionBtn.addEventListener("click", () => {
+    clinicalQuestion.value = "";
+    answerEl.textContent = "";
+    qStatus.textContent = "Cleared";
+  });
+
+  copyAnswerBtn.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(answerEl.textContent);
+  });
+
+  copyWrBtn.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(wrNote.value);
+    wrStatus.textContent = "Copied";
+  });
+
+  saveWrBtn.addEventListener("click", () => {
+    localStorage.setItem("consultation_notes", wrNote.value);
+    wrStatus.textContent = "Saved locally";
+  });
+
+  newWrBtn.addEventListener("click", () => {
+    wrNote.value = "";
+    wrStatus.textContent = "Cleared";
+  });
+
+});
 </script>
 
 </body>
