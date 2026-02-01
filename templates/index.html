@@ -23,12 +23,7 @@
               </div>
             </div>
 
-            <input
-              id="sidebarSearch"
-              class="topic-search"
-              type="text"
-              placeholder="Search saved..."
-            />
+            <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
           </div>
 
           <div class="sidebar-subhead">Saved Clinical Questions</div>
@@ -54,11 +49,20 @@
             <!-- QUESTION -->
             <section class="card input-card">
               <label class="label" for="clinicalQuestion">Clinical Question</label>
+
+              <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                <label class="label" style="margin:0;">Mode</label>
+                <select id="modeSelect" class="topic-search" style="max-width:220px;">
+                  <option value="clinical" selected>Clinical</option>
+                  <option value="dva">DVA Referral Check</option>
+                </select>
+              </div>
+
               <textarea
                 id="clinicalQuestion"
                 class="textarea"
-                rows="6"
-                placeholder="Type a clinical question… (Enter = Generate, Shift+Enter = new line)"
+                rows="7"
+                placeholder="Enter clinical question OR paste DVA patient details. Enter = Generate, Shift+Enter = new line."
               ></textarea>
 
               <div class="actions actions-compact">
@@ -84,9 +88,7 @@
               </div>
 
               <div class="output-body">
-                <div id="answer" class="answer placeholder">
-                  Your answer will appear here.
-                </div>
+                <div id="answer" class="answer placeholder">Your answer will appear here.</div>
               </div>
             </section>
           </main>
@@ -110,13 +112,7 @@
               </div>
             </div>
 
-            <textarea
-              id="wrNote"
-              class="textarea"
-              rows="16"
-              placeholder="Dictate or type freely here…"
-            ></textarea>
-
+            <textarea id="wrNote" class="textarea" rows="16" placeholder="Dictate or type freely here…"></textarea>
             <div id="wrStatus" class="mic-status">Notes mic: idle</div>
           </section>
 
@@ -127,19 +123,15 @@
 
 <script>
 window.addEventListener("DOMContentLoaded", () => {
-  /* =========================
-     STORAGE KEYS
-     ========================= */
-  const STORE_Q_CORR = "ebm_q_corrections_v6";
-  const STORE_WR_CORR = "ebm_wr_corrections_v6";
+  // Storage keys
+  const STORE_Q_CORR = "ebm_q_corrections_v7";
+  const STORE_WR_CORR = "ebm_wr_corrections_v7";
+  const STORE_SAVED_QA = "ebm_saved_qa_v7";
+  const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
 
-  // Save full Q+Answer cards in left panel
-  const STORE_SAVED_QA = "ebm_saved_qa_v6";
-  const STORE_SAVED_WR = "ebm_saved_notes_v6";
+  // Elements
+  const modeSelect = document.getElementById("modeSelect");
 
-  /* =========================
-     ELEMENTS
-     ========================= */
   const clinicalQuestion = document.getElementById("clinicalQuestion");
   const generateBtn = document.getElementById("generateBtn");
   const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
@@ -164,70 +156,24 @@ window.addEventListener("DOMContentLoaded", () => {
   const savedWrList = document.getElementById("savedWrList");
   const sidebarSearch = document.getElementById("sidebarSearch");
 
-  if (!clinicalQuestion || !generateBtn || !answerEl || !wrNote) {
-    console.error("Missing required elements. Check your HTML ids.");
-    return;
-  }
-
-  /* =========================
-     UTILS
-     ========================= */
-  function norm(s) {
-    return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
-  }
+  // Utils
+  function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
   function escapeHtml(str) {
-    return (str || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
-  function safeJsonParse(s, fallback) {
-    try { return JSON.parse(s); } catch { return fallback; }
-  }
-  async function copyText(text) {
-    if (!text) return;
-    try { await navigator.clipboard.writeText(text); } catch {}
-  }
-  function flashStatus(el, msg) {
-    if (el) el.textContent = msg;
-  }
-  function nowLabel() {
-    return new Date().toLocaleString();
-  }
+  function safeJsonParse(s, fallback){ try { return JSON.parse(s); } catch { return fallback; } }
+  async function copyText(text){ if (!text) return; try { await navigator.clipboard.writeText(text); } catch {} }
+  function flashStatus(el, msg){ if (el) el.textContent = msg; }
 
-  /* =========================
-     DICTATION CLEANUP
-     ========================= */
-  function dedupeRepeats(text) {
-    if (!text) return "";
-    let t = String(text);
-    t = t.replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1");
-    t = t.replace(/\s{2,}/g, " ").trim();
-    return t;
-  }
-  function normaliseDictation(text) {
-    let t = dedupeRepeats(text);
-    t = t.replace(/\b(um|uh|like|you know)\b/gi, "");
-    t = t.replace(/\s{2,}/g, " ").trim();
-    return t;
-  }
-
-  /* =========================
-     STRUCTURED ANSWER (collapsible)
-     ========================= */
-  function hasNonEmpty(arr) {
-    return Array.isArray(arr) && arr.some(l => (l || "").trim() !== "");
-  }
+  // Structured answer builder (collapsible)
+  function hasNonEmpty(arr){ return Array.isArray(arr) && arr.some(l => (l||"").trim() !== ""); }
 
   function buildStructuredHtml(raw) {
     if (!raw) return "";
-
-    // strip markdown-ish bits
     let text = String(raw)
       .replace(/\r/g, "")
       .replace(/\*\*(.*?)\*\*/g, "$1")
-      .replace(/#{1,6}\s*/g, "")
-      .trim();
+      .replace(/#{1,6}\s*/g, "");
 
     const sectionOrder = [
       "Summary",
@@ -237,8 +183,6 @@ window.addEventListener("DOMContentLoaded", () => {
       "Treatment",
       "Monitoring",
       "Follow-up & Safety Netting",
-      "Follow-up",
-      "Safety Netting",
       "Red Flags",
       "References",
     ];
@@ -248,16 +192,15 @@ window.addEventListener("DOMContentLoaded", () => {
     let current = { title: "Summary", content: [] };
     let seenExplicit = false;
 
-    function isHeading(line) {
-      const t = (line || "").trim().replace(/:$/, "");
+    function isHeading(line){
+      const t = (line||"").trim().replace(/:$/, "");
       const match = sectionOrder.find(h => h.toLowerCase() === t.toLowerCase());
       return match || null;
     }
 
     for (const rawLine of lines) {
-      const line = (rawLine || "").trim();
+      const line = (rawLine||"").trim();
       if (!line) { current.content.push(""); continue; }
-
       const heading = isHeading(line);
       if (heading) {
         if (hasNonEmpty(current.content)) sections.push(current);
@@ -269,10 +212,8 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (hasNonEmpty(current.content)) sections.push(current);
 
-    // if no headings detected, show as plain paragraphs
     if (!seenExplicit) {
-      const body = sections.map(s => s.content.join("\n")).join("\n").trim();
-      return `<div class="answer-paragraph">${escapeHtml(body || "No response generated.")}</div>`;
+      return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
     }
 
     let html = "";
@@ -280,16 +221,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
     for (const sec of sections) {
       if (!hasNonEmpty(sec.content)) continue;
-
       const id = `sec-${idx++}`;
       const inner = sec.content
-        .filter(l => (l || "").trim() !== "")
+        .filter(l => (l||"").trim() !== "")
         .map(l => `<p class="answer-paragraph">${escapeHtml(l.trim())}</p>`)
         .join("");
 
-      if (!inner.trim()) continue;
-
-      const alwaysOpen = (sec.title.toLowerCase() === "summary");
+      const alwaysOpen = (sec.title === "Summary");
 
       if (alwaysOpen) {
         html += `
@@ -319,7 +257,6 @@ window.addEventListener("DOMContentLoaded", () => {
     return html || `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
   }
 
-  // Collapsible + per-section copy
   document.addEventListener("click", async (e) => {
     const t = e.target;
 
@@ -344,16 +281,10 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* =========================
-     LOCAL LEARNING CORRECTIONS
-     ========================= */
-  function loadCorrections(key) {
-    return safeJsonParse(localStorage.getItem(key) || "{}", {});
-  }
-  function saveCorrections(key, map) {
-    localStorage.setItem(key, JSON.stringify(map || {}));
-  }
-  function applyCorrections(key, text) {
+  // Corrections
+  function loadCorrections(key){ return safeJsonParse(localStorage.getItem(key) || "{}", {}); }
+  function saveCorrections(key, map){ localStorage.setItem(key, JSON.stringify(map || {})); }
+  function applyCorrections(key, text){
     let out = text || "";
     const map = loadCorrections(key);
     const keys = Object.keys(map).sort((a,b)=>b.length-a.length);
@@ -365,7 +296,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     return out;
   }
-  function addCorrectionFromSelection(textarea, storeKey) {
+  function addCorrectionFromSelection(textarea, storeKey){
     const s = textarea.selectionStart;
     const e = textarea.selectionEnd;
     const selected = (textarea.value || "").slice(s, e).trim();
@@ -380,44 +311,40 @@ window.addEventListener("DOMContentLoaded", () => {
     const before = textarea.value.slice(0, s);
     const after = textarea.value.slice(e);
     textarea.value = before + correct.trim() + after;
-    textarea.selectionStart = textarea.selectionEnd = before.length + correct.trim().length;
   }
+
   incorrectQuestionBtn.addEventListener("click", () => addCorrectionFromSelection(clinicalQuestion, STORE_Q_CORR));
   incorrectWrBtn.addEventListener("click", () => addCorrectionFromSelection(wrNote, STORE_WR_CORR));
 
-  /* =========================
-     SIDEBAR STORAGE
-     ========================= */
-  function loadSavedQA() { return safeJsonParse(localStorage.getItem(STORE_SAVED_QA) || "[]", []); }
-  function saveSavedQA(list) { localStorage.setItem(STORE_SAVED_QA, JSON.stringify(list || [])); }
+  // Sidebar saved items
+  function loadSavedQA(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_QA) || "[]", []); }
+  function saveSavedQA(list){ localStorage.setItem(STORE_SAVED_QA, JSON.stringify(list || [])); }
+  function loadSavedNotes(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_NOTES) || "[]", []); }
+  function saveSavedNotes(list){ localStorage.setItem(STORE_SAVED_NOTES, JSON.stringify(list || [])); }
 
-  function loadSavedNotes() { return safeJsonParse(localStorage.getItem(STORE_SAVED_WR) || "[]", []); }
-  function saveSavedNotes(list) { localStorage.setItem(STORE_SAVED_WR, JSON.stringify(list || [])); }
-
-  function addSavedQA(question, answerText) {
+  function addSavedQA(question, answerText){
     const list = loadSavedQA();
     const title = question.length > 60 ? question.slice(0, 60).trim() + "…" : question.trim();
     list.unshift({ id: Date.now(), title, question, answer: answerText || "", ts: Date.now() });
     saveSavedQA(list.slice(0, 80));
   }
 
-  function addSavedNote(content) {
+  function addSavedNote(content){
     const list = loadSavedNotes();
-    const title = "Notes " + nowLabel();
+    const title = "Notes " + new Date().toLocaleString();
     list.unshift({ id: Date.now(), title, content, ts: Date.now() });
     saveSavedNotes(list.slice(0, 80));
   }
 
-  function renderSidebar() {
+  function renderSidebar(){
     const term = norm(sidebarSearch.value || "");
 
-    // Saved Q/A
-    const qaList = loadSavedQA();
+    const qa = loadSavedQA();
     savedQuestionsList.innerHTML = "";
-    if (!qaList.length) {
+    if (!qa.length) {
       savedQuestionsList.innerHTML = '<div class="conv-empty">No saved questions yet.</div>';
     } else {
-      qaList.forEach((item, idx) => {
+      qa.forEach((item, idx) => {
         const show = !term || norm(item.title).includes(term) || norm(item.question).includes(term);
         if (!show) return;
 
@@ -440,13 +367,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
         main.addEventListener("click", () => {
           clinicalQuestion.value = item.question || "";
-          if (item.answer) {
-            answerEl.innerHTML = buildStructuredHtml(item.answer);
-            copyAllBtn.disabled = !(item.answer || "").trim();
-          } else {
-            answerEl.innerHTML = '<div class="answer placeholder">Your answer will appear here.</div>';
-            copyAllBtn.disabled = true;
-          }
+          answerEl.innerHTML = item.answer ? buildStructuredHtml(item.answer) : "Your answer will appear here.";
+          copyAllBtn.disabled = !(item.answer || "").trim();
           clinicalQuestion.focus();
         });
 
@@ -471,13 +393,12 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Saved Notes
-    const noteList = loadSavedNotes();
+    const notes = loadSavedNotes();
     savedWrList.innerHTML = "";
-    if (!noteList.length) {
+    if (!notes.length) {
       savedWrList.innerHTML = '<div class="conv-empty">No saved notes yet.</div>';
     } else {
-      noteList.forEach((item, idx) => {
+      notes.forEach((item, idx) => {
         const show = !term || norm(item.title).includes(term) || norm(item.content).includes(term);
         if (!show) return;
 
@@ -526,36 +447,30 @@ window.addEventListener("DOMContentLoaded", () => {
 
   sidebarSearch.addEventListener("input", renderSidebar);
 
-  /* =========================
-     GENERATE
-     ========================= */
-  async function generate() {
+  // Generate
+  async function generate(){
     const query = (clinicalQuestion.value || "").trim();
     if (!query) return;
+
+    const mode = (modeSelect && modeSelect.value) ? modeSelect.value : "clinical";
 
     generateBtn.disabled = true;
     copyAllBtn.disabled = true;
     answerLoader.classList.remove("hidden");
-    answerEl.classList.remove("placeholder");
     answerEl.innerHTML = "";
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query })
+        body: JSON.stringify({ query, mode })
       });
 
       const data = await res.json();
 
       if (data.answer) {
-        // show structured UI
         answerEl.innerHTML = buildStructuredHtml(data.answer);
-
-        // enable copy all
-        const has = !!(data.answer || "").trim();
-        copyAllBtn.disabled = !has;
-
+        copyAllBtn.disabled = !(data.answer || "").trim();
         flashStatus(qStatus, "Generated.");
       } else {
         answerEl.textContent = (data.error || "No response.").trim();
@@ -575,7 +490,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   generateBtn.addEventListener("click", generate);
 
-  // Enter = generate, Shift+Enter = newline
+  // Enter = Generate, Shift+Enter = newline
   clinicalQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -589,25 +504,20 @@ window.addEventListener("DOMContentLoaded", () => {
     await copyText(text);
   });
 
+  // Clear saves Q+A to sidebar (if present)
   clearQuestionBtn.addEventListener("click", () => {
     const q = (clinicalQuestion.value || "").trim();
     const a = (answerEl.innerText || "").trim();
-
-    // Save to sidebar ON CLEAR (as requested)
     if (q && a) addSavedQA(q, a);
 
-    // Clear UI
     clinicalQuestion.value = "";
-    answerEl.innerHTML = '<div class="answer placeholder">Your answer will appear here.</div>';
+    answerEl.innerHTML = "Your answer will appear here.";
     copyAllBtn.disabled = true;
-    flashStatus(qStatus, "Cleared (saved to sidebar).");
-
+    flashStatus(qStatus, "Cleared (saved).");
     renderSidebar();
   });
 
-  /* =========================
-     WR NOTES BUTTONS
-     ========================= */
+  // Notes buttons
   copyWrBtn.addEventListener("click", async () => {
     const text = (wrNote.value || "").trim();
     if (!text) return;
@@ -634,29 +544,22 @@ window.addEventListener("DOMContentLoaded", () => {
     renderSidebar();
   });
 
-  /* =========================
-     VOICE (MediaRecorder → /api/transcribe)
-     ========================= */
-  function pickMimeType() {
-    const candidates = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/ogg"
-    ];
+  // Dictation (MediaRecorder → /api/transcribe)
+  function pickMimeType(){
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"];
     for (const t of candidates) {
       if (window.MediaRecorder?.isTypeSupported?.(t)) return t;
     }
     return "";
   }
 
-  async function ensureMicPermission(statusEl) {
+  async function ensureMicPermission(statusEl){
     if (!window.isSecureContext) {
-      flashStatus(statusEl, "Mic error: site must be HTTPS.");
+      flashStatus(statusEl, "Mic error: must be HTTPS.");
       return false;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      flashStatus(statusEl, "Mic error: getUserMedia not supported.");
+      flashStatus(statusEl, "Mic error: getUserMedia unsupported.");
       return false;
     }
     try {
@@ -670,35 +573,44 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function transcribeBlob(blob) {
+  function dedupeRepeats(text){
+    if (!text) return "";
+    let t = String(text);
+    t = t.replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1");
+    t = t.replace(/\s{2,}/g, " ").trim();
+    return t;
+  }
+  function normaliseDictation(text){
+    let t = dedupeRepeats(text);
+    t = t.replace(/\b(um|uh|like|you know)\b/gi, "");
+    t = t.replace(/\s{2,}/g, " ").trim();
+    return t;
+  }
+
+  async function transcribeBlob(blob){
     const form = new FormData();
     form.append("audio", blob, "audio.webm");
-
     const res = await fetch("/api/transcribe", { method: "POST", body: form });
     const raw = await res.text();
 
     let data = {};
     try { data = JSON.parse(raw); } catch {}
-
-    if (!res.ok) {
-      const msg = data.error || raw || ("HTTP " + res.status);
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error(data.error || raw || ("HTTP " + res.status));
     return (data.text || "").trim();
   }
 
-  function createRecorderController({ statusEl, onText }) {
+  function createRecorderController({ statusEl, onText }){
     let stream = null;
     let recorder = null;
     let chunks = [];
     let recording = false;
 
-    async function start() {
+    async function start(){
       if (recording) return;
       recording = true;
       chunks = [];
-      flashStatus(statusEl, "Mic: starting…");
 
+      flashStatus(statusEl, "Mic: starting…");
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const mimeType = pickMimeType();
@@ -709,27 +621,18 @@ window.addEventListener("DOMContentLoaded", () => {
       };
 
       recorder.onstart = () => flashStatus(statusEl, "Mic: recording…");
-      recorder.onerror = () => flashStatus(statusEl, "Mic: recorder error.");
 
       recorder.onstop = async () => {
         try {
-          flashStatus(statusEl, "Mic: uploading → transcribing…");
+          flashStatus(statusEl, "Mic: transcribing…");
           const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-
-          if (!blob || blob.size < 1500) {
-            flashStatus(statusEl, "Mic: no audio captured.");
+          if (!blob || blob.size < 300) {
+            flashStatus(statusEl, "Mic: no audio detected.");
             return;
           }
-
           const textRaw = await transcribeBlob(blob);
           const textClean = normaliseDictation(textRaw);
-
-          if (!textClean) {
-            flashStatus(statusEl, "Mic: nothing transcribed.");
-            return;
-          }
-
-          onText(textClean);
+          if (textClean) onText(textClean);
           flashStatus(statusEl, "Mic: done.");
         } catch (e) {
           console.warn(e);
@@ -746,10 +649,10 @@ window.addEventListener("DOMContentLoaded", () => {
       recorder.start();
     }
 
-    function stop() {
+    function stop(){
       if (!recording || !recorder) return;
       flashStatus(statusEl, "Mic: stopping…");
-      try { recorder.stop(); } catch (e) { console.warn(e); }
+      try { recorder.stop(); } catch(e) {}
     }
 
     return { start, stop, isRecording: () => recording };
@@ -758,7 +661,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let qRecorder = null;
   let nRecorder = null;
 
-  async function initRecordersIfNeeded() {
+  async function initRecordersIfNeeded(){
     if (!qRecorder) {
       qRecorder = createRecorderController({
         statusEl: qStatus,
@@ -786,7 +689,6 @@ window.addEventListener("DOMContentLoaded", () => {
   dictateQuestionBtn.addEventListener("click", async () => {
     const ok = await ensureMicPermission(qStatus);
     if (!ok) return;
-
     await initRecordersIfNeeded();
 
     if (!qRecorder.isRecording()) {
@@ -801,7 +703,6 @@ window.addEventListener("DOMContentLoaded", () => {
   dictateWrBtn.addEventListener("click", async () => {
     const ok = await ensureMicPermission(wrStatus);
     if (!ok) return;
-
     await initRecordersIfNeeded();
 
     if (!nRecorder.isRecording()) {
@@ -813,11 +714,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* =========================
-     INIT
-     ========================= */
+  // Init
   renderSidebar();
-  flashStatus(qStatus, "Question mic: idle (Enter=Generate, Shift+Enter=new line).");
+  flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
   flashStatus(wrStatus, "Notes mic: idle.");
 });
 </script>
