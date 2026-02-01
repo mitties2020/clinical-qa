@@ -1,6 +1,7 @@
 import os
 import tempfile
 import threading
+import subprocess
 import requests
 
 from flask import Flask, request, jsonify, render_template
@@ -17,13 +18,13 @@ if os.getenv("RENDER") is None:
 # DeepSeek config
 # -----------------------------------
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_MODEL = "deepseek-chat"
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # -----------------------------------
-# Whisper config
+# Whisper config (stable on Render)
 # -----------------------------------
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
+WHISPER_MODEL_SIZE = "tiny"   # IMPORTANT: tiny is reliable on free/low CPU
 
 # -----------------------------------
 # Flask app
@@ -66,20 +67,41 @@ def transcribe():
     if not _transcribe_lock.acquire(blocking=False):
         return jsonify({"error": "Server busy"}), 429
 
-    tmp_path = None
+    tmp_webm = None
+    tmp_wav = None
+
     try:
         f = request.files["audio"]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
-            tmp_path = tmp.name
-            f.save(tmp_path)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as t1:
+            tmp_webm = t1.name
+            f.save(tmp_webm)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as t2:
+            tmp_wav = t2.name
+
+        # 🔑 CRITICAL FIX: convert browser audio → WAV
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i", tmp_webm,
+                "-ac", "1",
+                "-ar", "16000",
+                tmp_wav,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
 
         model = get_whisper_model()
         segments, _ = model.transcribe(
-            tmp_path,
+            tmp_wav,
             language="en",
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 400},
+            vad_filter=False,  # IMPORTANT: VAD kills dictation
             temperature=0.0,
+            beam_size=5,
             condition_on_previous_text=False,
         )
 
@@ -87,16 +109,17 @@ def transcribe():
         return jsonify({"text": text})
 
     except Exception as e:
-        print("TRANSCRIBE ERROR:", e)
+        print("TRANSCRIBE ERROR:", repr(e))
         return jsonify({"error": "Transcription failed"}), 502
 
     finally:
         _transcribe_lock.release()
-        if tmp_path:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
+        for p in (tmp_webm, tmp_wav):
+            if p:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
 
 # ---------- GENERATE ----------
 @app.route("/api/generate", methods=["POST"])
@@ -109,61 +132,27 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
-    # Doctor-level, Australian-context, sectioned plain-text output for your UI parser.
-    system_prompt = (
-        "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
-
-        "ROLE AND CONTEXT:\n"
-        "This system is used by Australian hospital doctors (PGY2+, registrars, consultants).\n"
-        "The purpose is clinical reasoning, safe bedside understanding, and exam-style revision.\n"
-        "This is not patient-facing health education.\n\n"
-
-        "OUTPUT FORMAT (MANDATORY):\n"
-        "You MUST structure every response using the following headings EXACTLY, each on its own line, in this order:\n"
-        "Summary\n"
-        "Assessment\n"
-        "Diagnosis\n"
-        "Investigations\n"
-        "Treatment\n"
-        "Monitoring\n"
-        "Follow-up & Safety Netting\n"
-        "Red Flags\n"
-        "References\n\n"
-
-        "FORMAT RULES:\n"
-        "Use plain text only.\n"
-        "Do not use markdown symbols such as ###, **, *, -, or •.\n"
-        "Do not collapse the response into one paragraph.\n"
-        "Under each heading, write multiple short, clinically meaningful lines or paragraphs.\n"
-        "You may use separate lines to convey lists, but without bullet characters.\n"
-        "If a section is not relevant, write: Not applicable.\n\n"
-
-        "CLINICAL STANDARDS:\n"
-        "Align content with contemporary Australian practice.\n"
-        "Do not quote proprietary resources verbatim (e.g. ETG/AMH).\n"
-        "If discussing medicines, provide general approach and typical adult dose ranges only; advise checking local references.\n"
-        "For paediatrics, pregnancy, renal/hepatic impairment, and drug interactions, flag considerations and advise local checking.\n\n"
-
-        "DEPTH REQUIREMENT:\n"
-        "Aim for registrar-level depth by default.\n"
-        "Avoid superficial public-health style explanations.\n"
-    )
-
-    user_content = (
-        "This is a hypothetical, de-identified clinical question for educational purposes.\n\n"
-        f"Clinical question:\n{query}"
-    )
-
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content}
+            {
+                "role": "system",
+                "content": (
+                    "You are an Australian medical clinical decision-support AI. "
+                    "Respond using structured sections with clear headings: "
+                    "Summary, Assessment, Differential Diagnosis, Investigations, "
+                    "Management, Monitoring, Red Flags, References. "
+                    "Base recommendations on Australian guidelines (ETG, AMH, "
+                    "Therapeutic Guidelines, RACGP) where applicable."
+                )
+            },
+            {
+                "role": "user",
+                "content": query
+            }
         ],
-        "temperature": 0.25,
-        "top_p": 0.9,
-        "max_tokens": 1400,
-        "stream": False
+        "temperature": 0.2,
+        "max_tokens": 1200
     }
 
     headers = {
@@ -172,30 +161,18 @@ def generate():
     }
 
     try:
-        resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=60)
+        resp = session.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=40)
         resp.raise_for_status()
         data = resp.json()
 
         answer = (
-            (data.get("choices") or [{}])[0]
+            data.get("choices", [{}])[0]
             .get("message", {})
             .get("content", "")
             .strip()
         )
 
-        # Post-clean: if model sneaks in markdown, strip common markers safely.
-        if answer:
-            answer = answer.replace("\r", "")
-            answer = answer.replace("###", "")
-            answer = answer.replace("**", "")
-
-            cleaned_lines = []
-            for line in answer.splitlines():
-                # Strip bullet chars at line start (if any)
-                cleaned_lines.append(line.lstrip("-•* ").rstrip())
-            answer = "\n".join(cleaned_lines).strip()
-
-        return jsonify({"answer": answer or "No response."})
+        return jsonify({"answer": answer})
 
     except Exception as e:
         print("DEEPSEEK ERROR:", e)
