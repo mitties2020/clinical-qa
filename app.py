@@ -109,20 +109,45 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
+    # Force a plain-text, sectioned output your UI can parse reliably.
+    system_prompt = (
+        "You are an Australian clinical education assistant.\n\n"
+        "IMPORTANT OUTPUT RULES:\n"
+        "- Do NOT use markdown.\n"
+        "- Do NOT use headings like ###.\n"
+        "- Do NOT use bullet symbols such as '-', '*', or '•'.\n"
+        "- Do NOT use bold markers like **.\n"
+        "- Use plain text only.\n\n"
+        "Structure every answer using the following headings EXACTLY, each on its own line:\n"
+        "Summary\n"
+        "Assessment\n"
+        "Diagnosis\n"
+        "Investigations\n"
+        "Treatment\n"
+        "Monitoring\n"
+        "Follow-up & Safety Netting\n"
+        "Red Flags\n"
+        "References\n\n"
+        "Under each heading, write short paragraphs or single-sentence lines.\n"
+        "If a section is not relevant, write: Not applicable.\n"
+        "Keep it concise, practical, and consistent with Australian practice.\n"
+    )
+
+    user_content = (
+        "This is a hypothetical, de-identified clinical study question for educational purposes.\n\n"
+        f"Clinical question:\n{query}"
+    )
+
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": [
-            {
-                "role": "system",
-                "content": "You are an Australian clinical education AI. Use clear, concise explanations."
-            },
-            {
-                "role": "user",
-                "content": query
-            }
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
         ],
-        "temperature": 0.25,
-        "max_tokens": 1000
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "max_tokens": 1100,
+        "stream": False
     }
 
     headers = {
@@ -136,13 +161,19 @@ def generate():
         data = resp.json()
 
         answer = (
-            data.get("choices", [{}])[0]
+            (data.get("choices") or [{}])[0]
             .get("message", {})
             .get("content", "")
             .strip()
         )
 
-        return jsonify({"answer": answer})
+        # Extra safety: if model still returns markdown, strip common markers.
+        if answer:
+            answer = answer.replace("###", "").replace("**", "")
+            # Remove leading bullet chars at line start
+            answer = "\n".join([line.lstrip("-•* ").rstrip() for line in answer.splitlines()]).strip()
+
+        return jsonify({"answer": answer or "No response."})
 
     except Exception as e:
         print("DEEPSEEK ERROR:", e)
