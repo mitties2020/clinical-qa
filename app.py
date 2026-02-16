@@ -164,9 +164,16 @@ DVA_SYSTEM_PROMPT = (
 # -----------------------------------
 # Routes
 # -----------------------------------
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    try:
+        return render_template("index.html")
+    except Exception:
+        return "vividmedi backend running", 200
 
 # ---------- TRANSCRIBE ----------
 @app.route("/api/transcribe", methods=["POST"])
