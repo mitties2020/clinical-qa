@@ -27,7 +27,6 @@ DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/c
 # -----------------------------------
 # Whisper config
 # -----------------------------------
-# tiny is most reliable on low-CPU instances
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 # -----------------------------------
@@ -56,21 +55,13 @@ def get_whisper_model():
     return _whisper_model
 
 def awst_timestamp() -> str:
-    # Western Australia time
     dt = datetime.now(ZoneInfo("Australia/Perth"))
     return dt.strftime("%d %b %Y, %H:%M (AWST)")
 
 def extract_field(text: str, labels: list[str]) -> str:
-    """
-    Extracts value after labels like:
-    'DVA Patient Name: John Smith'
-    'Name - John Smith'
-    'Name=John Smith'
-    """
     if not text:
         return ""
     for lab in labels:
-        # label followed by : or - or =
         pattern = rf"(?im)^\s*{re.escape(lab)}\s*[:=\-]\s*(.+?)\s*$"
         m = re.search(pattern, text)
         if m:
@@ -115,50 +106,25 @@ def build_dva_header(user_text: str) -> str:
 # -----------------------------------
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
-    "Audience:\n"
-    "Australian hospital/GP doctors (PGY2+, registrars, consultants). Not patient-facing.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
-    "Use these headings EXACTLY, each on its own line:\n"
-    "Summary\n"
-    "Assessment\n"
-    "Diagnosis\n"
-    "Investigations\n"
-    "Treatment\n"
-    "Monitoring\n"
-    "Follow-up & Safety Netting\n"
-    "Red Flags\n"
-    "References\n\n"
+    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n\n"
     "STYLE:\n"
-    "Plain text only. No markdown symbols (###, **, *, •).\n"
-    "Registrar-level depth. Australian practice framing.\n"
-    "Do not quote proprietary sources verbatim.\n"
-    "References should name source families only (e.g. Therapeutic Guidelines/eTG, AMH, Australian Immunisation Handbook, local protocols).\n"
+    "Plain text only. Registrar-level depth. Australian practice framing.\n"
 )
 
-# Updated DVA prompt: includes DVA_META block + provider checks + renewal audit checks.
 DVA_SYSTEM_PROMPT = (
     "You are an Australian medical practitioner assisting other qualified clinicians with DVA documentation.\n\n"
-    "Primary use-case:\n"
-    "DVA D0904 allied health referrals (new + renewal).\n\n"
-    "Goal:\n"
-    "Assess whether the referral justification is defensible and identify missing elements that increase audit risk.\n"
-    "Provide clinician-grade suggestions to strengthen documentation and explore legitimate alternative pathways.\n"
-    "Do not claim DVA approval.\n\n"
+    "Primary use-case: DVA D0904 allied health referrals (new + renewal).\n\n"
     "IMPORTANT:\n"
-    "Do not invent accepted conditions, entitlements, or facts not provided.\n"
-    "If details are missing, explicitly say what is missing and why it matters.\n"
-    "You may propose LEGITIMATE alternatives (e.g., request clarification, GP review, specialist input, different discipline, IL pathway) "
-    "but do not advise gaming eligibility or misrepresenting linkage.\n\n"
+    "Do not invent accepted conditions or entitlements. Do not advise misrepresentation.\n"
+    "You may propose legitimate alternative pathways.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
-    "First output a machine-readable block exactly like this:\n"
     "DVA_META\n"
     "Referral type: <D0904 new | D0904 renewal | other/unclear>\n"
     "Provider type: <dietitian | physiotherapist | exercise physiologist | psychologist | OT | podiatrist | other/unclear>\n"
     "Provider-type checks:\n"
     "- <bullet>\n"
-    "- <bullet>\n"
     "Renewal audit checks:\n"
-    "- <bullet>\n"
     "- <bullet>\n"
     "Justification strength: <strong | moderate | weak>\n"
     "Audit risk: <low | medium | high>\n"
@@ -169,20 +135,8 @@ DVA_SYSTEM_PROMPT = (
     "Alternative legitimate pathways:\n"
     "- <bullet>\n"
     "END_DVA_META\n\n"
-    "Then output the clinical answer with these headings EXACTLY, each on its own line:\n"
-    "Summary\n"
-    "Assessment\n"
-    "Diagnosis\n"
-    "Investigations\n"
-    "Treatment\n"
-    "Monitoring\n"
-    "Follow-up & Safety Netting\n"
-    "Red Flags\n"
-    "References\n\n"
-    "Within the sections:\n"
-    "Assessment must include: justification strength + gaps + audit-risk flags.\n"
-    "Treatment must include: a rewritten, individualised clinical note paragraph suitable for records.\n"
-    "Style: Plain text only. No markdown.\n"
+    "Then output clinical sections:\n"
+    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
 
 # -----------------------------------
@@ -194,79 +148,10 @@ def healthz():
 
 @app.route("/")
 def index():
-    try:
-        return render_template("index.html")
-    except Exception:
-        return "vividmedi backend running", 200
+    return render_template("index.html")
 
-# ---------- TRANSCRIBE ----------
-@app.route("/api/transcribe", methods=["POST"])
-def transcribe():
-    """
-    Browser uploads audio/webm (opus).
-    Convert to 16kHz mono WAV with ffmpeg, then transcribe with faster_whisper.
-    """
-    if "audio" not in request.files:
-        return jsonify({"error": "Missing audio"}), 400
-
-    if not _transcribe_lock.acquire(blocking=False):
-        return jsonify({"error": "Server busy"}), 429
-
-    tmp_webm = None
-    tmp_wav = None
-
-    try:
-        f = request.files["audio"]
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as t1:
-            tmp_webm = t1.name
-            f.save(tmp_webm)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as t2:
-            tmp_wav = t2.name
-
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", tmp_webm, "-ac", "1", "-ar", "16000", tmp_wav],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-
-        model = get_whisper_model()
-        segments, _ = model.transcribe(
-            tmp_wav,
-            language="en",
-            vad_filter=False,
-            temperature=0.0,
-            beam_size=5,
-            condition_on_previous_text=False,
-        )
-
-        text = " ".join(s.text.strip() for s in segments).strip()
-        return jsonify({"text": text})
-
-    except Exception as e:
-        print("TRANSCRIBE ERROR:", repr(e))
-        return jsonify({"error": "Transcription failed"}), 502
-
-    finally:
-        _transcribe_lock.release()
-        for p in (tmp_webm, tmp_wav):
-            if p:
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-
-# ---------- GENERATE ----------
 @app.route("/api/generate", methods=["POST"])
 def generate():
-    """
-    Request JSON:
-      { "query": "...", "mode": "clinical" | "dva_new" | "dva_renew" | "dva" }
-
-    - mode defaults to "clinical"
-    """
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
 
@@ -277,41 +162,19 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
-    # Accept legacy "dva" and new "dva_*" modes
     if mode.startswith("dva"):
         header = build_dva_header(query)
-
-        if mode == "dva_renew":
-            referral_intent = "D0904 renewal"
-        elif mode == "dva_new":
-            referral_intent = "D0904 new"
-        else:
-            referral_intent = "D0904 (new/renewal not specified)"
+        referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
 
         user_content = (
-            "You are assessing a DVA allied health referral. Focus on D0904 logic.\n"
-            f"Referral intent (UI-selected): {referral_intent}\n\n"
-            "PATIENT HEADER (must appear at the top of your response exactly as provided):\n"
+            f"Referral intent: {referral_intent}\n\n"
             f"{header}\n\n"
-            "DETAILS (verbatim paste from clinician/UI):\n"
-            f"{query}\n\n"
-            "Instructions:\n"
-            "1) Output DVA_META block first (exact format required).\n"
-            "2) Provider-type checks must be discipline-specific (dietitian/physio/EP/psych/OT/podiatry) and include typical DVA admin pitfalls.\n"
-            "3) Renewal audit checks must be strict: measurable benefit, ongoing impairment, unmet goals, sessions used/remaining, "
-            "and whether an End-of-Cycle report content is present.\n"
-            "4) Strengthen the documentation only with legitimate strategies (clarify linkage, better clinical reasoning, alternative pathways). "
-            "Do NOT advise misrepresentation or gaming eligibility.\n"
-            "5) Then provide the structured headings output.\n"
-            "6) Keep it Australian clinician-facing.\n"
+            f"DETAILS:\n{query}\n\n"
+            "Follow DVA_META format then clinical headings."
         )
-
         system_prompt = DVA_SYSTEM_PROMPT
     else:
-        user_content = (
-            "This is a hypothetical, de-identified clinical question for educational purposes.\n\n"
-            f"Clinical question:\n{query}"
-        )
+        user_content = f"Clinical question:\n{query}"
         system_prompt = CLINICAL_SYSTEM_PROMPT
 
     payload = {
@@ -323,7 +186,6 @@ def generate():
         "temperature": 0.25,
         "top_p": 0.9,
         "max_tokens": 1800,
-        "stream": False,
     }
 
     headers = {
@@ -343,16 +205,6 @@ def generate():
             .strip()
         )
 
-        # Light cleanup if model sneaks markdown in
-        if answer:
-            answer = answer.replace("\r", "")
-            answer = answer.replace("###", "")
-            answer = answer.replace("**", "")
-            cleaned = []
-            for line in answer.splitlines():
-                cleaned.append(line.lstrip("•*- ").rstrip())
-            answer = "\n".join(cleaned).strip()
-
         return jsonify({"answer": answer or "No response."})
 
     except Exception as e:
@@ -364,4 +216,4 @@ def generate():
 # -----------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
