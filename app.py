@@ -135,17 +135,41 @@ CLINICAL_SYSTEM_PROMPT = (
     "References should name source families only (e.g. Therapeutic Guidelines/eTG, AMH, Australian Immunisation Handbook, local protocols).\n"
 )
 
+# Updated DVA prompt: includes DVA_META block + provider checks + renewal audit checks.
 DVA_SYSTEM_PROMPT = (
     "You are an Australian medical practitioner assisting other qualified clinicians with DVA documentation.\n\n"
+    "Primary use-case:\n"
+    "DVA D0904 allied health referrals (new + renewal).\n\n"
     "Goal:\n"
     "Assess whether the referral justification is defensible and identify missing elements that increase audit risk.\n"
-    "Produce an individualised clinical note. Do not claim DVA approval.\n\n"
+    "Provide clinician-grade suggestions to strengthen documentation and explore legitimate alternative pathways.\n"
+    "Do not claim DVA approval.\n\n"
     "IMPORTANT:\n"
-    "Do not invent accepted conditions or entitlements.\n"
+    "Do not invent accepted conditions, entitlements, or facts not provided.\n"
     "If details are missing, explicitly say what is missing and why it matters.\n"
-    "Avoid boilerplate. Use the patient-specific details provided.\n\n"
+    "You may propose LEGITIMATE alternatives (e.g., request clarification, GP review, specialist input, different discipline, IL pathway) "
+    "but do not advise gaming eligibility or misrepresenting linkage.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
-    "Use these headings EXACTLY, each on its own line:\n"
+    "First output a machine-readable block exactly like this:\n"
+    "DVA_META\n"
+    "Referral type: <D0904 new | D0904 renewal | other/unclear>\n"
+    "Provider type: <dietitian | physiotherapist | exercise physiologist | psychologist | OT | podiatrist | other/unclear>\n"
+    "Provider-type checks:\n"
+    "- <bullet>\n"
+    "- <bullet>\n"
+    "Renewal audit checks:\n"
+    "- <bullet>\n"
+    "- <bullet>\n"
+    "Justification strength: <strong | moderate | weak>\n"
+    "Audit risk: <low | medium | high>\n"
+    "Missing items:\n"
+    "- <bullet>\n"
+    "Suggested amendments:\n"
+    "- <bullet>\n"
+    "Alternative legitimate pathways:\n"
+    "- <bullet>\n"
+    "END_DVA_META\n\n"
+    "Then output the clinical answer with these headings EXACTLY, each on its own line:\n"
     "Summary\n"
     "Assessment\n"
     "Diagnosis\n"
@@ -158,7 +182,7 @@ DVA_SYSTEM_PROMPT = (
     "Within the sections:\n"
     "Assessment must include: justification strength + gaps + audit-risk flags.\n"
     "Treatment must include: a rewritten, individualised clinical note paragraph suitable for records.\n"
-    "Use plain text only. No markdown.\n"
+    "Style: Plain text only. No markdown.\n"
 )
 
 # -----------------------------------
@@ -239,7 +263,7 @@ def transcribe():
 def generate():
     """
     Request JSON:
-      { "query": "...", "mode": "clinical" | "dva" }
+      { "query": "...", "mode": "clinical" | "dva_new" | "dva_renew" | "dva" }
 
     - mode defaults to "clinical"
     """
@@ -253,22 +277,33 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
-    if mode == "dva":
+    # Accept legacy "dva" and new "dva_*" modes
+    if mode.startswith("dva"):
         header = build_dva_header(query)
 
+        if mode == "dva_renew":
+            referral_intent = "D0904 renewal"
+        elif mode == "dva_new":
+            referral_intent = "D0904 new"
+        else:
+            referral_intent = "D0904 (new/renewal not specified)"
+
         user_content = (
-            "Use the details below to assess DVA referral justification.\n"
-            "Return a structured doctor-level answer with the required headings.\n\n"
+            "You are assessing a DVA allied health referral. Focus on D0904 logic.\n"
+            f"Referral intent (UI-selected): {referral_intent}\n\n"
             "PATIENT HEADER (must appear at the top of your response exactly as provided):\n"
             f"{header}\n\n"
-            "DETAILS:\n"
+            "DETAILS (verbatim paste from clinician/UI):\n"
             f"{query}\n\n"
             "Instructions:\n"
-            "In Assessment, clearly state:\n"
-            "Justification strength (strong / moderate / weak)\n"
-            "Gaps (missing items)\n"
-            "Audit-risk flags\n"
-            "In Treatment, provide an individualised clinical note paragraph that is defensible and patient-specific.\n"
+            "1) Output DVA_META block first (exact format required).\n"
+            "2) Provider-type checks must be discipline-specific (dietitian/physio/EP/psych/OT/podiatry) and include typical DVA admin pitfalls.\n"
+            "3) Renewal audit checks must be strict: measurable benefit, ongoing impairment, unmet goals, sessions used/remaining, "
+            "and whether an End-of-Cycle report content is present.\n"
+            "4) Strengthen the documentation only with legitimate strategies (clarify linkage, better clinical reasoning, alternative pathways). "
+            "Do NOT advise misrepresentation or gaming eligibility.\n"
+            "5) Then provide the structured headings output.\n"
+            "6) Keep it Australian clinician-facing.\n"
         )
 
         system_prompt = DVA_SYSTEM_PROMPT
@@ -287,7 +322,7 @@ def generate():
         ],
         "temperature": 0.25,
         "top_p": 0.9,
-        "max_tokens": 1600,
+        "max_tokens": 1800,
         "stream": False,
     }
 
