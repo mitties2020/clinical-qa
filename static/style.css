@@ -536,3 +536,62 @@ body{
   .brand-header__name{ font-size: 28px; }
   .brand-header__logo{ width: 54px; height: 54px; border-radius: 18px; }
 }
+/* ===== VividMedi visual polish ===== */
+
+.brand-header{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+  margin-bottom: 10px;
+}
+
+.brand-header__logo{
+  width:64px;
+  height:64px;
+  filter: drop-shadow(0 0 18px rgba(51,230,166,0.55));
+}
+
+.brand-header__name{
+  font-size:40px;
+  font-weight:900;
+  letter-spacing:0.04em;
+}
+
+.brand-header__tagline{
+  letter-spacing:0.22em;
+  opacity:0.7;
+}
+
+.sidebar-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px;
+  border-radius:16px;
+  background:rgba(5,10,25,0.6);
+}
+
+.brand-logo{
+  width:42px;
+  height:42px;
+  filter: drop-shadow(0 0 12px rgba(51,230,166,0.55));
+}
+
+.btn{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02)),
+    radial-gradient(circle at 30% 0%, rgba(51,230,166,0.25), transparent 60%),
+    rgba(15,23,42,0.95);
+  border: 1px solid rgba(148,163,253,0.22);
+}
+
+.btn-primary{
+  color:#02110b;
+  background:
+    linear-gradient(180deg, rgba(234,255,247,0.95), rgba(51,230,166,0.95));
+}
+
+.btn-danger{
+  border-color: rgba(239,68,68,0.4);
+}
