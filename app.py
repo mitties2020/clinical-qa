@@ -34,9 +34,14 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 # -----------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 http = requests.Session()
+
+# -----------------------------------
+# Health check (Render)
+# -----------------------------------
 @app.get("/healthz")
 def healthz():
     return "ok", 200
+
 # -----------------------------------
 # Whisper model (load once)
 # -----------------------------------
@@ -144,10 +149,6 @@ DVA_SYSTEM_PROMPT = (
 # -----------------------------------
 # Routes
 # -----------------------------------
-@app.route("/healthz")
-def healthz():
-    return "ok", 200
-
 @app.route("/")
 def index():
     return render_template("index.html")
