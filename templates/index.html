@@ -34,6 +34,9 @@
           <div class="sidebar-subhead">Consultation Notes (saved)</div>
           <div id="savedWrList" class="conversation-list"></div>
 
+          <div class="sidebar-subhead">Handovers (saved)</div>
+          <div id="savedHandoverList" class="conversation-list"></div>
+
           <div class="sidebar-footer">
             <span class="sidebar-hint">Locally stored • Per device</span>
           </div>
@@ -110,11 +113,23 @@
           <!-- CONSULTATION NOTES -->
           <section class="card wr-card">
             <div class="wr-head">
-              <div>
+              <div style="min-width:240px;">
                 <div class="label wr-label">Consultation Notes</div>
+
+                <!-- NEW: consult dropdown (same style as top) -->
+                <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+                  <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
+                  <select id="consultModeSelect" class="topic-search" style="max-width:260px;">
+                    <option value="consult_note" selected>Create clinical note</option>
+                    <option value="handover">Handover summary</option>
+                  </select>
+                </div>
               </div>
 
               <div class="actions actions-compact">
+                <!-- NEW: Smart device button (placeholder only) -->
+                <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
+
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button">Copy</button>
@@ -139,9 +154,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_WR_CORR = "ebm_wr_corrections_v7";
   const STORE_SAVED_QA = "ebm_saved_qa_v7";
   const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
+  const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
 
   // Elements
   const modeSelect = document.getElementById("modeSelect");
+  const consultModeSelect = document.getElementById("consultModeSelect");
 
   const clinicalQuestion = document.getElementById("clinicalQuestion");
   const generateBtn = document.getElementById("generateBtn");
@@ -150,6 +167,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const clearQuestionBtn = document.getElementById("clearQuestionBtn");
 
   const wrNote = document.getElementById("wrNote");
+  const smartDeviceBtn = document.getElementById("smartDeviceBtn");
   const dictateWrBtn = document.getElementById("dictateWrBtn");
   const incorrectWrBtn = document.getElementById("incorrectWrBtn");
   const copyWrBtn = document.getElementById("copyWrBtn");
@@ -165,6 +183,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const savedQuestionsList = document.getElementById("savedQuestionsList");
   const savedWrList = document.getElementById("savedWrList");
+  const savedHandoverList = document.getElementById("savedHandoverList");
   const sidebarSearch = document.getElementById("sidebarSearch");
 
   // Utils
@@ -422,6 +441,8 @@ window.addEventListener("DOMContentLoaded", () => {
   function saveSavedQA(list){ localStorage.setItem(STORE_SAVED_QA, JSON.stringify(list || [])); }
   function loadSavedNotes(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_NOTES) || "[]", []); }
   function saveSavedNotes(list){ localStorage.setItem(STORE_SAVED_NOTES, JSON.stringify(list || [])); }
+  function loadSavedHandovers(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_HANDOVERS) || "[]", []); }
+  function saveSavedHandovers(list){ localStorage.setItem(STORE_SAVED_HANDOVERS, JSON.stringify(list || [])); }
 
   function addSavedQA(question, answerText){
     const list = loadSavedQA();
@@ -437,9 +458,17 @@ window.addEventListener("DOMContentLoaded", () => {
     saveSavedNotes(list.slice(0, 80));
   }
 
+  function addSavedHandover(content){
+    const list = loadSavedHandovers();
+    const title = "Handover " + new Date().toLocaleString();
+    list.unshift({ id: Date.now(), title, content, ts: Date.now() });
+    saveSavedHandovers(list.slice(0, 120));
+  }
+
   function renderSidebar(){
     const term = norm(sidebarSearch.value || "");
 
+    // Clinical Qs
     const qa = loadSavedQA();
     savedQuestionsList.innerHTML = "";
     if (!qa.length) {
@@ -494,6 +523,7 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    // Notes
     const notes = loadSavedNotes();
     savedWrList.innerHTML = "";
     if (!notes.length) {
@@ -544,11 +574,64 @@ window.addEventListener("DOMContentLoaded", () => {
         savedWrList.appendChild(row);
       });
     }
+
+    // Handovers
+    const handovers = loadSavedHandovers();
+    savedHandoverList.innerHTML = "";
+    if (!handovers.length) {
+      savedHandoverList.innerHTML = '<div class="conv-empty">No saved handovers yet.</div>';
+    } else {
+      handovers.forEach((item, idx) => {
+        const show = !term || norm(item.title).includes(term) || norm(item.content).includes(term);
+        if (!show) return;
+
+        const row = document.createElement("div");
+        row.className = "conversation-item";
+
+        const main = document.createElement("div");
+        main.className = "conv-main";
+        main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Handover")}</div>`;
+
+        const copy = document.createElement("button");
+        copy.className = "conv-delete";
+        copy.textContent = "⧉";
+        copy.title = "Copy handover";
+
+        const del = document.createElement("button");
+        del.className = "conv-delete";
+        del.textContent = "✕";
+        del.title = "Remove";
+
+        main.addEventListener("click", () => {
+          wrNote.value = item.content || "";
+          wrNote.focus();
+          if (consultModeSelect) consultModeSelect.value = "handover";
+        });
+
+        copy.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if ((item.content || "").trim()) await copyText(item.content.trim());
+        });
+
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const list = loadSavedHandovers();
+          list.splice(idx, 1);
+          saveSavedHandovers(list);
+          renderSidebar();
+        });
+
+        row.appendChild(main);
+        row.appendChild(copy);
+        row.appendChild(del);
+        savedHandoverList.appendChild(row);
+      });
+    }
   }
 
   sidebarSearch.addEventListener("input", renderSidebar);
 
-  // Generate
+  // Generate (top clinical engine)
   async function generate(){
     const query = (clinicalQuestion.value || "").trim();
     if (!query) return;
@@ -632,7 +715,14 @@ window.addEventListener("DOMContentLoaded", () => {
     renderSidebar();
   });
 
-  // Notes buttons
+  // ========= Consult Notes: NEW behaviour =========
+
+  // Placeholder button
+  smartDeviceBtn.addEventListener("click", () => {
+    flashStatus(wrStatus, "Smart device data collection: coming soon.");
+  });
+
+  // Copy notes textbox
   copyWrBtn.addEventListener("click", async () => {
     const text = (wrNote.value || "").trim();
     if (!text) return;
@@ -640,19 +730,83 @@ window.addEventListener("DOMContentLoaded", () => {
     flashStatus(wrStatus, "Copied.");
   });
 
+  // NEW: Save based on consult mode
   saveWrBtn.addEventListener("click", () => {
     const text = (wrNote.value || "").trim();
     if (!text) return;
-    addSavedNote(text);
-    flashStatus(wrStatus, "Saved.");
+
+    const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+    if (cmode === "handover") {
+      addSavedHandover(text);
+      flashStatus(wrStatus, "Saved handover.");
+    } else {
+      addSavedNote(text);
+      flashStatus(wrStatus, "Saved note.");
+    }
     renderSidebar();
   });
 
+  // NEW: Generate handover or consult note from pasted content (uses backend)
+  async function generateConsultOutput(){
+    const input = (wrNote.value || "").trim();
+    if (!input) return;
+
+    const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+    if (cmode === "smart_device") return;
+
+    // Reuse the same output panel, so users can copy structured output
+    generateBtn.disabled = true;
+    copyAllBtn.disabled = true;
+    answerLoader.classList.remove("hidden");
+    answerEl.innerHTML = "";
+
+    try {
+      const res = await fetch("/api/consult", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input, mode: cmode })
+      });
+
+      const data = await res.json();
+      if (data.answer) {
+        answerEl.innerHTML = buildStructuredHtml(data.answer);
+        copyAllBtn.disabled = !(data.answer || "").trim();
+        flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Clinical note generated.");
+      } else {
+        answerEl.textContent = (data.error || "No response.").trim();
+        copyAllBtn.disabled = true;
+        flashStatus(wrStatus, "Generate failed.");
+      }
+    } catch (e) {
+      console.error(e);
+      answerEl.textContent = "Error generating output.";
+      copyAllBtn.disabled = true;
+      flashStatus(wrStatus, "Generate error.");
+    } finally {
+      answerLoader.classList.add("hidden");
+      generateBtn.disabled = false;
+    }
+  }
+
+  // NEW: Double-tap Enter behaviour in consult box:
+  // - Ctrl+Enter generates consult output
+  wrNote.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      generateConsultOutput();
+    }
+  });
+
+  // New note button
   newWrBtn.addEventListener("click", () => {
     const current = (wrNote.value || "").trim();
     if (current) {
-      const save = confirm("Save this note before starting a new one?");
-      if (save) addSavedNote(current);
+      const save = confirm("Save this before starting a new one?");
+      if (save) {
+        const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+        if (cmode === "handover") addSavedHandover(current);
+        else addSavedNote(current);
+      }
     }
     wrNote.value = "";
     flashStatus(wrStatus, "Cleared.");
@@ -832,7 +986,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // Init
   renderSidebar();
   flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
-  flashStatus(wrStatus, "Notes mic: idle.");
+  flashStatus(wrStatus, "Notes mic: idle. Ctrl+Enter generates handover/note.");
 });
 </script>
 
