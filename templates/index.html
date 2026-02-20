@@ -5,6 +5,61 @@
   <title>Clinical Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- VividMedi brand header styles (only affects the top header area) -->
+  <style>
+    .brand-header{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      padding-top:2px;
+      padding-bottom:2px;
+    }
+    .brand-header__logo{
+      height:42px;
+      width:auto;
+      display:block;
+      filter: drop-shadow(0 10px 26px rgba(0, 255, 180, 0.18));
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+    .brand-header__text{
+      display:flex;
+      flex-direction:column;
+      line-height:1.05;
+      text-align:left;
+    }
+    .brand-header__name{
+      font-size:34px;
+      font-weight:700;
+      letter-spacing:0.02em;
+      color: rgba(245, 250, 255, 0.95);
+      text-shadow: 0 0 18px rgba(80, 255, 200, 0.10);
+    }
+    .brand-header__tagline{
+      margin-top:6px;
+      font-size:12px;
+      letter-spacing:0.24em;
+      text-transform:uppercase;
+      color: rgba(185, 205, 215, 0.82);
+    }
+    @media (max-width: 520px){
+      .brand-header{
+        gap:10px;
+      }
+      .brand-header__logo{
+        height:36px;
+      }
+      .brand-header__name{
+        font-size:28px;
+      }
+      .brand-header__tagline{
+        font-size:11px;
+        letter-spacing:0.20em;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -40,7 +95,20 @@
         <!-- MAIN -->
         <div class="main-region">
           <header class="header">
-            <h1 class="title">CLINICAL ENGINE</h1>
+            <!-- Replaced CLINICAL ENGINE with logo + modern wordmark -->
+            <div class="brand-header">
+              <!-- Put your logo at: /static/assets/vividmedi-logo.svg (or .png) -->
+              <img
+                class="brand-header__logo"
+                src="{{ url_for('static', filename='assets/vividmedi-logo.svg') }}"
+                alt="VividMedi"
+              />
+              <div class="brand-header__text">
+                <div class="brand-header__name">VividMedi</div>
+                <div class="brand-header__tagline">Clinical Intelligence Engine</div>
+              </div>
+            </div>
+
             <p class="subtitle">Clinical questions (top) + consultation notes (below). Dictation never triggers the Clinical Engine.</p>
           </header>
 
@@ -48,7 +116,8 @@
           <main class="grid">
             <!-- QUESTION -->
             <section class="card input-card">
-              <label class="label" for="clinicalQuestion">Clinical Question</label>
+              <!-- Changed Clinical Question -> Clinical -->
+              <label class="label" for="clinicalQuestion">Clinical</label>
 
               <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
                 <label class="label" style="margin:0;">Mode</label>
