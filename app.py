@@ -34,7 +34,9 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 # -----------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 http = requests.Session()
-
+@app.get("/healthz")
+def healthz():
+    return "ok", 200
 # -----------------------------------
 # Whisper model (load once)
 # -----------------------------------
