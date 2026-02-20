@@ -55,37 +55,51 @@ body {
 }
 
 .sidebar-header { display: flex; flex-direction: column; gap: 10px; }
-.sidebar-brand { display: flex; flex-direction: column; gap: 6px; }
 
-.brand-logo {
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 30% 0, rgba(51,230,166,1), rgba(17,24,39,1));
-  box-shadow: 0 0 16px rgba(51,230,166,0.9);
+/* Make sidebar brand row modern */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(148,163,253,0.14);
+  background: rgba(3,7,18,0.65);
+  box-shadow: inset 0 0 12px rgba(15,23,42,0.45);
 }
 
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(51,230,166,0.45));
+}
+
+.brand-text { display: flex; flex-direction: column; gap: 2px; }
+
+/* Brand text */
 .brand-title {
   font-weight: 800;
   font-size: 18px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
+  letter-spacing: 0.02em;
+  color: var(--accent-text);
+  text-shadow: 0 0 18px rgba(51,230,166,0.18);
 }
 
 .sidebar-title {
   text-align: left;
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 750;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.20em;
   text-transform: uppercase;
-  color: #ffffff;
+  color: rgba(255,255,255,0.92);
   margin-bottom: 2px;
-  opacity: 0.95;
+  opacity: 0.9;
 }
 
-.sidebar-section-title {
+/* Used by your HTML */
+.sidebar-subhead {
   padding: 10px 10px 4px;
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -178,18 +192,53 @@ body {
 
 /* Main */
 .main-region { display: flex; flex-direction: column; gap: 14px; }
-.header { text-align: center; padding-top: 4px; }
 
-.title {
-  margin: 0;
-  font-size: 30px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--accent-text);
-  text-shadow: 0 0 18px rgba(51,230,166,0.22);
+/* Header: now brand row (no sentence under it) */
+.header {
+  padding-top: 6px;
+  padding-bottom: 4px;
 }
-.subtitle { margin: 4px 0 0; font-size: 13px; color: rgba(229,231,235,0.65); }
 
+/* Brand header row */
+.brand-header{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap: 14px;
+}
+
+.brand-header__logo{
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 18px rgba(51,230,166,0.45));
+}
+
+.brand-header__text{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  line-height:1.05;
+}
+
+.brand-header__name{
+  margin:0;
+  font-size: 38px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  color: rgba(245,247,255,0.95);
+  text-shadow: 0 0 20px rgba(51,230,166,0.16);
+}
+
+.brand-header__tagline{
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(229,231,235,0.70);
+}
+
+/* Grid */
 .grid {
   display: grid;
   grid-template-columns: minmax(0,1fr) minmax(0,1.25fr);
@@ -241,53 +290,112 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(51,230,166,0.12), var(--accent-glow);
 }
-.textarea-compact { min-height: 150px; }
-.textarea-tall { min-height: 360px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
-/* Buttons (smaller + metallic) */
-.btn-row {
-  display: flex;
+/* Actions row used by your HTML */
+.actions-compact{
+  display:flex;
   gap: 10px;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
+  align-items:center;
+  justify-content:center;
   margin-top: 10px;
 }
 
-.btn {
-  border: none;
+/* =========
+   Buttons — upgraded
+   ========= */
+.btn{
+  border: 1px solid rgba(148,163,253,0.20);
   cursor: pointer;
   border-radius: 999px;
-  font-weight: 750;
+  font-weight: 800;
   letter-spacing: 0.02em;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
   user-select: none;
-}
-
-.btn-sm {
   padding: 8px 14px;
   font-size: 13px;
-  color: #07111f;
-  background:
-    linear-gradient(180deg, rgba(220,255,244,0.95), rgba(51,230,166,0.95));
-  box-shadow:
-    0 10px 26px rgba(51,230,166,0.18),
-    0 0 18px rgba(51,230,166,0.25);
-}
-.btn-sm:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(51,230,166,0.24), 0 0 22px rgba(51,230,166,0.30); }
-.btn-sm:active { transform: translateY(0px); }
-
-.btn-ghost {
-  background: rgba(15,23,42,0.92);
   color: rgba(240,255,252,0.92);
-  border: 1px solid rgba(51,230,166,0.35);
-  box-shadow: inset 0 0 0 1px rgba(148,163,253,0.12);
+
+  /* glass + metallic sheen */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)),
+    radial-gradient(circle at 20% 0%, rgba(51,230,166,0.18), transparent 55%),
+    rgba(15,23,42,0.92);
+  box-shadow:
+    0 12px 26px rgba(0,0,0,0.25),
+    inset 0 0 0 1px rgba(0,0,0,0.20);
 }
-.btn-ghost:hover {
-  background: rgba(51,230,166,0.12);
+
+.btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(51,230,166,0.45);
+  box-shadow:
+    0 14px 30px rgba(0,0,0,0.28),
+    0 0 22px rgba(51,230,166,0.25),
+    inset 0 0 0 1px rgba(0,0,0,0.18);
+}
+
+.btn:active{
+  transform: translateY(0px);
+  filter: saturate(1.05);
+}
+
+.btn:disabled{
+  opacity: 0.40;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Primary (Generate / Save) */
+.btn-primary{
+  border-color: rgba(51,230,166,0.42);
+  color: #051018;
+  background:
+    linear-gradient(180deg, rgba(234,255,247,0.92), rgba(51,230,166,0.92)),
+    radial-gradient(circle at 20% 0%, rgba(45,212,191,0.35), transparent 55%);
+  box-shadow:
+    0 14px 28px rgba(51,230,166,0.18),
+    0 0 18px rgba(51,230,166,0.22);
+}
+
+.btn-primary:hover{
+  box-shadow:
+    0 18px 34px rgba(51,230,166,0.22),
+    0 0 26px rgba(51,230,166,0.28);
+}
+
+/* Danger (Clear / New) */
+.btn-danger{
+  border-color: rgba(239,68,68,0.30);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)),
+    radial-gradient(circle at 20% 0%, rgba(239,68,68,0.20), transparent 55%),
+    rgba(15,23,42,0.92);
+}
+.btn-danger:hover{
+  border-color: rgba(239,68,68,0.55);
+  box-shadow:
+    0 14px 30px rgba(0,0,0,0.28),
+    0 0 20px rgba(239,68,68,0.18);
+}
+
+/* Copy All button uses btn too */
+.copy-btn{
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(51,230,166,0.35);
+  background: rgba(15,23,42,0.96);
+  color: rgba(240,255,252,0.92);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.copy-btn:hover:not(:disabled) {
+  background: rgba(51,230,166,0.14);
   box-shadow: var(--accent-glow);
 }
-.btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; transform: none; }
+.copy-btn:disabled { opacity: 0.25; cursor: default; }
 
 /* Mic status */
 .mic-status {
@@ -315,25 +423,6 @@ body {
   opacity: 0.92;
 }
 
-.copy-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(51,230,166,0.45);
-  background: rgba(15,23,42,0.96);
-  color: rgba(240,255,252,0.92);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-.copy-btn:hover:not(:disabled) {
-  background: rgba(51,230,166,0.14);
-  box-shadow: var(--accent-glow);
-}
-.copy-btn:disabled { opacity: 0.25; cursor: default; }
-.copy-btn.copied { background: rgba(51,230,166,0.85); color: #051018; }
-
-.copy-mini { padding: 5px 10px; font-size: 11px; }
-
 .output-body {
   margin-top: 4px;
   padding: 10px;
@@ -348,16 +437,34 @@ body {
 .answer { font-size: 14px; line-height: 1.65; color: rgba(245,247,255,0.95); }
 .answer.placeholder { color: rgba(229,231,235,0.55); }
 
-/* Accordion sections */
-.acc { margin-bottom: 10px; }
-.acc-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ===== Your JS uses these classes (add styling) ===== */
+.section { margin-bottom: 10px; }
+.section-header,
+.collapsible-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
   gap: 10px;
   margin-bottom: 6px;
 }
-.acc-btn {
+
+.section-header.static span{
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  font-weight: 900;
+  opacity: 0.92;
+}
+
+.section-body,
+.collapsible-content{
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(5,10,25,0.92);
+  border: 1px solid rgba(148,163,253,0.16);
+}
+
+.collapsible{
   flex: 1;
   padding: 9px 10px;
   border-radius: 12px;
@@ -371,15 +478,8 @@ body {
   cursor: pointer;
   transition: all 0.18s ease;
 }
-.acc-btn:hover { border-color: rgba(51,230,166,0.40); box-shadow: 0 0 18px rgba(51,230,166,0.14); }
-.acc-btn.active { border-color: rgba(51,230,166,0.60); box-shadow: 0 0 18px rgba(51,230,166,0.18); }
-
-.acc-body {
-  padding: 10px 10px;
-  border-radius: 14px;
-  background: rgba(5,10,25,0.92);
-  border: 1px solid rgba(148,163,253,0.16);
-}
+.collapsible:hover { border-color: rgba(51,230,166,0.40); box-shadow: 0 0 18px rgba(51,230,166,0.14); }
+.collapsible.active { border-color: rgba(51,230,166,0.60); box-shadow: 0 0 18px rgba(51,230,166,0.18); }
 
 .answer-line {
   padding: 6px 0;
@@ -405,115 +505,19 @@ body {
 
 /* WR card layout */
 .wr-card { width: 100%; }
-.wr-header {
+.wr-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
-.wr-header-left { display: flex; flex-direction: column; gap: 4px; }
-.wr-subtitle { font-size: 12px; color: rgba(229,231,235,0.65); }
+.wr-sub { font-size: 12px; color: rgba(229,231,235,0.65); }
+.divider-spacer { height: 14px; }
 
 /* Responsive */
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .grid { grid-template-columns: 1fr; }
   .conversation-list { max-height: 200px; }
-  .btn-row { justify-content: flex-start; }
-  }
-/* =========================
-   PATCH: smaller metallic buttons + clearer text
-   (paste at END of your existing CSS)
-   ========================= */
-
-.sidebar-subhead {
-  padding: 10px 14px 6px;
-  opacity: 0.85;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.actions-compact {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  margin-top: 6px;
-}
-
-.btn-compact {
-  padding: 7px 14px;
-  font-size: 13px;
-  border-radius: 999px;
-  box-shadow: 0 0 14px rgba(34,197,94,0.35);
-}
-
-/* Metallic look: keep your green brand but add a steel-like sheen */
-.btn {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02)) ,
-    linear-gradient(90deg, #22c55e, #4ade80);
-  color: #04110b;
-  text-shadow: none;
-  border: 1px solid rgba(255,255,255,0.10);
-}
-
-.btn:hover {
-  box-shadow: 0 0 26px rgba(34,197,94,0.65);
-}
-
-/* Improve label contrast */
-.label, .output-title, .sidebar-title {
-  color: rgba(255,255,255,0.96);
-  text-shadow: 0 0 10px rgba(34,197,94,0.10);
-}
-
-.answer {
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-/* Keep answer area from “taking over” visually */
-.output-body {
-  max-height: 520px;
-}
-
-/* Ensure collapsible headings look like tabs again */
-.collapsible {
-  border: 1px solid rgba(148,163,253,0.18);
-}
-
-.collapsible.active {
-  background: rgba(22,163,74,0.28);
-  box-shadow: 0 0 16px rgba(34,197,94,0.35);
-}
-
-.mic-status {
-  opacity: 0.80;
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-.divider-spacer { height: 14px; }
-
-.wr-card { width: 100%; }
-.wr-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.wr-label { margin-bottom: 6px; }
-.wr-sub { opacity: 0.75; font-size: 12px; }
-
-/* Mobile: prevent buttons getting huge */
-@media (max-width: 900px) {
-  .btn-compact { padding: 7px 12px; font-size: 13px; }
-  .output-title { position: static; transform: none; }
-  .output-header { min-height: 34px; }
 }
