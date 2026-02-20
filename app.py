@@ -37,6 +37,7 @@ http = requests.Session()
 
 # -----------------------------------
 # Health check (Render)
+# IMPORTANT: define ONCE only (duplicate routes break gunicorn)
 # -----------------------------------
 @app.get("/healthz")
 def healthz():
@@ -61,6 +62,9 @@ def get_whisper_model():
                 )
     return _whisper_model
 
+# -----------------------------------
+# Helpers
+# -----------------------------------
 def awst_timestamp() -> str:
     dt = datetime.now(ZoneInfo("Australia/Perth"))
     return dt.strftime("%d %b %Y, %H:%M (AWST)")
@@ -108,8 +112,35 @@ def build_dva_header(user_text: str) -> str:
     header.append(f"Date & Time (AWST): {awst_timestamp()}")
     return "\n".join(header).strip()
 
+def _run_ffmpeg_to_wav(in_path: str, out_path: str) -> None:
+    """
+    Convert whatever the browser recorded (webm/ogg/mp3/etc) to a clean 16kHz mono wav
+    for Whisper. Requires ffmpeg installed on Render (you already apt-get it).
+    """
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", in_path,
+        "-vn",
+        "-ac", "1",
+        "-ar", "16000",
+        "-f", "wav",
+        out_path,
+    ]
+    # Capture stderr so we can diagnose failures.
+    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode != 0:
+        raise RuntimeError("ffmpeg failed: " + (p.stderr.decode("utf-8", "ignore")[-800:] or "unknown error"))
+
+def _clean_transcript(text: str) -> str:
+    # Keep light-touch; you already do corrections client-side.
+    t = (text or "").strip()
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
 # -----------------------------------
-# Prompts
+# Prompts (keep headings consistent with your front-end accordion)
 # -----------------------------------
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
@@ -117,6 +148,31 @@ CLINICAL_SYSTEM_PROMPT = (
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n\n"
     "STYLE:\n"
     "Plain text only. Registrar-level depth. Australian practice framing.\n"
+    "If the user pastes raw data (old notes, imaging, labs), extract and reformat cleanly.\n"
+)
+
+HANDOVER_SYSTEM_PROMPT = (
+    "You are an Australian ED-focused clinical assistant.\n"
+    "Task: produce a high-quality HANDOVER / PRESENTATION that suits the most likely context.\n"
+    "Infer context (ED, ward, ICU, clinic) from the content and tailor accordingly.\n\n"
+    "OUTPUT FORMAT (MANDATORY):\n"
+    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n\n"
+    "CONTENT RULES:\n"
+    "- Summary should be an ISBAR-style handover (concise, immediately usable).\n"
+    "- Include key vitals/status, working diagnosis, key differentials, what has been done, and what's pending.\n"
+    "- If pasted data is messy, reorganise into a clean handover.\n"
+)
+
+CLINICAL_NOTE_SYSTEM_PROMPT = (
+    "You are an Australian clinical documentation assistant.\n"
+    "Task: turn the provided text/dictation/pasted results into a structured clinical note.\n"
+    "Use Australian spelling. Avoid fabricating details; use placeholders when unknown.\n\n"
+    "OUTPUT FORMAT (MANDATORY):\n"
+    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n\n"
+    "CONTENT RULES:\n"
+    "- Summary: structured note skeleton (presenting complaint, HPI, relevant PMHx/meds/allergies, exam, impression, plan).\n"
+    "- Use concise, clinically realistic phrasing appropriate for ED/ward notes.\n"
+    "- If the user pastes labs/imaging/history, format into readable sections.\n"
 )
 
 DVA_SYSTEM_PROMPT = (
@@ -149,11 +205,11 @@ DVA_SYSTEM_PROMPT = (
 # -----------------------------------
 # Routes
 # -----------------------------------
-@app.route("/")
+@app.get("/")
 def index():
     return render_template("index.html")
 
-@app.route("/api/generate", methods=["POST"])
+@app.post("/api/generate")
 def generate():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
@@ -165,10 +221,14 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
+    # Choose prompt by mode
     if mode.startswith("dva"):
         header = build_dva_header(query)
-        referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
-
+        referral_intent = (
+            "D0904 new" if mode == "dva_new"
+            else "D0904 renewal" if mode == "dva_renew"
+            else "D0904 (unspecified)"
+        )
         user_content = (
             f"Referral intent: {referral_intent}\n\n"
             f"{header}\n\n"
@@ -176,6 +236,23 @@ def generate():
             "Follow DVA_META format then clinical headings."
         )
         system_prompt = DVA_SYSTEM_PROMPT
+
+    elif mode in ("handover", "handover_summary"):
+        user_content = (
+            "Create a clinician-to-clinician handover/presentation from the following content.\n"
+            "If context is unclear, infer the most likely.\n\n"
+            f"{query}"
+        )
+        system_prompt = HANDOVER_SYSTEM_PROMPT
+
+    elif mode in ("clinical_note", "note", "create_clinical_note"):
+        user_content = (
+            "Create a structured clinical note from the following content (dictation / pasted data).\n"
+            "Do not invent details; use placeholders when missing.\n\n"
+            f"{query}"
+        )
+        system_prompt = CLINICAL_NOTE_SYSTEM_PROMPT
+
     else:
         user_content = f"Clinical question:\n{query}"
         system_prompt = CLINICAL_SYSTEM_PROMPT
@@ -213,6 +290,71 @@ def generate():
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
+
+@app.post("/api/transcribe")
+def transcribe():
+    """
+    Browser uploads audio as FormData 'audio' (webm/ogg).
+    We convert -> wav via ffmpeg then run faster-whisper.
+
+    This route is REQUIRED for your Dictate buttons to work.
+    """
+    if "audio" not in request.files:
+        return jsonify({"error": "Missing audio file"}), 400
+
+    f = request.files["audio"]
+    if not f or f.filename is None:
+        return jsonify({"error": "Invalid audio upload"}), 400
+
+    # Serialise transcription to prevent CPU thrash on tiny Render instances
+    with _transcribe_lock:
+        tmp_in = None
+        tmp_wav = None
+        try:
+            # Save incoming blob
+            suffix = os.path.splitext(f.filename)[1] or ".webm"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tin:
+                tmp_in = tin.name
+                f.save(tmp_in)
+
+            # Convert to wav for whisper
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tw:
+                tmp_wav = tw.name
+
+            _run_ffmpeg_to_wav(tmp_in, tmp_wav)
+
+            model = get_whisper_model()
+
+            # Higher accuracy knobs without going too slow:
+            segments, info = model.transcribe(
+                tmp_wav,
+                language="en",
+                vad_filter=True,
+                beam_size=5,
+                best_of=5,
+                temperature=0.0,
+                condition_on_previous_text=False,
+            )
+
+            text_parts = []
+            for seg in segments:
+                if seg and seg.text:
+                    text_parts.append(seg.text.strip())
+
+            text = _clean_transcript(" ".join(text_parts))
+            return jsonify({"text": text})
+
+        except Exception as e:
+            print("TRANSCRIBE ERROR:", repr(e))
+            return jsonify({"error": "Transcription failed"}), 500
+
+        finally:
+            for p in (tmp_in, tmp_wav):
+                try:
+                    if p and os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
 
 # -----------------------------------
 # Local run
