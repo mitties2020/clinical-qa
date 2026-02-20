@@ -523,3 +523,39 @@ body {
   .grid { grid-template-columns: 1fr; }
   .conversation-list { max-height: 200px; }
 }
+/* =========================
+   FIX: Consultation Notes mode dropdown too narrow
+   ========================= */
+
+.wr-head .mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Make the consult dropdown wider + readable */
+#wrcModeSelect,
+select.wr-mode-select {
+  width: 340px;          /* <-- increase if you want (eg 380px) */
+  max-width: 100%;
+  padding-right: 38px;   /* room for the arrow */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* If you're using the same "topic-search" class on the select */
+.wr-head select.topic-search {
+  width: 340px;
+  max-width: 100%;
+}
+
+/* Optional: on large screens make it even wider */
+@media (min-width: 1100px) {
+  #wrcModeSelect,
+  select.wr-mode-select,
+  .wr-head select.topic-search {
+    width: 420px;
+  }
+}
