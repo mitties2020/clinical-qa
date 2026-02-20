@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VividMedi – Clinical Intelligence Engine</title>
+  <title>VividMedi — Clinical Intelligence Engine</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -15,8 +15,13 @@
         <!-- SIDEBAR -->
         <aside class="sidebar">
           <div class="sidebar-header">
+            <!-- Brand block (NO EBM) -->
             <div class="sidebar-brand">
-              <img class="brand-logo" src="{{ url_for('static', filename='assets/vividmedi-icon.svg') }}" alt="VividMedi" />
+              <img
+                class="brand-logo"
+                src="{{ url_for('static', filename='assets/vividmedi-icon.svg') }}"
+                alt="VividMedi"
+              />
               <div class="brand-text">
                 <div class="brand-title">VividMedi</div>
                 <div class="sidebar-title">Clinical Intelligence Engine</div>
@@ -39,26 +44,31 @@
 
         <!-- MAIN -->
         <div class="main-region">
+          <!-- HEADER (no extra sentence) -->
           <header class="header">
             <div class="brand-header">
-              <img class="brand-header__logo" src="{{ url_for('static', filename='assets/vividmedi-icon.svg') }}" alt="VividMedi" />
+              <img
+                class="brand-header__logo"
+                src="{{ url_for('static', filename='assets/vividmedi-icon.svg') }}"
+                alt="VividMedi"
+              />
               <div class="brand-header__text">
-                <div class="brand-header__name">VividMedi</div>
+                <h1 class="brand-header__name">VividMedi</h1>
                 <div class="brand-header__tagline">Clinical Intelligence Engine</div>
               </div>
             </div>
-            <!-- ✅ Removed the sentence completely -->
           </header>
 
           <!-- TOP ROW -->
           <main class="grid">
             <!-- QUESTION -->
             <section class="card input-card">
+              <!-- Clinical Question -> Clinical -->
               <label class="label" for="clinicalQuestion">Clinical</label>
 
-              <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
-                <label class="label" style="margin:0; text-align:left; width:auto;">Mode</label>
-                <select id="modeSelect" class="topic-search" style="max-width:260px;">
+              <div class="mode-row">
+                <label class="label label-tight mode-label" style="margin:0;">Mode</label>
+                <select id="modeSelect" class="topic-search mode-select" style="max-width:260px;">
                   <option value="clinical" selected>Clinical</option>
                   <option value="dva_new">DVA D0904 (New referral)</option>
                   <option value="dva_renew">DVA D0904 (Renewal / EoC-based)</option>
@@ -72,7 +82,7 @@
                 placeholder="Enter clinical question OR paste DVA details. Enter = Generate, Shift+Enter = new line."
               ></textarea>
 
-              <div class="actions-compact">
+              <div class="actions actions-compact">
                 <button id="generateBtn" class="btn btn-primary" type="button">Generate</button>
                 <button id="dictateQuestionBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectQuestionBtn" class="btn" type="button">Incorrect</button>
@@ -87,7 +97,7 @@
               <div class="output-header">
                 <div class="output-header-flex">
                   <h2 class="output-title-inline">Answers</h2>
-                  <button id="copyAllBtn" class="btn" disabled type="button">Copy All</button>
+                  <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
                 </div>
               </div>
 
@@ -108,11 +118,11 @@
           <section class="card wr-card">
             <div class="wr-head">
               <div>
-                <div class="label" style="text-align:left; margin:0;">Consultation Notes</div>
-                <div class="wr-sub">Dictation never triggers the Clinical Engine.</div>
+                <div class="label wr-label">Consultation Notes</div>
+                <div class="wr-sub"></div>
               </div>
 
-              <div class="actions-compact" style="justify-content:flex-end; margin-top:0;">
+              <div class="actions actions-compact">
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button">Copy</button>
@@ -231,7 +241,7 @@ window.addEventListener("DOMContentLoaded", () => {
       <div class="section">
         <div class="section-header static">
           <span>${escapeHtml("DVA Audit (D0904)")}</span>
-          <button class="btn section-copy-btn" data-target="dva-meta" type="button">Copy</button>
+          <button class="section-copy-btn copy-btn" data-target="dva-meta" type="button">Copy</button>
         </div>
         <div class="section-body static-body" data-section="dva-meta">
           <div class="answer-line"><b>Referral type:</b> ${escapeHtml(meta.referralType || "unclear")}</div>
@@ -332,7 +342,7 @@ window.addEventListener("DOMContentLoaded", () => {
           <div class="section">
             <div class="section-header static">
               <span>${escapeHtml(sec.title)}</span>
-              <button class="btn section-copy-btn" data-target="${id}" type="button">Copy</button>
+              <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
             </div>
             <div class="section-body static-body" data-section="${id}">
               ${inner}
@@ -343,7 +353,7 @@ window.addEventListener("DOMContentLoaded", () => {
           <div class="section">
             <div class="collapsible-header">
               <button class="collapsible" data-target="${id}" type="button">${escapeHtml(sec.title)}</button>
-              <button class="btn section-copy-btn" data-target="${id}" type="button">Copy</button>
+              <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
             </div>
             <div class="collapsible-content" data-section="${id}" style="display:none;">
               ${inner}
@@ -822,7 +832,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Init
   renderSidebar();
   flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
   flashStatus(wrStatus, "Notes mic: idle.");
