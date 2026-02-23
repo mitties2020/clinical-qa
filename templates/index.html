@@ -125,12 +125,7 @@
                 </select>
               </div>
 
-              <textarea
-                id="clinicalQuestion"
-                class="textarea"
-                rows="7"
-                placeholder=""
-              ></textarea>
+              <textarea id="clinicalQuestion" class="textarea" rows="7" placeholder=""></textarea>
 
               <div class="actions actions-compact">
                 <button id="generateBtn" class="btn btn-primary" type="button">Generate</button>
@@ -181,10 +176,7 @@
 
               <div class="actions actions-compact">
                 <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
-
-                <!-- generate button for consultation notes -->
                 <button id="generateWrBtn" class="btn btn-primary" type="button">Generate</button>
-
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button">Copy</button>
@@ -237,7 +229,20 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
   const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
 
-  // ✅ Guard so we don't loop/redirect multiple times
+  // ✅ Checkout intent key: only auto-pay if user intended upgrade
+  const CHECKOUT_INTENT_KEY = "vm_intent_checkout";
+
+  function setCheckoutIntent() {
+    try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, "1"); } catch {}
+  }
+  function clearCheckoutIntent() {
+    try { sessionStorage.removeItem(CHECKOUT_INTENT_KEY); } catch {}
+  }
+  function hasCheckoutIntent() {
+    try { return sessionStorage.getItem(CHECKOUT_INTENT_KEY) === "1"; } catch { return false; }
+  }
+
+  // ✅ Guard so we don't redirect multiple times
   let checkoutInProgress = false;
 
   // Auth + quota UI elements
@@ -258,6 +263,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // This comes from Flask render_template(..., google_client_id=GOOGLE_CLIENT_ID)
   const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
+
+  // Stripe return pages (avoid auto prompts/loops)
+  const PATH = (window.location.pathname || "");
+  const IS_STRIPE_RETURN = (PATH.startsWith("/pro/success") || PATH.startsWith("/pro/cancelled"));
 
   function showPaywall(payload) {
     const used = payload?.used ?? 10;
@@ -325,38 +334,68 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function logout() {
     try { await fetch("/auth/logout", { method: "POST" }); } catch {}
+    clearCheckoutIntent();
+    checkoutInProgress = false;
     await ensureSessionCookie();
     await refreshMe();
   }
   logoutBtn.addEventListener("click", logout);
 
   async function startCheckout() {
+    if (checkoutInProgress) return;
+    checkoutInProgress = true;
+
     try {
       const res = await fetch("/api/stripe/create-checkout-session", { method: "POST" });
+
+      // If not logged in, set intent and show paywall
+      if (res.status === 401) {
+        setCheckoutIntent();
+        checkoutInProgress = false;
+        showPaywall({
+          used: 10, limit: 10,
+          promo: { label: "Create a free account to unlock 1 extra generation today." }
+        });
+        return;
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
-        checkoutInProgress = false; // ✅ reset on failure
-        showPaywall({ used: 10, limit: 10, promo: { label: "Create a free account to unlock 1 extra generation today." } });
+        checkoutInProgress = false;
+        showPaywall({
+          used: 10, limit: 10,
+          promo: { label: "Create a free account to unlock 1 extra generation today." }
+        });
         return;
       }
 
       if (data.url) {
+        // Clear intent so we don't loop on return
+        clearCheckoutIntent();
         window.location.href = data.url;
       } else {
-        checkoutInProgress = false; // ✅ reset if no URL
+        checkoutInProgress = false;
       }
     } catch {
-      checkoutInProgress = false; // ✅ reset
+      checkoutInProgress = false;
       alert("Could not start checkout. Please try again.");
     }
   }
 
-  upgradeTopBtn.addEventListener("click", startCheckout);
-  upgradeBtnModal.addEventListener("click", startCheckout);
+  // Upgrade buttons: explicitly set intent then start checkout
+  upgradeTopBtn.addEventListener("click", () => {
+    setCheckoutIntent();
+    startCheckout();
+  });
+  upgradeBtnModal.addEventListener("click", () => {
+    setCheckoutIntent();
+    startCheckout();
+  });
 
-  // "Create account" in modal -> prompt One Tap, scroll to Google button
+  // "Create account" in modal: set intent (they want Pro), prompt Google
   signupBtnModal.addEventListener("click", () => {
+    setCheckoutIntent();
     try { window.google?.accounts?.id?.prompt?.(); } catch {}
     googleBtnModal.scrollIntoView({ behavior: "smooth", block: "center" });
   });
@@ -367,8 +406,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
     window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
-
-      // ✅ After any successful sign-in, redirect non-Pro to Stripe Checkout
       callback: async (response) => {
         try {
           const res = await fetch("/auth/google", {
@@ -376,22 +413,24 @@ window.addEventListener("DOMContentLoaded", () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ credential: response.credential })
           });
-
           const data = await res.json();
           if (!res.ok) {
             alert(data.error || "Google sign-in failed.");
             return;
           }
 
+          // ✅ stop One Tap from re-triggering loops
+          try { window.google.accounts.id.cancel(); } catch {}
+
           hidePaywall();
 
           const me = await refreshMe();
           const plan = String(data?.user?.plan || me?.plan || "free").toLowerCase();
 
-          // ✅ auto-checkout for anyone not already Pro
-          if (plan !== "pro" && !checkoutInProgress) {
-            checkoutInProgress = true;
-            await startCheckout(); // redirects
+          // ✅ ONLY auto-checkout if the user intended to upgrade
+          if (hasCheckoutIntent() && plan !== "pro") {
+            clearCheckoutIntent();
+            await startCheckout(); // redirects to Stripe
           }
         } catch (e) {
           alert("Google sign-in failed.");
@@ -414,8 +453,15 @@ window.addEventListener("DOMContentLoaded", () => {
       text: "continue_with"
     });
 
-    // One Tap prompt
-    window.google.accounts.id.prompt();
+    // ✅ CRITICAL: do NOT auto prompt on every load (causes circles)
+    // If you want One Tap sometimes, only do it when NOT on Stripe return pages.
+    if (!IS_STRIPE_RETURN) {
+      const me = await refreshMe();
+      if (!me?.logged_in) {
+        // Optional: enable One Tap once on fresh page loads (safe)
+        // window.google.accounts.id.prompt();
+      }
+    }
   }
 
   // Elements
