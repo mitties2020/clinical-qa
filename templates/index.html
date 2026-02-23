@@ -5,6 +5,52 @@
   <title>VividMedi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- Google Identity Services (One Tap + button) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <style>
+    /* Minimal UI additions for auth + paywall (won't affect your existing CSS) */
+    .topbar-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .chip {
+      font-size: 12px; padding: 6px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.9);
+      background: rgba(0,0,0,0.18);
+    }
+    .chip strong { color: #fff; }
+    .auth-btn { cursor:pointer; }
+
+    /* Paywall modal */
+    .vm-modal-backdrop {
+      position: fixed; inset: 0; display:none;
+      background: rgba(0,0,0,0.55); z-index: 9999;
+      align-items: center; justify-content: center;
+      padding: 18px;
+    }
+    .vm-modal {
+      width: 100%; max-width: 540px;
+      border-radius: 14px; overflow:hidden;
+      background: #0f172a; color: #e5e7eb;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    .vm-modal-head { padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .vm-modal-title { font-size: 16px; font-weight: 700; margin:0; }
+    .vm-modal-close {
+      background: transparent; border: none; color: rgba(255,255,255,0.85);
+      font-size: 20px; cursor:pointer; line-height: 1;
+    }
+    .vm-modal-body { padding: 16px 18px; }
+    .vm-modal-body p { margin: 0 0 10px 0; line-height: 1.45; }
+    .vm-modal-body em { color: rgba(255,255,255,0.78); }
+    .vm-modal-foot {
+      padding: 16px 18px; border-top: 1px solid rgba(255,255,255,0.08);
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    }
+    .vm-mini { font-size: 12px; color: rgba(255,255,255,0.7); }
+    .vm-spacer { flex: 1 1 auto; }
+    .vm-google-wrap { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  </style>
 </head>
 
 <body>
@@ -53,6 +99,14 @@
                 <h1 class="brand-header__name">VividMedi</h1>
                 <div class="brand-header__tagline">Clinical Intelligence Engine</div>
               </div>
+            </div>
+
+            <!-- NEW: top-right usage + auth -->
+            <div class="topbar-actions">
+              <span id="usageChip" class="chip">Loading usage…</span>
+              <button id="upgradeTopBtn" class="btn btn-primary" type="button">Upgrade to Pro</button>
+              <button id="logoutBtn" class="btn auth-btn" type="button" style="display:none;">Sign out</button>
+              <div id="googleBtnTop" style="display:none;"></div>
             </div>
           </header>
 
@@ -116,7 +170,6 @@
               <div style="min-width:240px;">
                 <div class="label wr-label">Consultation Notes</div>
 
-                <!-- NEW: consult dropdown (same style as top) -->
                 <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
                   <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
                   <select id="consultModeSelect" class="topic-search" style="max-width:260px;">
@@ -127,7 +180,6 @@
               </div>
 
               <div class="actions actions-compact">
-                <!-- NEW: Smart device button (placeholder only) -->
                 <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
 
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
@@ -147,6 +199,32 @@
     </div>
   </div>
 
+  <!-- NEW: Paywall modal -->
+  <div id="paywallBackdrop" class="vm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+    <div class="vm-modal">
+      <div class="vm-modal-head">
+        <h3 id="paywallTitle" class="vm-modal-title">Free limit reached</h3>
+        <button id="paywallClose" class="vm-modal-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="vm-modal-body">
+        <p><strong id="paywallLine1">You’ve used 10/10 free generations.</strong></p>
+        <p><strong id="paywallLine2">Upgrade to Pro for unlimited access.</strong></p>
+        <p id="paywallLine3">Pro includes higher limits, priority processing, and ongoing updates.</p>
+        <p id="paywallPromo" style="display:none;"><em>Create a free account to unlock 1 extra generation today.</em></p>
+
+        <div class="vm-google-wrap" style="margin-top:12px;">
+          <div id="googleBtnModal" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="vm-modal-foot">
+        <button id="upgradeBtnModal" class="btn btn-primary" type="button">Upgrade to Pro</button>
+        <button id="signupBtnModal" class="btn" type="button">Create account</button>
+        <span class="vm-spacer"></span>
+        <span class="vm-mini">Cancel anytime • Secure payments via Stripe</span>
+      </div>
+    </div>
+  </div>
+
 <script>
 window.addEventListener("DOMContentLoaded", () => {
   // Storage keys
@@ -155,6 +233,172 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_SAVED_QA = "ebm_saved_qa_v7";
   const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
   const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
+
+  // ===== NEW: auth + quota UI elements =====
+  const usageChip = document.getElementById("usageChip");
+  const upgradeTopBtn = document.getElementById("upgradeTopBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const googleBtnTop = document.getElementById("googleBtnTop");
+
+  const paywallBackdrop = document.getElementById("paywallBackdrop");
+  const paywallClose = document.getElementById("paywallClose");
+  const paywallLine1 = document.getElementById("paywallLine1");
+  const paywallLine2 = document.getElementById("paywallLine2");
+  const paywallLine3 = document.getElementById("paywallLine3");
+  const paywallPromo = document.getElementById("paywallPromo");
+  const upgradeBtnModal = document.getElementById("upgradeBtnModal");
+  const signupBtnModal = document.getElementById("signupBtnModal");
+  const googleBtnModal = document.getElementById("googleBtnModal");
+
+  // IMPORTANT: You must set this in the template or hardcode it.
+  // Preferred: pass google_client_id from Flask: render_template("index.html", google_client_id=os.getenv("GOOGLE_CLIENT_ID",""))
+  const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
+
+  // ===== NEW: helpers for paywall + auth =====
+  function showPaywall(payload) {
+    // Use backend payload if present, otherwise your Option A copy.
+    const used = payload?.used ?? 10;
+    const limit = payload?.limit ?? 10;
+
+    paywallLine1.textContent = `You’ve used ${used}/${limit} free generations.`;
+    paywallLine2.textContent = "Upgrade to Pro for unlimited access.";
+    paywallLine3.textContent = "Pro includes higher limits, priority processing, and ongoing updates.";
+
+    const hasPromo = !!payload?.promo?.label;
+    paywallPromo.style.display = hasPromo ? "block" : "none";
+
+    paywallBackdrop.style.display = "flex";
+
+    // Encourage Google sign-in inside modal (if configured)
+    if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
+      googleBtnModal.style.display = "block";
+    }
+  }
+
+  function hidePaywall() {
+    paywallBackdrop.style.display = "none";
+  }
+
+  paywallClose.addEventListener("click", hidePaywall);
+  paywallBackdrop.addEventListener("click", (e) => {
+    if (e.target === paywallBackdrop) hidePaywall();
+  });
+
+  async function ensureSessionCookie() {
+    try { await fetch("/api/session"); } catch {}
+  }
+
+  async function refreshMe() {
+    try {
+      const res = await fetch("/api/me");
+      const me = await res.json();
+
+      const plan = me.plan || "guest";
+      const used = Number(me.used || 0);
+      const limit = Number(me.limit || 0);
+      const remaining = Number(me.remaining || 0);
+
+      if (plan === "pro") {
+        usageChip.innerHTML = `<strong>Pro</strong> • Unlimited`;
+      } else {
+        usageChip.innerHTML = `<strong>${remaining}</strong> remaining • ${used}/${limit}`;
+      }
+
+      // If logged in, show sign out; else show Google button area
+      if (me.logged_in) {
+        logoutBtn.style.display = "inline-flex";
+        googleBtnTop.style.display = "none";
+      } else {
+        logoutBtn.style.display = "none";
+        if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
+          googleBtnTop.style.display = "block";
+        }
+      }
+
+      return me;
+    } catch (e) {
+      usageChip.textContent = "Usage unavailable";
+      return null;
+    }
+  }
+
+  async function logout() {
+    try { await fetch("/auth/logout", { method: "POST" }); } catch {}
+    await ensureSessionCookie();
+    await refreshMe();
+  }
+  logoutBtn.addEventListener("click", logout);
+
+  async function startCheckout() {
+    // Creates a Checkout Session on backend; redirects to Stripe Checkout URL
+    try {
+      const res = await fetch("/api/stripe/create-checkout-session", { method: "POST" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // If not logged in, show paywall with signup prompt
+        showPaywall({ used: 10, limit: 10, promo: { label: "Create a free account to unlock 1 extra generation today." } });
+        return;
+      }
+      if (data.url) window.location.href = data.url;
+    } catch {
+      alert("Could not start checkout. Please try again.");
+    }
+  }
+
+  upgradeTopBtn.addEventListener("click", startCheckout);
+  upgradeBtnModal.addEventListener("click", startCheckout);
+  signupBtnModal.addEventListener("click", () => {
+    // Trigger One Tap if available; otherwise user can click the Google button.
+    try { window.google?.accounts?.id?.prompt?.(); } catch {}
+    googleBtnModal.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  // Google sign-in init (One Tap + button)
+  async function initGoogleSignIn() {
+    if (!GOOGLE_CLIENT_ID) return;
+    if (!window.google?.accounts?.id) return;
+
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: async (response) => {
+        try {
+          const res = await fetch("/auth/google", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ credential: response.credential })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data.error || "Google sign-in failed.");
+            return;
+          }
+          hidePaywall();
+          await refreshMe();
+        } catch (e) {
+          alert("Google sign-in failed.");
+        }
+      }
+    });
+
+    // Render Google buttons (top bar + modal)
+    googleBtnTop.style.display = "block";
+    googleBtnModal.style.display = "block";
+
+    window.google.accounts.id.renderButton(googleBtnTop, {
+      theme: "outline",
+      size: "large",
+      text: "continue_with"
+    });
+    window.google.accounts.id.renderButton(googleBtnModal, {
+      theme: "outline",
+      size: "large",
+      text: "continue_with"
+    });
+
+    // One Tap prompt (common UX)
+    window.google.accounts.id.prompt();
+  }
 
   // Elements
   const modeSelect = document.getElementById("modeSelect");
@@ -652,10 +896,18 @@ window.addEventListener("DOMContentLoaded", () => {
 
       const data = await res.json();
 
+      // NEW: quota paywall
+      if (res.status === 402 && data && data.error === "quota_exceeded") {
+        showPaywall(data);
+        await refreshMe();
+        answerEl.textContent = "Free limit reached. Please upgrade to continue.";
+        copyAllBtn.disabled = true;
+        return;
+      }
+
       if (data.answer) {
         let raw = data.answer || "";
 
-        // If DVA mode: render meta audit card first, then collapsible clinical sections
         if (mode.startsWith("dva")) {
           const meta = parseDvaMeta(raw);
           raw = stripDvaMeta(raw);
@@ -670,6 +922,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
         copyAllBtn.disabled = !(data.answer || "").trim();
         flashStatus(qStatus, "Generated.");
+        addSavedQA(query, data.answer);
+        renderSidebar();
+        await refreshMe();
       } else {
         answerEl.textContent = (data.error || "No response.").trim();
         copyAllBtn.disabled = true;
@@ -715,14 +970,12 @@ window.addEventListener("DOMContentLoaded", () => {
     renderSidebar();
   });
 
-  // ========= Consult Notes: NEW behaviour =========
+  // ========= Consult Notes =========
 
-  // Placeholder button
   smartDeviceBtn.addEventListener("click", () => {
     flashStatus(wrStatus, "Smart device data collection: coming soon.");
   });
 
-  // Copy notes textbox
   copyWrBtn.addEventListener("click", async () => {
     const text = (wrNote.value || "").trim();
     if (!text) return;
@@ -730,7 +983,6 @@ window.addEventListener("DOMContentLoaded", () => {
     flashStatus(wrStatus, "Copied.");
   });
 
-  // NEW: Save based on consult mode
   saveWrBtn.addEventListener("click", () => {
     const text = (wrNote.value || "").trim();
     if (!text) return;
@@ -746,7 +998,6 @@ window.addEventListener("DOMContentLoaded", () => {
     renderSidebar();
   });
 
-  // NEW: Generate handover or consult note from pasted content (uses backend)
   async function generateConsultOutput(){
     const input = (wrNote.value || "").trim();
     if (!input) return;
@@ -754,7 +1005,6 @@ window.addEventListener("DOMContentLoaded", () => {
     const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
     if (cmode === "smart_device") return;
 
-    // Reuse the same output panel, so users can copy structured output
     generateBtn.disabled = true;
     copyAllBtn.disabled = true;
     answerLoader.classList.remove("hidden");
@@ -768,10 +1018,21 @@ window.addEventListener("DOMContentLoaded", () => {
       });
 
       const data = await res.json();
+
+      // NEW: quota paywall
+      if (res.status === 402 && data && data.error === "quota_exceeded") {
+        showPaywall(data);
+        await refreshMe();
+        answerEl.textContent = "Free limit reached. Please upgrade to continue.";
+        copyAllBtn.disabled = true;
+        return;
+      }
+
       if (data.answer) {
         answerEl.innerHTML = buildStructuredHtml(data.answer);
         copyAllBtn.disabled = !(data.answer || "").trim();
         flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Clinical note generated.");
+        await refreshMe();
       } else {
         answerEl.textContent = (data.error || "No response.").trim();
         copyAllBtn.disabled = true;
@@ -788,8 +1049,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // NEW: Double-tap Enter behaviour in consult box:
-  // - Ctrl+Enter generates consult output
   wrNote.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -797,7 +1056,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // New note button
   newWrBtn.addEventListener("click", () => {
     const current = (wrNote.value || "").trim();
     if (current) {
@@ -987,6 +1245,13 @@ window.addEventListener("DOMContentLoaded", () => {
   renderSidebar();
   flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
   flashStatus(wrStatus, "Notes mic: idle. Ctrl+Enter generates handover/note.");
+
+  // NEW: Ensure guest session cookie exists, then initialise auth + usage
+  (async () => {
+    await ensureSessionCookie();
+    await initGoogleSignIn();
+    await refreshMe();
+  })();
 });
 </script>
 
