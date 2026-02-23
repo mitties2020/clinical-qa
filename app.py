@@ -63,7 +63,9 @@ if STRIPE_SECRET_KEY:
 # Google Sign-In config
 # -----------------------------------
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-# Docs: verify_oauth2_token on backend :contentReference[oaicite:3]{index=3}
+
+# ✅ Auto-Pro creator account (set this in Render env)
+CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 
 # -----------------------------------
 # Flask app
@@ -78,10 +80,12 @@ http = requests.Session()
 # -----------------------------------
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
+
 def db_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def db_init():
     with db_conn() as conn:
@@ -109,6 +113,7 @@ def db_init():
         """)
         conn.commit()
 
+
 db_init()
 
 # -----------------------------------
@@ -117,6 +122,7 @@ db_init()
 def now_awst() -> str:
     dt = datetime.now(ZoneInfo("Australia/Perth"))
     return dt.strftime("%d %b %Y, %H:%M (AWST)")
+
 
 def extract_field(text: str, labels: list[str]) -> str:
     if not text:
@@ -128,6 +134,7 @@ def extract_field(text: str, labels: list[str]) -> str:
             return m.group(1).strip()
     return ""
 
+
 def normalise_card_type(s: str) -> str:
     s = (s or "").strip().lower()
     if not s:
@@ -138,11 +145,15 @@ def normalise_card_type(s: str) -> str:
         return "White"
     return s[:1].upper() + s[1:]
 
+
 def build_dva_header(user_text: str) -> str:
     name = extract_field(user_text, ["DVA patient name", "Patient name", "Name", "Patient"])
     card = extract_field(user_text, ["DVA card", "Card type", "Card", "DVA card type"])
     dva_no = extract_field(user_text, ["DVA number", "DVA no", "File number", "File no"])
-    accepted = extract_field(user_text, ["Accepted conditions", "Accepted condition", "Accepted", "White card accepted conditions"])
+    accepted = extract_field(
+        user_text,
+        ["Accepted conditions", "Accepted condition", "Accepted", "White card accepted conditions"]
+    )
     referral = extract_field(user_text, ["Referral type", "Referral", "Requested referral", "Discipline"])
     contact = extract_field(user_text, ["Contact number", "Phone", "Mobile", "Contact"])
 
@@ -165,8 +176,8 @@ def build_dva_header(user_text: str) -> str:
 # Guest + auth helpers
 # -----------------------------------
 def get_guest_id():
-    # Cookie is set in /api/session or on-demand if missing
     return request.cookies.get("vivid_guest") or ""
+
 
 def ensure_guest_cookie(resp):
     gid = get_guest_id()
@@ -183,6 +194,7 @@ def ensure_guest_cookie(resp):
         )
     return gid
 
+
 def current_user():
     uid = session.get("user_id")
     if not uid:
@@ -191,14 +203,15 @@ def current_user():
         row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         return dict(row) if row else None
 
+
 def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
     email = (email or "").strip().lower()
     if not email:
         raise ValueError("Missing email")
+
     with db_conn() as conn:
         row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
         if row:
-            # Update profile bits (optional)
             conn.execute(
                 "UPDATE users SET name=?, picture=? WHERE email=?",
                 (name or row["name"], picture or row["picture"], email),
@@ -206,6 +219,7 @@ def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -
             conn.commit()
             row2 = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
             return dict(row2)
+
         uid = "usr_" + uuid4().hex
         conn.execute(
             """
@@ -217,6 +231,7 @@ def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -
         conn.commit()
         row2 = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         return dict(row2)
+
 
 def upgrade_user_to_pro(user_id: str, stripe_customer_id: str = None, stripe_subscription_id: str = None):
     with db_conn() as conn:
@@ -245,6 +260,7 @@ def usage_get(actor_type: str, actor_id: str) -> int:
         ).fetchone()
         return int(row["used"]) if row else 0
 
+
 def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
     if not actor_id:
         return 0
@@ -268,6 +284,7 @@ def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
         conn.commit()
         return used
 
+
 def actor_and_limit():
     """
     Guest: 10 total generations
@@ -283,15 +300,15 @@ def actor_and_limit():
         else:
             limit = 11
         return actor_type, actor_id, limit, u
-    # guest
+
     gid = get_guest_id()
     actor_type = "guest"
     actor_id = gid
     limit = 10
     return actor_type, actor_id, limit, None
 
+
 def quota_block_payload(used: int, limit: int, is_logged_in: bool):
-    # Your chosen copy (Option A) + bonus line for guests
     payload = {
         "error": "quota_exceeded",
         "used": min(used, limit),
@@ -304,18 +321,21 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
         ],
         "cta": {
             "primary": {"label": "Upgrade to Pro", "action": "upgrade"},
-            "secondary": {"label": "Create account" if not is_logged_in else "Account", "action": "signup" if not is_logged_in else "account"},
+            "secondary": {
+                "label": "Create account" if not is_logged_in else "Account",
+                "action": "signup" if not is_logged_in else "account"
+            },
         },
     }
     if not is_logged_in:
         payload["promo"] = {"label": "Create a free account to unlock 1 extra generation today."}
     return payload
 
+
 def enforce_quota_or_402():
     actor_type, actor_id, limit, u = actor_and_limit()
     used_after = usage_incr(actor_type, actor_id, 1)
     if used_after > limit:
-        # roll back increment? (optional). Keeping it strict discourages brute forcing.
         return jsonify(quota_block_payload(used_after, limit, is_logged_in=bool(u))), 402
     return None
 
@@ -325,6 +345,7 @@ def enforce_quota_or_402():
 @app.get("/healthz")
 def healthz():
     return "ok", 200
+
 
 @app.get("/_ping")
 def ping():
@@ -336,6 +357,7 @@ def ping():
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
+
 
 def get_whisper_model():
     global _whisper_model
@@ -447,16 +469,18 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 # -----------------------------------
 @app.get("/")
 def index():
-    resp = make_response(render_template("index.html"))
+    # ✅ pass google_client_id to template so Google button/One Tap can initialise
+    resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)  # set guest cookie early for quota tracking
     return resp
 
+
 @app.get("/api/session")
 def api_session():
-    # Call this on page load to ensure guest cookie exists
     resp = make_response(jsonify({"ok": True}))
     ensure_guest_cookie(resp)
     return resp
+
 
 @app.get("/api/me")
 def api_me():
@@ -472,15 +496,23 @@ def api_me():
         "remaining": max(0, limit - used),
     })
 
+
+# Stripe return pages (avoid 404)
+@app.get("/pro/success")
+def pro_success():
+    return make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
+
+
+@app.get("/pro/cancelled")
+def pro_cancelled():
+    return make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
+
+
 # -----------------------------
 # Google auth (One Tap / button)
 # -----------------------------
 @app.post("/auth/google")
 def auth_google():
-    """
-    Frontend posts: { "credential": "<google_id_token>" }
-    We verify token server-side and create/login user.
-    """
     if not GOOGLE_CLIENT_ID:
         return jsonify({"error": "Server misconfigured: missing GOOGLE_CLIENT_ID"}), 500
 
@@ -494,13 +526,19 @@ def auth_google():
             token,
             google_requests.Request(),
             GOOGLE_CLIENT_ID
-        )  # verify_oauth2_token guidance :contentReference[oaicite:4]{index=4}
+        )
 
         email = (info.get("email") or "").strip().lower()
         name = (info.get("name") or "") or (info.get("given_name") or "")
         picture = (info.get("picture") or "")
 
         user = create_or_get_user_by_email(email=email, name=name, picture=picture)
+
+        # ✅ Auto-Pro creator account
+        if CREATOR_EMAIL and email == CREATOR_EMAIL and user.get("plan") != "pro":
+            upgrade_user_to_pro(user["id"])
+            user["plan"] = "pro"
+
         session["user_id"] = user["id"]
 
         return jsonify({"ok": True, "user": {"email": user["email"], "plan": user["plan"]}})
@@ -509,20 +547,18 @@ def auth_google():
         print("GOOGLE AUTH ERROR:", repr(e))
         return jsonify({"error": "Google sign-in failed"}), 401
 
+
 @app.post("/auth/logout")
 def auth_logout():
     session.clear()
     return jsonify({"ok": True})
+
 
 # -----------------------------
 # Stripe checkout (automatic)
 # -----------------------------
 @app.post("/api/stripe/create-checkout-session")
 def stripe_create_checkout_session():
-    """
-    Create a server-side Checkout Session so it is tied to the logged-in user.
-    This is the reliable way to auto-upgrade on webhook. :contentReference[oaicite:5]{index=5}
-    """
     if not STRIPE_SECRET_KEY:
         return jsonify({"error": "Server misconfigured: missing STRIPE_SECRET_KEY"}), 500
     if not STRIPE_PRICE_ID_PRO:
@@ -538,7 +574,7 @@ def stripe_create_checkout_session():
             line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
             success_url=f"{APP_BASE_URL}/pro/success",
             cancel_url=f"{APP_BASE_URL}/pro/cancelled",
-            client_reference_id=u["id"],  # used to reconcile on webhook :contentReference[oaicite:6]{index=6}
+            client_reference_id=u["id"],
             customer_email=u["email"],
             metadata={"user_id": u["id"], "product": "vividmedi_pro"},
         )
@@ -547,16 +583,13 @@ def stripe_create_checkout_session():
         print("STRIPE CHECKOUT ERROR:", repr(e))
         return jsonify({"error": "Could not start checkout"}), 500
 
+
 @app.post("/api/stripe/webhook")
 def stripe_webhook():
-    """
-    Verify Stripe-Signature then handle checkout.session.completed to upgrade.
-    Stripe recommends verifying webhook signatures. :contentReference[oaicite:7]{index=7}
-    """
     if not STRIPE_WEBHOOK_SECRET:
         return "Missing webhook secret", 500
 
-    payload = request.get_data()  # raw bytes required
+    payload = request.get_data()
     sig_header = request.headers.get("Stripe-Signature", "")
 
     try:
@@ -572,9 +605,7 @@ def stripe_webhook():
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
-    # Checkout completed => upgrade user
     if etype == "checkout.session.completed":
-        # Stripe docs: checkout.session.completed event exists :contentReference[oaicite:8]{index=8}
         user_id = obj.get("client_reference_id") or (obj.get("metadata") or {}).get("user_id")
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
@@ -586,11 +617,8 @@ def stripe_webhook():
                 stripe_subscription_id=subscription_id,
             )
 
-    # Optional: handle subscription cancellation -> downgrade (you can implement later)
-    # if etype == "customer.subscription.deleted":
-    #     ...
-
     return "OK", 200
+
 
 # -----------------------------
 # Your existing AI endpoints
@@ -600,17 +628,17 @@ def generate():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
 
-    # enforce quota (counts 1 generation per request)
-    blocked = enforce_quota_or_402()
-    if blocked:
-        return blocked
-
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     mode = (data.get("mode") or "clinical").strip().lower()
 
     if not query:
         return jsonify({"error": "Empty query"}), 400
+
+    # ✅ enforce quota AFTER validation
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
 
     try:
         if mode.startswith("dva"):
@@ -634,20 +662,11 @@ def generate():
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
 
+
 @app.post("/api/consult")
 def consult():
-    """
-    For the Consultation Notes panel:
-    - mode=consult_note -> produce a structured clinical note
-    - mode=handover -> produce a handover/presentation (context-aware)
-    """
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
-    # enforce quota (counts 1 generation per request)
-    blocked = enforce_quota_or_402()
-    if blocked:
-        return blocked
 
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -655,6 +674,11 @@ def consult():
 
     if not text:
         return jsonify({"error": "Empty input"}), 400
+
+    # ✅ enforce quota AFTER validation
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
 
     try:
         if mode == "handover":
@@ -678,12 +702,9 @@ def consult():
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
 
+
 @app.post("/api/transcribe")
 def transcribe():
-    """
-    Accepts: multipart/form-data with 'audio' file
-    Returns: JSON { text: "..." }
-    """
     f = request.files.get("audio")
     if not f:
         return jsonify({"error": "Missing audio"}), 400
@@ -691,12 +712,10 @@ def transcribe():
     with _transcribe_lock:
         tmp_path = None
         try:
-            # Save uploaded audio
             fd, tmp_path = tempfile.mkstemp(suffix=".webm")
             os.close(fd)
             f.save(tmp_path)
 
-            # Convert to wav for Whisper stability
             wav_path = tmp_path + ".wav"
             cmd = ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", wav_path]
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -711,13 +730,13 @@ def transcribe():
             print("TRANSCRIBE ERROR:", repr(e))
             return jsonify({"error": "Transcription failed"}), 500
         finally:
-            # Cleanup
             for p in [tmp_path, (tmp_path + ".wav") if tmp_path else None]:
                 if p and os.path.exists(p):
                     try:
                         os.remove(p)
                     except Exception:
                         pass
+
 
 # -----------------------------------
 # Local run
