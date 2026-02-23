@@ -101,7 +101,7 @@
               </div>
             </div>
 
-            <!-- NEW: top-right usage + auth -->
+            <!-- top-right usage + auth -->
             <div class="topbar-actions">
               <span id="usageChip" class="chip">Loading usage…</span>
               <button id="upgradeTopBtn" class="btn btn-primary" type="button">Upgrade to Pro</button>
@@ -182,10 +182,13 @@
               <div class="actions actions-compact">
                 <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
 
+                <!-- NEW: generate button for consultation notes -->
+                <button id="generateWrBtn" class="btn btn-primary" type="button">Generate</button>
+
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button">Copy</button>
-                <button id="saveWrBtn" class="btn btn-primary" type="button">Save</button>
+                <button id="saveWrBtn" class="btn" type="button">Save</button>
                 <button id="newWrBtn" class="btn btn-danger" type="button">New</button>
               </div>
             </div>
@@ -199,7 +202,7 @@
     </div>
   </div>
 
-  <!-- NEW: Paywall modal -->
+  <!-- Paywall modal -->
   <div id="paywallBackdrop" class="vm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
     <div class="vm-modal">
       <div class="vm-modal-head">
@@ -234,7 +237,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
   const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
 
-  // ===== NEW: auth + quota UI elements =====
+  // Auth + quota UI elements
   const usageChip = document.getElementById("usageChip");
   const upgradeTopBtn = document.getElementById("upgradeTopBtn");
   const logoutBtn = document.getElementById("logoutBtn");
@@ -250,13 +253,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const signupBtnModal = document.getElementById("signupBtnModal");
   const googleBtnModal = document.getElementById("googleBtnModal");
 
-  // IMPORTANT: You must set this in the template or hardcode it.
-  // Preferred: pass google_client_id from Flask: render_template("index.html", google_client_id=os.getenv("GOOGLE_CLIENT_ID",""))
+  // IMPORTANT: This comes from Flask render_template(..., google_client_id=GOOGLE_CLIENT_ID)
   const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
 
-  // ===== NEW: helpers for paywall + auth =====
   function showPaywall(payload) {
-    // Use backend payload if present, otherwise your Option A copy.
     const used = payload?.used ?? 10;
     const limit = payload?.limit ?? 10;
 
@@ -269,7 +269,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
     paywallBackdrop.style.display = "flex";
 
-    // Encourage Google sign-in inside modal (if configured)
     if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
       googleBtnModal.style.display = "block";
     }
@@ -304,7 +303,6 @@ window.addEventListener("DOMContentLoaded", () => {
         usageChip.innerHTML = `<strong>${remaining}</strong> remaining • ${used}/${limit}`;
       }
 
-      // If logged in, show sign out; else show Google button area
       if (me.logged_in) {
         logoutBtn.style.display = "inline-flex";
         googleBtnTop.style.display = "none";
@@ -330,13 +328,11 @@ window.addEventListener("DOMContentLoaded", () => {
   logoutBtn.addEventListener("click", logout);
 
   async function startCheckout() {
-    // Creates a Checkout Session on backend; redirects to Stripe Checkout URL
     try {
       const res = await fetch("/api/stripe/create-checkout-session", { method: "POST" });
       const data = await res.json();
 
       if (!res.ok) {
-        // If not logged in, show paywall with signup prompt
         showPaywall({ used: 10, limit: 10, promo: { label: "Create a free account to unlock 1 extra generation today." } });
         return;
       }
@@ -349,12 +345,10 @@ window.addEventListener("DOMContentLoaded", () => {
   upgradeTopBtn.addEventListener("click", startCheckout);
   upgradeBtnModal.addEventListener("click", startCheckout);
   signupBtnModal.addEventListener("click", () => {
-    // Trigger One Tap if available; otherwise user can click the Google button.
     try { window.google?.accounts?.id?.prompt?.(); } catch {}
     googleBtnModal.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 
-  // Google sign-in init (One Tap + button)
   async function initGoogleSignIn() {
     if (!GOOGLE_CLIENT_ID) return;
     if (!window.google?.accounts?.id) return;
@@ -381,7 +375,6 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Render Google buttons (top bar + modal)
     googleBtnTop.style.display = "block";
     googleBtnModal.style.display = "block";
 
@@ -396,7 +389,6 @@ window.addEventListener("DOMContentLoaded", () => {
       text: "continue_with"
     });
 
-    // One Tap prompt (common UX)
     window.google.accounts.id.prompt();
   }
 
@@ -412,6 +404,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const wrNote = document.getElementById("wrNote");
   const smartDeviceBtn = document.getElementById("smartDeviceBtn");
+  const generateWrBtn = document.getElementById("generateWrBtn");
   const dictateWrBtn = document.getElementById("dictateWrBtn");
   const incorrectWrBtn = document.getElementById("incorrectWrBtn");
   const copyWrBtn = document.getElementById("copyWrBtn");
@@ -439,7 +432,7 @@ window.addEventListener("DOMContentLoaded", () => {
   async function copyText(text){ if (!text) return; try { await navigator.clipboard.writeText(text); } catch {} }
   function flashStatus(el, msg){ if (el) el.textContent = msg; }
 
-  // ===== DVA META PARSER (provider checks + renewal audit + risk flags) =====
+  // ===== DVA META PARSER =====
   function parseDvaMeta(raw) {
     if (!raw) return null;
     const text = String(raw).replace(/\r/g, "");
@@ -528,7 +521,7 @@ window.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
-  // ===== Structured answer builder (collapsible sections) =====
+  // ===== Structured answer builder =====
   function hasNonEmpty(arr){ return Array.isArray(arr) && arr.some(l => (l||"").trim() !== ""); }
 
   function buildStructuredHtml(raw) {
@@ -620,7 +613,6 @@ window.addEventListener("DOMContentLoaded", () => {
     return html || `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
   }
 
-  // Click handlers: open/close + copy per section
   document.addEventListener("click", async (e) => {
     const t = e.target;
 
@@ -712,7 +704,6 @@ window.addEventListener("DOMContentLoaded", () => {
   function renderSidebar(){
     const term = norm(sidebarSearch.value || "");
 
-    // Clinical Qs
     const qa = loadSavedQA();
     savedQuestionsList.innerHTML = "";
     if (!qa.length) {
@@ -767,7 +758,6 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Notes
     const notes = loadSavedNotes();
     savedWrList.innerHTML = "";
     if (!notes.length) {
@@ -819,7 +809,6 @@ window.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Handovers
     const handovers = loadSavedHandovers();
     savedHandoverList.innerHTML = "";
     if (!handovers.length) {
@@ -896,7 +885,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
       const data = await res.json();
 
-      // NEW: quota paywall
       if (res.status === 402 && data && data.error === "quota_exceeded") {
         showPaywall(data);
         await refreshMe();
@@ -943,7 +931,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   generateBtn.addEventListener("click", generate);
 
-  // Enter = Generate, Shift+Enter = newline
   clinicalQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -957,7 +944,6 @@ window.addEventListener("DOMContentLoaded", () => {
     await copyText(text);
   });
 
-  // Clear saves Q+A to sidebar (if present)
   clearQuestionBtn.addEventListener("click", () => {
     const q = (clinicalQuestion.value || "").trim();
     const a = (answerEl.innerText || "").trim();
@@ -971,7 +957,6 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // ========= Consult Notes =========
-
   smartDeviceBtn.addEventListener("click", () => {
     flashStatus(wrStatus, "Smart device data collection: coming soon.");
   });
@@ -1003,9 +988,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!input) return;
 
     const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
-    if (cmode === "smart_device") return;
 
-    generateBtn.disabled = true;
+    generateWrBtn.disabled = true;
     copyAllBtn.disabled = true;
     answerLoader.classList.remove("hidden");
     answerEl.innerHTML = "";
@@ -1019,7 +1003,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
       const data = await res.json();
 
-      // NEW: quota paywall
       if (res.status === 402 && data && data.error === "quota_exceeded") {
         showPaywall(data);
         await refreshMe();
@@ -1045,10 +1028,14 @@ window.addEventListener("DOMContentLoaded", () => {
       flashStatus(wrStatus, "Generate error.");
     } finally {
       answerLoader.classList.add("hidden");
-      generateBtn.disabled = false;
+      generateWrBtn.disabled = false;
     }
   }
 
+  // NEW: Button triggers consult generation
+  generateWrBtn.addEventListener("click", generateConsultOutput);
+
+  // Ctrl/Cmd+Enter triggers consult generation too
   wrNote.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -1244,13 +1231,15 @@ window.addEventListener("DOMContentLoaded", () => {
   // Init
   renderSidebar();
   flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
-  flashStatus(wrStatus, "Notes mic: idle. Ctrl+Enter generates handover/note.");
+  flashStatus(wrStatus, "Notes mic: idle. Ctrl/Cmd+Enter generates handover/note.");
 
-  // NEW: Ensure guest session cookie exists, then initialise auth + usage
   (async () => {
     await ensureSessionCookie();
-    await initGoogleSignIn();
-    await refreshMe();
+    // Wait a tick so the GIS script has time to load (helps on slow connections)
+    setTimeout(async () => {
+      await initGoogleSignIn();
+      await refreshMe();
+    }, 250);
   })();
 });
 </script>
