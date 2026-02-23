@@ -3,12 +3,27 @@ import re
 import tempfile
 import threading
 import subprocess
+import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from uuid import uuid4
 
 import requests
-from flask import Flask, request, jsonify, render_template
+import stripe
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    render_template,
+    session,
+    make_response,
+)
+
 from faster_whisper import WhisperModel
+
+# Google ID token verification (server-side)
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
 
 # -----------------------------------
 # Load .env locally only (not Render)
@@ -30,42 +45,76 @@ DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/c
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 # -----------------------------------
+# Stripe config
+# -----------------------------------
+STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
+STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
+
+# Your live price id (from your Stripe screenshot)
+STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "price_1T3yFlHvfV7kt9wle2LpbpU0").strip()
+
+# Recommended base URL (set explicitly if you have multiple domains)
+APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
+
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
+# -----------------------------------
+# Google Sign-In config
+# -----------------------------------
+GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+# Docs: verify_oauth2_token on backend :contentReference[oaicite:3]{index=3}
+
+# -----------------------------------
 # Flask app
 # -----------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
+app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me")
+
 http = requests.Session()
 
 # -----------------------------------
-# Health check (Render)
+# DB (SQLite) - minimal, self-contained
 # -----------------------------------
-@app.get("/healthz")
-def healthz():
-    return "ok", 200
+DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
-@app.get("/_ping")
-def ping():
-    return "pong", 200
+def db_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def db_init():
+    with db_conn() as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT,
+            picture TEXT,
+            plan TEXT NOT NULL DEFAULT 'free',         -- free | pro
+            email_verified INTEGER NOT NULL DEFAULT 1, -- Google tokens are verified
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
+            created_at TEXT NOT NULL
+        )
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS usage (
+            actor_type TEXT NOT NULL,   -- guest | user
+            actor_id TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (actor_type, actor_id)
+        )
+        """)
+        conn.commit()
+
+db_init()
 
 # -----------------------------------
-# Whisper model (load once)
+# Helpers: time + formatting
 # -----------------------------------
-_whisper_model = None
-_whisper_init_lock = threading.Lock()
-_transcribe_lock = threading.Lock()
-
-def get_whisper_model():
-    global _whisper_model
-    if _whisper_model is None:
-        with _whisper_init_lock:
-            if _whisper_model is None:
-                _whisper_model = WhisperModel(
-                    WHISPER_MODEL_SIZE,
-                    device="cpu",
-                    compute_type="int8"
-                )
-    return _whisper_model
-
-def awst_timestamp() -> str:
+def now_awst() -> str:
     dt = datetime.now(ZoneInfo("Australia/Perth"))
     return dt.strftime("%d %b %Y, %H:%M (AWST)")
 
@@ -109,8 +158,196 @@ def build_dva_header(user_text: str) -> str:
     header.append("")
     header.append("Telehealth Consult:")
     header.append("Dr Michael Addis")
-    header.append(f"Date & Time (AWST): {awst_timestamp()}")
+    header.append(f"Date & Time (AWST): {now_awst()}")
     return "\n".join(header).strip()
+
+# -----------------------------------
+# Guest + auth helpers
+# -----------------------------------
+def get_guest_id():
+    # Cookie is set in /api/session or on-demand if missing
+    return request.cookies.get("vivid_guest") or ""
+
+def ensure_guest_cookie(resp):
+    gid = get_guest_id()
+    if not gid:
+        gid = str(uuid4())
+        resp.set_cookie(
+            "vivid_guest",
+            gid,
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 365,  # 1 year
+            path="/",
+        )
+    return gid
+
+def current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    with db_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        return dict(row) if row else None
+
+def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
+    email = (email or "").strip().lower()
+    if not email:
+        raise ValueError("Missing email")
+    with db_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        if row:
+            # Update profile bits (optional)
+            conn.execute(
+                "UPDATE users SET name=?, picture=? WHERE email=?",
+                (name or row["name"], picture or row["picture"], email),
+            )
+            conn.commit()
+            row2 = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+            return dict(row2)
+        uid = "usr_" + uuid4().hex
+        conn.execute(
+            """
+            INSERT INTO users (id, email, name, picture, plan, email_verified, created_at)
+            VALUES (?, ?, ?, ?, 'free', 1, ?)
+            """,
+            (uid, email, name, picture, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        row2 = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        return dict(row2)
+
+def upgrade_user_to_pro(user_id: str, stripe_customer_id: str = None, stripe_subscription_id: str = None):
+    with db_conn() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET plan='pro',
+                stripe_customer_id=COALESCE(?, stripe_customer_id),
+                stripe_subscription_id=COALESCE(?, stripe_subscription_id)
+            WHERE id=?
+            """,
+            (stripe_customer_id, stripe_subscription_id, user_id),
+        )
+        conn.commit()
+
+# -----------------------------------
+# Quota / usage
+# -----------------------------------
+def usage_get(actor_type: str, actor_id: str) -> int:
+    if not actor_id:
+        return 0
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT used FROM usage WHERE actor_type=? AND actor_id=?",
+            (actor_type, actor_id),
+        ).fetchone()
+        return int(row["used"]) if row else 0
+
+def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
+    if not actor_id:
+        return 0
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT used FROM usage WHERE actor_type=? AND actor_id=?",
+            (actor_type, actor_id),
+        ).fetchone()
+        if row:
+            used = int(row["used"]) + by
+            conn.execute(
+                "UPDATE usage SET used=?, updated_at=? WHERE actor_type=? AND actor_id=?",
+                (used, datetime.utcnow().isoformat(), actor_type, actor_id),
+            )
+        else:
+            used = by
+            conn.execute(
+                "INSERT INTO usage (actor_type, actor_id, used, updated_at) VALUES (?, ?, ?, ?)",
+                (actor_type, actor_id, used, datetime.utcnow().isoformat()),
+            )
+        conn.commit()
+        return used
+
+def actor_and_limit():
+    """
+    Guest: 10 total generations
+    Logged-in free: 11 total generations (includes +1 bonus on account creation)
+    Pro: effectively unlimited (still add separate rate-limits later if needed)
+    """
+    u = current_user()
+    if u:
+        actor_type = "user"
+        actor_id = u["id"]
+        if (u.get("plan") or "free") == "pro":
+            limit = 1_000_000
+        else:
+            limit = 11
+        return actor_type, actor_id, limit, u
+    # guest
+    gid = get_guest_id()
+    actor_type = "guest"
+    actor_id = gid
+    limit = 10
+    return actor_type, actor_id, limit, None
+
+def quota_block_payload(used: int, limit: int, is_logged_in: bool):
+    # Your chosen copy (Option A) + bonus line for guests
+    payload = {
+        "error": "quota_exceeded",
+        "used": min(used, limit),
+        "limit": limit,
+        "headline": "Free limit reached",
+        "copy": [
+            f"You’ve used {min(used, limit)}/{limit} free generations.",
+            "Upgrade to Pro for unlimited access.",
+            "Pro includes higher limits, priority processing, and ongoing updates.",
+        ],
+        "cta": {
+            "primary": {"label": "Upgrade to Pro", "action": "upgrade"},
+            "secondary": {"label": "Create account" if not is_logged_in else "Account", "action": "signup" if not is_logged_in else "account"},
+        },
+    }
+    if not is_logged_in:
+        payload["promo"] = {"label": "Create a free account to unlock 1 extra generation today."}
+    return payload
+
+def enforce_quota_or_402():
+    actor_type, actor_id, limit, u = actor_and_limit()
+    used_after = usage_incr(actor_type, actor_id, 1)
+    if used_after > limit:
+        # roll back increment? (optional). Keeping it strict discourages brute forcing.
+        return jsonify(quota_block_payload(used_after, limit, is_logged_in=bool(u))), 402
+    return None
+
+# -----------------------------------
+# Health check (Render)
+# -----------------------------------
+@app.get("/healthz")
+def healthz():
+    return "ok", 200
+
+@app.get("/_ping")
+def ping():
+    return "pong", 200
+
+# -----------------------------------
+# Whisper model (load once)
+# -----------------------------------
+_whisper_model = None
+_whisper_init_lock = threading.Lock()
+_transcribe_lock = threading.Lock()
+
+def get_whisper_model():
+    global _whisper_model
+    if _whisper_model is None:
+        with _whisper_init_lock:
+            if _whisper_model is None:
+                _whisper_model = WhisperModel(
+                    WHISPER_MODEL_SIZE,
+                    device="cpu",
+                    compute_type="int8"
+                )
+    return _whisper_model
 
 # -----------------------------------
 # Prompts
@@ -210,12 +447,163 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 # -----------------------------------
 @app.get("/")
 def index():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    ensure_guest_cookie(resp)  # set guest cookie early for quota tracking
+    return resp
 
+@app.get("/api/session")
+def api_session():
+    # Call this on page load to ensure guest cookie exists
+    resp = make_response(jsonify({"ok": True}))
+    ensure_guest_cookie(resp)
+    return resp
+
+@app.get("/api/me")
+def api_me():
+    u = current_user()
+    actor_type, actor_id, limit, _u = actor_and_limit()
+    used = usage_get(actor_type, actor_id)
+    return jsonify({
+        "logged_in": bool(u),
+        "email": u["email"] if u else None,
+        "plan": u["plan"] if u else "guest",
+        "used": used,
+        "limit": limit,
+        "remaining": max(0, limit - used),
+    })
+
+# -----------------------------
+# Google auth (One Tap / button)
+# -----------------------------
+@app.post("/auth/google")
+def auth_google():
+    """
+    Frontend posts: { "credential": "<google_id_token>" }
+    We verify token server-side and create/login user.
+    """
+    if not GOOGLE_CLIENT_ID:
+        return jsonify({"error": "Server misconfigured: missing GOOGLE_CLIENT_ID"}), 500
+
+    data = request.get_json(silent=True) or {}
+    token = (data.get("credential") or "").strip()
+    if not token:
+        return jsonify({"error": "Missing credential"}), 400
+
+    try:
+        info = google_id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )  # verify_oauth2_token guidance :contentReference[oaicite:4]{index=4}
+
+        email = (info.get("email") or "").strip().lower()
+        name = (info.get("name") or "") or (info.get("given_name") or "")
+        picture = (info.get("picture") or "")
+
+        user = create_or_get_user_by_email(email=email, name=name, picture=picture)
+        session["user_id"] = user["id"]
+
+        return jsonify({"ok": True, "user": {"email": user["email"], "plan": user["plan"]}})
+
+    except Exception as e:
+        print("GOOGLE AUTH ERROR:", repr(e))
+        return jsonify({"error": "Google sign-in failed"}), 401
+
+@app.post("/auth/logout")
+def auth_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+# -----------------------------
+# Stripe checkout (automatic)
+# -----------------------------
+@app.post("/api/stripe/create-checkout-session")
+def stripe_create_checkout_session():
+    """
+    Create a server-side Checkout Session so it is tied to the logged-in user.
+    This is the reliable way to auto-upgrade on webhook. :contentReference[oaicite:5]{index=5}
+    """
+    if not STRIPE_SECRET_KEY:
+        return jsonify({"error": "Server misconfigured: missing STRIPE_SECRET_KEY"}), 500
+    if not STRIPE_PRICE_ID_PRO:
+        return jsonify({"error": "Server misconfigured: missing STRIPE_PRICE_ID_PRO"}), 500
+
+    u = current_user()
+    if not u:
+        return jsonify({"error": "not_authenticated"}), 401
+
+    try:
+        sess = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
+            success_url=f"{APP_BASE_URL}/pro/success",
+            cancel_url=f"{APP_BASE_URL}/pro/cancelled",
+            client_reference_id=u["id"],  # used to reconcile on webhook :contentReference[oaicite:6]{index=6}
+            customer_email=u["email"],
+            metadata={"user_id": u["id"], "product": "vividmedi_pro"},
+        )
+        return jsonify({"url": sess.url})
+    except Exception as e:
+        print("STRIPE CHECKOUT ERROR:", repr(e))
+        return jsonify({"error": "Could not start checkout"}), 500
+
+@app.post("/api/stripe/webhook")
+def stripe_webhook():
+    """
+    Verify Stripe-Signature then handle checkout.session.completed to upgrade.
+    Stripe recommends verifying webhook signatures. :contentReference[oaicite:7]{index=7}
+    """
+    if not STRIPE_WEBHOOK_SECRET:
+        return "Missing webhook secret", 500
+
+    payload = request.get_data()  # raw bytes required
+    sig_header = request.headers.get("Stripe-Signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=payload,
+            sig_header=sig_header,
+            secret=STRIPE_WEBHOOK_SECRET,
+        )
+    except Exception as e:
+        print("STRIPE WEBHOOK SIGNATURE ERROR:", repr(e))
+        return "Bad signature", 400
+
+    etype = event.get("type", "")
+    obj = (event.get("data") or {}).get("object") or {}
+
+    # Checkout completed => upgrade user
+    if etype == "checkout.session.completed":
+        # Stripe docs: checkout.session.completed event exists :contentReference[oaicite:8]{index=8}
+        user_id = obj.get("client_reference_id") or (obj.get("metadata") or {}).get("user_id")
+        customer_id = obj.get("customer")
+        subscription_id = obj.get("subscription")
+
+        if user_id:
+            upgrade_user_to_pro(
+                user_id=user_id,
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=subscription_id,
+            )
+
+    # Optional: handle subscription cancellation -> downgrade (you can implement later)
+    # if etype == "customer.subscription.deleted":
+    #     ...
+
+    return "OK", 200
+
+# -----------------------------
+# Your existing AI endpoints
+# -----------------------------
 @app.post("/api/generate")
 def generate():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    # enforce quota (counts 1 generation per request)
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
 
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
@@ -255,6 +643,11 @@ def consult():
     """
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    # enforce quota (counts 1 generation per request)
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
 
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
