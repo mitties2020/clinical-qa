@@ -182,7 +182,7 @@
               <div class="actions actions-compact">
                 <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
 
-                <!-- NEW: generate button for consultation notes -->
+                <!-- generate button for consultation notes -->
                 <button id="generateWrBtn" class="btn btn-primary" type="button">Generate</button>
 
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
@@ -237,6 +237,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
   const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
 
+  // ✅ Guard so we don't loop/redirect multiple times
+  let checkoutInProgress = false;
+
   // Auth + quota UI elements
   const usageChip = document.getElementById("usageChip");
   const upgradeTopBtn = document.getElementById("upgradeTopBtn");
@@ -253,7 +256,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const signupBtnModal = document.getElementById("signupBtnModal");
   const googleBtnModal = document.getElementById("googleBtnModal");
 
-  // IMPORTANT: This comes from Flask render_template(..., google_client_id=GOOGLE_CLIENT_ID)
+  // This comes from Flask render_template(..., google_client_id=GOOGLE_CLIENT_ID)
   const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
 
   function showPaywall(payload) {
@@ -333,17 +336,26 @@ window.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
 
       if (!res.ok) {
+        checkoutInProgress = false; // ✅ reset on failure
         showPaywall({ used: 10, limit: 10, promo: { label: "Create a free account to unlock 1 extra generation today." } });
         return;
       }
-      if (data.url) window.location.href = data.url;
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        checkoutInProgress = false; // ✅ reset if no URL
+      }
     } catch {
+      checkoutInProgress = false; // ✅ reset
       alert("Could not start checkout. Please try again.");
     }
   }
 
   upgradeTopBtn.addEventListener("click", startCheckout);
   upgradeBtnModal.addEventListener("click", startCheckout);
+
+  // "Create account" in modal -> prompt One Tap, scroll to Google button
   signupBtnModal.addEventListener("click", () => {
     try { window.google?.accounts?.id?.prompt?.(); } catch {}
     googleBtnModal.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -355,6 +367,8 @@ window.addEventListener("DOMContentLoaded", () => {
 
     window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
+
+      // ✅ After any successful sign-in, redirect non-Pro to Stripe Checkout
       callback: async (response) => {
         try {
           const res = await fetch("/auth/google", {
@@ -362,19 +376,30 @@ window.addEventListener("DOMContentLoaded", () => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ credential: response.credential })
           });
+
           const data = await res.json();
           if (!res.ok) {
             alert(data.error || "Google sign-in failed.");
             return;
           }
+
           hidePaywall();
-          await refreshMe();
+
+          const me = await refreshMe();
+          const plan = String(data?.user?.plan || me?.plan || "free").toLowerCase();
+
+          // ✅ auto-checkout for anyone not already Pro
+          if (plan !== "pro" && !checkoutInProgress) {
+            checkoutInProgress = true;
+            await startCheckout(); // redirects
+          }
         } catch (e) {
           alert("Google sign-in failed.");
         }
       }
     });
 
+    // Render Google buttons (top bar + modal)
     googleBtnTop.style.display = "block";
     googleBtnModal.style.display = "block";
 
@@ -389,6 +414,7 @@ window.addEventListener("DOMContentLoaded", () => {
       text: "continue_with"
     });
 
+    // One Tap prompt
     window.google.accounts.id.prompt();
   }
 
@@ -931,6 +957,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   generateBtn.addEventListener("click", generate);
 
+  // Enter = Generate, Shift+Enter = newline
   clinicalQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -944,6 +971,7 @@ window.addEventListener("DOMContentLoaded", () => {
     await copyText(text);
   });
 
+  // Clear saves Q+A to sidebar (if present)
   clearQuestionBtn.addEventListener("click", () => {
     const q = (clinicalQuestion.value || "").trim();
     const a = (answerEl.innerText || "").trim();
@@ -1032,7 +1060,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // NEW: Button triggers consult generation
+  // Generate button triggers consult generation
   generateWrBtn.addEventListener("click", generateConsultOutput);
 
   // Ctrl/Cmd+Enter triggers consult generation too
@@ -1235,7 +1263,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   (async () => {
     await ensureSessionCookie();
-    // Wait a tick so the GIS script has time to load (helps on slow connections)
     setTimeout(async () => {
       await initGoogleSignIn();
       await refreshMe();
