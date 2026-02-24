@@ -1,20 +1,20 @@
-# app.py — VividMedi (Flask) — FULL PASTEABLE VERSION
+# app.py — VividMedi (Flask) — FULL PASTEABLE VERSION (Stripe SUBSCRIPTION via PRICE ID)
 # ✅ Google Sign-In (server verified)
-# ✅ Bearer token auth (for your frontend apiFetch) + session cookie fallback
-# ✅ Stripe subscription checkout ($30/month, no trial) using PRICE ID (not payment link)
-# ✅ Webhook upgrades user reliably via stripe_customer_id
+# ✅ Returns Bearer token to frontend (index.html expects data.token)
+# ✅ Stripe subscription checkout: $30/month, NO trial, uses PRICE id (price_...)
+# ✅ Webhook upgrades user via stripe_customer_id (reliable)
 # ✅ Quota tracking (guest/free/pro)
 # ✅ DeepSeek generate + consult endpoints
 # ✅ Whisper transcription (MediaRecorder -> /api/transcribe)
 #
-# IMPORTANT (Render env vars you MUST set):
+# Render env vars you MUST set:
 # - FLASK_SECRET_KEY (or APP_SECRET_KEY)
 # - GOOGLE_CLIENT_ID
 # - DEEPSEEK_API_KEY
 # - STRIPE_SECRET_KEY (sk_live_...)
 # - STRIPE_WEBHOOK_SECRET (whsec_...)
-# - STRIPE_PRICE_ID_PRO (price_...)
-# - APP_BASE_URL (https://www.vividmedi.com)
+# - STRIPE_PRICE_ID_PRO=price_1T3yFlHvfV7kt9wle2LpbpU0
+# - APP_BASE_URL=https://www.vividmedi.com
 
 import os
 import re
@@ -29,7 +29,6 @@ from zoneinfo import ZoneInfo
 import requests
 import stripe
 from flask import Flask, request, jsonify, render_template, session, make_response
-
 from faster_whisper import WhisperModel
 
 # Google ID token verification (server-side)
@@ -65,9 +64,7 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
-# MUST be a Stripe PRICE id like "price_..."
-STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()
-
+STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()  # MUST be price_...
 APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
 
 # Optional: auto-pro for your own account
@@ -75,6 +72,13 @@ CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+
+# HARD GUARD: prevents your old error (plink_ or URL passed as price)
+if STRIPE_PRICE_ID_PRO:
+    if STRIPE_PRICE_ID_PRO.startswith("plink_") or STRIPE_PRICE_ID_PRO.startswith("http"):
+        raise RuntimeError(f"STRIPE_PRICE_ID_PRO must be a price_ id, not a payment link or URL: {STRIPE_PRICE_ID_PRO}")
+    if not STRIPE_PRICE_ID_PRO.startswith("price_"):
+        raise RuntimeError(f"STRIPE_PRICE_ID_PRO must start with 'price_': {STRIPE_PRICE_ID_PRO}")
 
 
 # -----------------------------------
@@ -138,7 +142,7 @@ def verify_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 30):
     except (BadSignature, SignatureExpired):
         return None
 
-def get_user_from_bearer() -> dict | None:
+def get_user_from_bearer():
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -150,7 +154,7 @@ def get_user_from_bearer() -> dict | None:
         row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     return dict(row) if row else None
 
-def get_authed_user() -> dict | None:
+def get_authed_user():
     # Prefer Bearer (frontend apiFetch), fallback to session cookie
     u = get_user_from_bearer()
     if u:
@@ -196,7 +200,7 @@ def now_awst() -> str:
 # -----------------------------------
 # DVA header helpers
 # -----------------------------------
-def extract_field(text: str, labels: list[str]) -> str:
+def extract_field(text: str, labels):
     if not text:
         return ""
     for lab in labels:
@@ -332,10 +336,7 @@ def actor_and_limit():
     if u:
         actor_type = "user"
         actor_id = u["id"]
-        if (u.get("plan") or "free") == "pro":
-            limit = 1_000_000
-        else:
-            limit = 11
+        limit = 1_000_000 if (u.get("plan") or "free") == "pro" else 11
         return actor_type, actor_id, limit, u
 
     gid = get_guest_id()
@@ -354,7 +355,10 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
         ],
         "cta": {
             "primary": {"label": "Upgrade to Pro", "action": "upgrade"},
-            "secondary": {"label": "Create account" if not is_logged_in else "Account", "action": "signup" if not is_logged_in else "account"},
+            "secondary": {
+                "label": "Create account" if not is_logged_in else "Account",
+                "action": "signup" if not is_logged_in else "account",
+            },
         },
     }
     if not is_logged_in:
@@ -583,7 +587,7 @@ def auth_google():
 
         return jsonify({
             "ok": True,
-            "token": bearer,
+            "token": bearer,  # ✅ index.html uses this
             "user": {"email": user["email"], "plan": user["plan"]},
         })
 
@@ -631,7 +635,6 @@ def stripe_create_checkout_session():
             mode="subscription",
             customer=customer_id,
             line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
-            # include CHECKOUT_SESSION_ID for debugging if you need it
             success_url=f"{APP_BASE_URL}/pro/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{APP_BASE_URL}/pro/cancelled",
             metadata={"user_id": u["id"], "product": "vividmedi_pro"},
@@ -679,7 +682,7 @@ def stripe_webhook():
                     stripe_subscription_id=subscription_id,
                 )
 
-    # Optional: handle cancellations/delinquent states (keeps pro accurate)
+    # Optional: downgrade on cancellation/unpaid
     if etype in ("customer.subscription.deleted", "customer.subscription.updated"):
         sub = obj
         customer_id = sub.get("customer")
@@ -687,10 +690,9 @@ def stripe_webhook():
         if customer_id:
             with db_conn() as conn:
                 row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
-                if row:
-                    if status in ("canceled", "unpaid", "incomplete_expired"):
-                        conn.execute("UPDATE users SET plan='free' WHERE id=?", (row["id"],))
-                        conn.commit()
+                if row and status in ("canceled", "unpaid", "incomplete_expired"):
+                    conn.execute("UPDATE users SET plan='free' WHERE id=?", (row["id"],))
+                    conn.commit()
 
     return "OK", 200
 
