@@ -1,490 +1,444 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>VividMedi</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta charset="UTF-8" />
+<title>VividMedi</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Google Identity Services -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
-  <style>
-    .topbar-actions {
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
+<style>
 
-    .chip {
-      font-size:12px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,0.15);
-      color:rgba(255,255,255,0.9);
-      background:rgba(0,0,0,0.18);
-    }
+/* ===============================
+   GLOBAL POLISH
+================================ */
 
-    .chip strong { color:#fff; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.2px;
+}
 
-    .vm-modal-backdrop {
-      position:fixed;
-      inset:0;
-      display:none;
-      background:rgba(0,0,0,0.55);
-      z-index:9999;
-      align-items:center;
-      justify-content:center;
-      padding:18px;
-    }
+.grid.equal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
 
-    .vm-modal {
-      width:100%;
-      max-width:540px;
-      border-radius:14px;
-      overflow:hidden;
-      background:#0f172a;
-      color:#e5e7eb;
-      border:1px solid rgba(255,255,255,0.10);
-      box-shadow:0 20px 60px rgba(0,0,0,0.35);
-    }
+.equal-grid .card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 
-    .vm-modal-head {
-      padding:16px 18px;
-      border-bottom:1px solid rgba(255,255,255,0.08);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
+/* ===============================
+   BUTTON SYSTEM (UNIFORM)
+================================ */
 
-    .vm-modal-body { padding:16px 18px; }
-    .vm-modal-foot {
-      padding:16px 18px;
-      border-top:1px solid rgba(255,255,255,0.08);
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
+.btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 500;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  transition: all 0.2s ease;
+  min-width: 90px;
+  text-align: center;
+}
 
-    .vm-spacer { flex:1 1 auto; }
+.btn:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateY(-1px);
+}
 
-    /* Day mode hook */
-    body.day-mode {
-      filter: brightness(1.3);
-    }
-  </style>
+.btn-primary {
+  background: linear-gradient(135deg,#2563eb,#1e40af);
+  border: none;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg,#1d4ed8,#1e3a8a);
+}
+
+.btn-danger {
+  background: rgba(220,38,38,0.15);
+  border: 1px solid rgba(220,38,38,0.4);
+}
+
+.actions-compact .btn {
+  height: 40px;
+}
+
+/* ===============================
+   SMART DROPDOWN
+================================ */
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  background: #111827;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  min-width: 180px;
+  padding: 6px;
+  display: none;
+  z-index: 100;
+}
+
+.dropdown-menu.open {
+  display: block;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* ===============================
+   DAY MODE TOGGLE
+================================ */
+
+.theme-toggle {
+  margin-right: 16px;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+}
+
+.switch input { display:none; }
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  background-color: #374151;
+  border-radius: 34px;
+  inset: 0;
+  transition: 0.3s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+input:checked + .slider {
+  background-color: #2563eb;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+body.day-mode {
+  filter: brightness(1.25);
+}
+
+/* ===============================
+   CONSULT OUTPUT BOX
+================================ */
+
+.wr-output-wrapper {
+  margin-top: 24px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 20px;
+}
+
+.answer {
+  min-height: 160px;
+}
+
+</style>
 </head>
-
 <body>
-  <div class="app-root">
-    <div class="shell">
-      <div class="layout">
 
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
+<div class="app-root">
+<div class="shell">
+<div class="layout">
 
-          <div class="sidebar-header">
-            <div class="sidebar-brand">
-              <div class="vm-mark vm-mark--sm">
-                <span class="vm-plus"></span>
-              </div>
-              <div class="brand-text">
-                <div class="brand-title">VividMedi</div>
-                <div class="sidebar-title">Clinical Intelligence Engine</div>
-              </div>
-            </div>
+<!-- ===============================
+     SIDEBAR
+================================ -->
 
-            <input id="sidebarSearch"
-                   class="topic-search"
-                   type="text"
-                   placeholder="Search saved..." />
-          </div>
+<aside class="sidebar">
 
-          <!-- Updated headings -->
-          <div class="sidebar-subhead">Clinical Content</div>
-          <div id="savedQuestionsList" class="conversation-list"></div>
+  <div class="sidebar-header">
+    <div class="sidebar-brand">
+      <div class="vm-mark vm-mark--sm">
+        <span class="vm-plus"></span>
+      </div>
+      <div class="brand-text">
+        <div class="brand-title">VividMedi</div>
+        <div class="sidebar-title">Clinical Intelligence Engine</div>
+      </div>
+    </div>
 
-          <div class="sidebar-subhead">Referrals</div>
-          <div id="savedWrList" class="conversation-list"></div>
+    <input id="sidebarSearch"
+           class="topic-search"
+           type="text"
+           placeholder="Search saved..." />
+  </div>
 
-          <div class="sidebar-subhead">Consultation Documentation</div>
-          <div id="savedHandoverList" class="conversation-list"></div>
+  <div class="sidebar-subhead">Clinical Content</div>
+  <div id="savedQuestionsList" class="conversation-list"></div>
 
-          <div class="sidebar-footer">
-            <span class="sidebar-hint">Locally stored • Per device</span>
-          </div>
+  <div class="sidebar-subhead">Referrals</div>
+  <div id="savedWrList" class="conversation-list"></div>
 
-        </aside>
+  <div class="sidebar-subhead">Consultation Documentation</div>
+  <div id="savedHandoverList" class="conversation-list"></div>
 
-        <!-- MAIN -->
-        <div class="main-region">
+  <div class="sidebar-footer">
+    <span class="sidebar-hint">Locally stored • Per device</span>
+  </div>
 
-          <header class="header">
+</aside>
 
-            <!-- Day toggle -->
-            <div class="theme-toggle">
-              <label class="switch">
-                <input type="checkbox" id="themeToggle">
-                <span class="slider"></span>
-              </label>
-            </div>
+<!-- ===============================
+     MAIN REGION
+================================ -->
 
-            <div class="brand-header">
-              <div class="vm-mark vm-mark--lg">
-                <span class="vm-plus"></span>
-              </div>
-              <div class="brand-header__text">
-                <h1 class="brand-header__name">VividMedi</h1>
-                <div class="brand-header__tagline">
-                  Clinical Intelligence Engine
-                </div>
-              </div>
-            </div>
+<div class="main-region">
 
-            <div class="topbar-actions">
-              <span id="usageChip" class="chip">Loading usage…</span>
-              <button id="upgradeTopBtn"
-                      class="btn btn-primary"
-                      type="button">
-                Upgrade to Pro
-              </button>
-              <button id="logoutBtn"
-                      class="btn"
-                      type="button"
-                      style="display:none;">
-                Sign out
-              </button>
-              <div id="googleBtnTop" style="display:none;"></div>
-            </div>
+<header class="header">
 
-          </header>
+  <div class="theme-toggle">
+    <label class="switch">
+      <input type="checkbox" id="themeToggle">
+      <span class="slider"></span>
+    </label>
+  </div>
 
-          <!-- TOP ROW -->
-          <main class="grid equal-grid">
-
-            <!-- QUESTION -->
-            <section class="card input-card">
-
-              <label class="label" for="clinicalQuestion">
-                Clinical
-              </label>
-
-              <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
-                <label class="label label-tight"
-                       style="margin:0; text-align:left;">
-                  Mode
-                </label>
-
-                <select id="modeSelect"
-                        class="topic-search"
-                        style="max-width:260px;">
-                  <option value="clinical" selected>Clinical</option>
-                  <option value="dva_new">DVA D0904 (New referral)</option>
-                  <option value="dva_renew">DVA D0904 (Renewal / EoC-based)</option>
-                </select>
-              </div>
-
-              <textarea id="clinicalQuestion"
-                        class="textarea"
-                        rows="7"></textarea>
-
-              <div class="actions actions-compact">
-                <button id="generateBtn"
-                        class="btn btn-primary"
-                        type="button">
-                  Generate
-                </button>
-                <button id="dictateQuestionBtn"
-                        class="btn"
-                        type="button">
-                  🎙 Dictate
-                </button>
-                <button id="incorrectQuestionBtn"
-                        class="btn"
-                        type="button">
-                  Incorrect
-                </button>
-                <button id="clearQuestionBtn"
-                        class="btn btn-danger"
-                        type="button">
-                  Clear
-                </button>
-              </div>
-
-              <div id="qStatus"
-                   class="mic-status">
-                Question mic: idle
-              </div>
-
-            </section>
-
-            <!-- ANSWER -->
-            <section class="card output-card">
-
-              <div class="output-header">
-                <div class="output-header-flex">
-                  <h2 class="output-title-inline">Answers</h2>
-                  <button id="copyAllBtn"
-                          class="copy-btn main-copy-btn"
-                          disabled
-                          type="button">
-                    Copy All
-                  </button>
-                </div>
-              </div>
-
-              <div id="answerLoader"
-                   class="answer-loader hidden">
-                <div class="loader"></div>
-                <div class="loader-text">
-                  Generating structured answer…
-                </div>
-              </div>
-
-              <div class="output-body">
-                <div id="answer"
-                     class="answer placeholder">
-                  Your answer will appear here.
-                </div>
-              </div>
-
-            </section>
-
-          </main>
-
-          <div class="divider-spacer"></div>
-                    <!-- CONSULTATION NOTES -->
-          <section class="card wr-card">
-
-            <div class="wr-head">
-              <div style="min-width:240px;">
-                <div class="label wr-label">
-                  Consultation Notes
-                </div>
-
-                <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
-                  <label class="label label-tight"
-                         style="margin:0; text-align:left;">
-                    Mode
-                  </label>
-
-                  <select id="consultModeSelect"
-                          class="topic-search"
-                          style="max-width:260px;">
-
-                    <option value="consult_note" selected>
-                      Create Clinical Note
-                    </option>
-                    <option value="initial_consult">
-                      Initial Patient Consult
-                    </option>
-                    <option value="patient_review">
-                      Patient Review
-                    </option>
-                    <option value="discharge_summary">
-                      Discharge Summary
-                    </option>
-                    <option value="specialist_letter">
-                      Specialist Letter
-                    </option>
-                    <option value="handover">
-                      Handover Summary
-                    </option>
-
-                  </select>
-                </div>
-              </div>
-
-              <div class="actions actions-compact">
-
-                <!-- Smart Device Dropdown -->
-                <div class="dropdown">
-                  <button id="smartDeviceBtn"
-                          class="btn"
-                          type="button">
-                    Connect Smart Device ▾
-                  </button>
-
-                  <div id="smartDeviceMenu"
-                       class="dropdown-menu">
-                    <div class="dropdown-item">Smart Watch</div>
-                    <div class="dropdown-item">AI Glasses</div>
-                    <div class="dropdown-item">AI Necklace</div>
-                    <div class="dropdown-item">Smart Ring</div>
-                  </div>
-                </div>
-
-                <button id="generateWrBtn"
-                        class="btn btn-primary"
-                        type="button">
-                  Generate
-                </button>
-
-                <button id="dictateWrBtn"
-                        class="btn"
-                        type="button">
-                  🎙 Dictate
-                </button>
-
-                <button id="incorrectWrBtn"
-                        class="btn"
-                        type="button">
-                  Incorrect
-                </button>
-
-                <button id="copyWrBtn"
-                        class="btn"
-                        type="button">
-                  Copy
-                </button>
-
-                <button id="clearWrBtn"
-                        class="btn btn-danger"
-                        type="button">
-                  Clear
-                </button>
-
-              </div>
-            </div>
-
-            <textarea id="wrNote"
-                      class="textarea"
-                      rows="16"></textarea>
-
-            <div id="wrStatus"
-                 class="mic-status">
-              Notes mic: idle
-            </div>
-
-            <!-- Structured Consultation Output -->
-            <div class="wr-output-wrapper">
-
-              <div class="output-header">
-                <div class="output-header-flex">
-                  <h2 class="output-title-inline">
-                    Generated Consultation Output
-                  </h2>
-
-                  <button id="copyWrOutputBtn"
-                          class="copy-btn main-copy-btn"
-                          disabled
-                          type="button">
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              <div id="wrAnswerLoader"
-                   class="answer-loader hidden">
-                <div class="loader"></div>
-                <div class="loader-text">
-                  Generating consultation output…
-                </div>
-              </div>
-
-              <div class="output-body">
-                <div id="wrOutput"
-                     class="answer placeholder">
-                  Generated consultation note will appear here.
-                </div>
-              </div>
-
-            </div>
-
-          </section>
-
-        </div>
+  <div class="brand-header">
+    <div class="vm-mark vm-mark--lg">
+      <span class="vm-plus"></span>
+    </div>
+    <div class="brand-header__text">
+      <h1 class="brand-header__name">VividMedi</h1>
+      <div class="brand-header__tagline">
+        Clinical Intelligence Engine
       </div>
     </div>
   </div>
-  const clearWrBtn = document.getElementById("clearWrBtn");
-const wrOutput = document.getElementById("wrOutput");
-const copyWrOutputBtn = document.getElementById("copyWrOutputBtn");
-const wrAnswerLoader = document.getElementById("wrAnswerLoader");
-  const smartDeviceMenu = document.getElementById("smartDeviceMenu");
 
-smartDeviceBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  smartDeviceMenu.classList.toggle("open");
-});
+  <div class="topbar-actions">
+    <span id="usageChip" class="chip">Loading usage…</span>
+    <button id="upgradeTopBtn" class="btn btn-primary" type="button">
+      Upgrade to Pro
+    </button>
+    <button id="logoutBtn" class="btn" type="button" style="display:none;">
+      Sign out
+    </button>
+    <div id="googleBtnTop" style="display:none;"></div>
+  </div>
 
-document.addEventListener("click", (e) => {
-  if (!smartDeviceBtn.contains(e.target) &&
-      !smartDeviceMenu.contains(e.target)) {
-    smartDeviceMenu.classList.remove("open");
-  }
-});
-  clearWrBtn.addEventListener("click", () => {
-  wrNote.value = "";
-  wrOutput.innerHTML = "Generated consultation note will appear here.";
-  copyWrOutputBtn.disabled = true;
-  flashStatus(wrStatus, "Cleared.");
-});
-  async function generateConsultOutput(){
-  const input = (wrNote.value || "").trim();
-  if (!input) return;
+</header>
 
-  const cmode = (consultModeSelect && consultModeSelect.value)
-    ? consultModeSelect.value
-    : "consult_note";
+<!-- ===============================
+     TOP GRID
+================================ -->
 
-  generateWrBtn.disabled = true;
-  wrAnswerLoader.classList.remove("hidden");
-  wrOutput.innerHTML = "";
+<main class="grid equal-grid">
 
-  try {
-    const res = await apiFetch("/api/consult", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: input, mode: cmode })
-    });
+<!-- CLINICAL INPUT -->
 
-    const data = await res.json();
+<section class="card input-card">
 
-    if (res.status === 402 && data && data.error === "quota_exceeded") {
-      showPaywall(data);
-      await refreshMe();
-      wrOutput.textContent =
-        "Free limit reached. Please upgrade to continue.";
-      copyWrOutputBtn.disabled = true;
-      return;
-    }
+<label class="label">Clinical</label>
 
-    if (data.answer) {
-      wrOutput.innerHTML = buildStructuredHtml(data.answer);
-      copyWrOutputBtn.disabled = !(data.answer || "").trim();
-      flashStatus(wrStatus, "Consultation output generated.");
-      await refreshMe();
-    } else {
-      wrOutput.textContent =
-        (data.error || "No response.").trim();
-      copyWrOutputBtn.disabled = true;
-    }
+<div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+  <label class="label label-tight" style="margin:0;">Mode</label>
+  <select id="modeSelect" class="topic-search" style="max-width:260px;">
+    <option value="clinical" selected>Clinical</option>
+    <option value="dva_new">DVA D0904 (New referral)</option>
+    <option value="dva_renew">DVA D0904 (Renewal)</option>
+  </select>
+</div>
 
-  } catch (e) {
-    console.error(e);
-    wrOutput.textContent = "Error generating output.";
-    copyWrOutputBtn.disabled = true;
-  } finally {
-    wrAnswerLoader.classList.add("hidden");
-    generateWrBtn.disabled = false;
-  }
-}
-  copyWrOutputBtn.addEventListener("click", async () => {
-  const text = (wrOutput.innerText || "").trim();
-  if (!text) return;
-  await copyText(text);
-});
-  const themeToggle = document.getElementById("themeToggle");
-if (themeToggle) {
-  themeToggle.addEventListener("change", () => {
-    document.body.classList.toggle("day-mode");
-  });
-}
-  <!-- PAYWALL MODAL (UNCHANGED ORIGINAL) -->
+<textarea id="clinicalQuestion"
+          class="textarea"
+          rows="7"></textarea>
+
+<div class="actions actions-compact">
+  <button id="generateBtn" class="btn btn-primary">Generate</button>
+  <button id="dictateQuestionBtn" class="btn">🎙 Dictate</button>
+  <button id="incorrectQuestionBtn" class="btn">Incorrect</button>
+  <button id="clearQuestionBtn" class="btn btn-danger">Clear</button>
+</div>
+
+<div id="qStatus" class="mic-status">
+  Question mic: idle
+</div>
+
+</section>
+
+<!-- ANSWER OUTPUT -->
+
+<section class="card output-card">
+
+<div class="output-header">
+  <div class="output-header-flex">
+    <h2 class="output-title-inline">Answers</h2>
+    <button id="copyAllBtn"
+            class="copy-btn main-copy-btn"
+            disabled>
+      Copy All
+    </button>
+  </div>
+</div>
+
+<div id="answerLoader" class="answer-loader hidden">
+  <div class="loader"></div>
+  <div class="loader-text">
+    Generating structured answer…
+  </div>
+</div>
+
+<div class="output-body">
+  <div id="answer" class="answer placeholder">
+    Your answer will appear here.
+  </div>
+</div>
+
+</section>
+
+</main>
+
+<div class="divider-spacer"></div>
+
+<!-- ===============================
+     CONSULTATION SECTION
+================================ -->
+
+<section class="card wr-card">
+
+<div class="wr-head">
+
+  <div style="min-width:240px;">
+    <div class="label wr-label">Consultation Notes</div>
+
+    <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+      <label class="label label-tight" style="margin:0;">Mode</label>
+      <select id="consultModeSelect"
+              class="topic-search"
+              style="max-width:260px;">
+        <option value="consult_note" selected>Create Clinical Note</option>
+        <option value="initial_consult">Initial Patient Consult</option>
+        <option value="patient_review">Patient Review</option>
+        <option value="discharge_summary">Discharge Summary</option>
+        <option value="specialist_letter">Specialist Letter</option>
+        <option value="handover">Handover Summary</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="actions actions-compact">
+
+    <div class="dropdown">
+      <button id="smartDeviceBtn" class="btn">
+        Connect Smart Device ▾
+      </button>
+      <div id="smartDeviceMenu" class="dropdown-menu">
+        <div class="dropdown-item">Smart Watch</div>
+        <div class="dropdown-item">AI Glasses</div>
+        <div class="dropdown-item">AI Necklace</div>
+        <div class="dropdown-item">Smart Ring</div>
+      </div>
+    </div>
+
+    <button id="generateWrBtn" class="btn btn-primary">
+      Generate
+    </button>
+
+    <button id="dictateWrBtn" class="btn">
+      🎙 Dictate
+    </button>
+
+    <button id="incorrectWrBtn" class="btn">
+      Incorrect
+    </button>
+
+    <button id="copyWrBtn" class="btn">
+      Copy
+    </button>
+
+    <button id="clearWrBtn" class="btn btn-danger">
+      Clear
+    </button>
+
+  </div>
+</div>
+
+<textarea id="wrNote"
+          class="textarea"
+          rows="16"></textarea>
+
+<div id="wrStatus" class="mic-status">
+  Notes mic: idle
+</div>
+
+<div class="wr-output-wrapper">
+
+  <div class="output-header">
+    <div class="output-header-flex">
+      <h2 class="output-title-inline">
+        Generated Consultation Output
+      </h2>
+      <button id="copyWrOutputBtn"
+              class="copy-btn main-copy-btn"
+              disabled>
+        Copy
+      </button>
+    </div>
+  </div>
+
+  <div id="wrAnswerLoader"
+       class="answer-loader hidden">
+    <div class="loader"></div>
+    <div class="loader-text">
+      Generating consultation output…
+    </div>
+  </div>
+
+  <div class="output-body">
+    <div id="wrOutput" class="answer placeholder">
+      Generated consultation note will appear here.
+    </div>
+  </div>
+
+</div>
+
+</section>
+
+</div>
+</div>
+</div>
+</div>
+<!-- ===============================
+     PAYWALL MODAL
+================================ -->
+
 <div id="paywallBackdrop"
      class="vm-modal-backdrop"
      role="dialog"
@@ -494,8 +448,7 @@ if (themeToggle) {
   <div class="vm-modal">
 
     <div class="vm-modal-head">
-      <h3 id="paywallTitle"
-          class="vm-modal-title">
+      <h3 id="paywallTitle" class="vm-modal-title">
         Free limit reached
       </h3>
       <button id="paywallClose"
@@ -509,26 +462,12 @@ if (themeToggle) {
       <p><strong id="paywallLine1">
         You’ve used 10/10 free generations.
       </strong></p>
-
       <p><strong id="paywallLine2">
         Upgrade to Pro for unlimited access.
       </strong></p>
-
       <p id="paywallLine3">
-        Pro includes higher limits, priority processing,
-        and ongoing updates.
+        Cancel anytime • Secure payments via Stripe
       </p>
-
-      <p id="paywallPromo"
-         style="display:none;">
-        <em>Create a free account to continue to checkout.</em>
-      </p>
-
-      <div class="vm-google-wrap"
-           style="margin-top:12px;">
-        <div id="googleBtnModal"
-             style="display:none;"></div>
-      </div>
     </div>
 
     <div class="vm-modal-foot">
@@ -537,176 +476,43 @@ if (themeToggle) {
               type="button">
         Upgrade to Pro
       </button>
-
-      <button id="signupBtnModal"
-              class="btn"
-              type="button">
-        Sign in
-      </button>
-
       <span class="vm-spacer"></span>
-
-      <span class="vm-mini">
-        Cancel anytime • Secure payments via Stripe
-      </span>
     </div>
 
   </div>
 </div>
 
+<!-- ===============================
+     MAIN SCRIPT
+================================ -->
+
 <script>
 window.addEventListener("DOMContentLoaded", () => {
 
-  /* ===============================
-     STORAGE KEYS
-  =============================== */
+  /* ========= ELEMENTS ========= */
 
-  const STORE_Q_CORR = "ebm_q_corrections_v7";
-  const STORE_WR_CORR = "ebm_wr_corrections_v7";
-  const STORE_SAVED_QA = "ebm_saved_qa_v7";
-  const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
-  const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
+  const clinicalQuestion = document.getElementById("clinicalQuestion");
+  const generateBtn = document.getElementById("generateBtn");
+  const answerEl = document.getElementById("answer");
+  const answerLoader = document.getElementById("answerLoader");
+  const copyAllBtn = document.getElementById("copyAllBtn");
 
-  /* ===============================
-     TOKEN AUTH
-  =============================== */
+  const wrNote = document.getElementById("wrNote");
+  const generateWrBtn = document.getElementById("generateWrBtn");
+  const wrOutput = document.getElementById("wrOutput");
+  const wrAnswerLoader = document.getElementById("wrAnswerLoader");
+  const copyWrOutputBtn = document.getElementById("copyWrOutputBtn");
 
-  const AUTH_TOKEN_KEY = "vm_auth_token";
-
-  function setAuthToken(t) {
-    try { localStorage.setItem(AUTH_TOKEN_KEY, t || ""); } catch {}
-  }
-
-  function getAuthToken() {
-    try { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; }
-    catch { return ""; }
-  }
-
-  function clearAuthToken() {
-    try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {}
-  }
-
-  /* ===============================
-     CHECKOUT INTENT
-  =============================== */
-
-  const CHECKOUT_INTENT_KEY = "vm_intent_checkout";
-
-  function setCheckoutIntent() {
-    try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, "1"); } catch {}
-  }
-
-  function clearCheckoutIntent() {
-    try { sessionStorage.removeItem(CHECKOUT_INTENT_KEY); } catch {}
-  }
-
-  function hasCheckoutIntent() {
-    try { return sessionStorage.getItem(CHECKOUT_INTENT_KEY) === "1"; }
-    catch { return false; }
-  }
-
-  let checkoutInProgress = false;
-
-  /* ===============================
-     ELEMENT REFERENCES
-  =============================== */
-
-  const usageChip = document.getElementById("usageChip");
-  const upgradeTopBtn = document.getElementById("upgradeTopBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
-  const googleBtnTop = document.getElementById("googleBtnTop");
+  const clearWrBtn = document.getElementById("clearWrBtn");
+  const smartDeviceBtn = document.getElementById("smartDeviceBtn");
+  const smartDeviceMenu = document.getElementById("smartDeviceMenu");
+  const themeToggle = document.getElementById("themeToggle");
 
   const paywallBackdrop = document.getElementById("paywallBackdrop");
   const paywallClose = document.getElementById("paywallClose");
-  const paywallLine1 = document.getElementById("paywallLine1");
-  const paywallLine2 = document.getElementById("paywallLine2");
-  const paywallLine3 = document.getElementById("paywallLine3");
-  const paywallPromo = document.getElementById("paywallPromo");
   const upgradeBtnModal = document.getElementById("upgradeBtnModal");
-  const signupBtnModal = document.getElementById("signupBtnModal");
-  const googleBtnModal = document.getElementById("googleBtnModal");
 
-  const GOOGLE_CLIENT_ID =
-    "{{ google_client_id|default('') }}".trim();
-
-  const PATH = (window.location.pathname || "");
-  const IS_STRIPE_RETURN =
-    (PATH.startsWith("/pro/success") ||
-     PATH.startsWith("/pro/cancelled"));
-
-  /* ===============================
-     API FETCH WRAPPER
-  =============================== */
-
-  async function apiFetch(url, opts = {}) {
-    const token = getAuthToken();
-    const headers = Object.assign({}, opts.headers || {});
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return fetch(url, Object.assign({}, opts, { headers }));
-  }
-
-  /* ===============================
-     UTILS
-  =============================== */
-
-  function norm(s) {
-    return (s || "")
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function escapeHtml(str) {
-    return (str || "")
-      .replace(/&/g,"&amp;")
-      .replace(/</g,"&lt;")
-      .replace(/>/g,"&gt;");
-  }
-
-  async function copyText(text){
-    if (!text) return;
-    try { await navigator.clipboard.writeText(text); }
-    catch {}
-  }
-
-  function flashStatus(el, msg){
-    if (el) el.textContent = msg;
-  }
-
-  /* ===============================
-     PAYWALL CONTROLS
-  =============================== */
-
-  function showPaywall(payload){
-    const used = payload?.used ?? 10;
-    const limit = payload?.limit ?? 10;
-
-    paywallLine1.textContent =
-      `You’ve used ${used}/${limit} free generations.`;
-
-    paywallLine2.textContent =
-      "Upgrade to Pro for unlimited access.";
-
-    paywallLine3.textContent =
-      "Cancel anytime. Secure payments via Stripe.";
-
-    paywallBackdrop.style.display = "flex";
-  }
-
-  function hidePaywall(){
-    paywallBackdrop.style.display = "none";
-  }
-
-  paywallClose.addEventListener("click", hidePaywall);
-  paywallBackdrop.addEventListener("click", (e) => {
-    if (e.target === paywallBackdrop) hidePaywall();
-  });
-
-  /* ===============================
-     DAY MODE TOGGLE
-  =============================== */
-
-  const themeToggle = document.getElementById("themeToggle");
+  /* ========= DAY MODE ========= */
 
   if (themeToggle) {
     themeToggle.addEventListener("change", () => {
@@ -714,18 +520,9 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /* ===============================
-     SMART DEVICE DROPDOWN
-  =============================== */
-
-  const smartDeviceBtn =
-    document.getElementById("smartDeviceBtn");
-
-  const smartDeviceMenu =
-    document.getElementById("smartDeviceMenu");
+  /* ========= SMART DROPDOWN ========= */
 
   if (smartDeviceBtn && smartDeviceMenu) {
-
     smartDeviceBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       smartDeviceMenu.classList.toggle("open");
@@ -739,258 +536,122 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-});
-</script>
-</body>
-</html>
-<script>
-  /* ===============================
-     STRUCTURED ANSWER BUILDER
-  =============================== */
+  /* ========= CLEAR CONSULT ========= */
 
-  function hasNonEmpty(arr){
-    return Array.isArray(arr) &&
-           arr.some(l => (l||"").trim() !== "");
-  }
-
-  function buildStructuredHtml(raw) {
-    if (!raw) return "";
-
-    let text = String(raw)
-      .replace(/\r/g,"")
-      .replace(/\*\*(.*?)\*\*/g,"$1")
-      .replace(/#{1,6}\s*/g,"");
-
-    const sectionOrder = [
-      "Summary","Assessment","Diagnosis",
-      "Investigations","Treatment","Monitoring",
-      "Follow-up & Safety Netting",
-      "Red Flags","References"
-    ];
-
-    const lines = text.split("\n");
-    const sections = [];
-    let current = { title:"Summary", content:[] };
-    let seenExplicit = false;
-
-    function isHeading(line){
-      const t = (line||"").trim().replace(/:$/,"");
-      return sectionOrder.find(
-        h => h.toLowerCase() === t.toLowerCase()
-      ) || null;
-    }
-
-    for (const rawLine of lines) {
-      const line = (rawLine||"").trim();
-      if (!line){
-        current.content.push("");
-        continue;
-      }
-
-      const heading = isHeading(line);
-      if (heading) {
-        if (hasNonEmpty(current.content))
-          sections.push(current);
-
-        current = { title:heading, content:[] };
-        seenExplicit = true;
-      } else {
-        current.content.push(line);
-      }
-    }
-
-    if (hasNonEmpty(current.content))
-      sections.push(current);
-
-    if (!seenExplicit)
-      return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
-
-    let html = "";
-    let idx = 0;
-
-    for (const sec of sections) {
-
-      if (!hasNonEmpty(sec.content)) continue;
-
-      const id = `sec-${idx++}`;
-      const inner = sec.content
-        .filter(l => (l||"").trim() !== "")
-        .map(l =>
-          `<div class="answer-line">${escapeHtml(l.trim())}</div>`
-        ).join("");
-
-      const alwaysOpen = (sec.title === "Summary");
-
-      if (alwaysOpen) {
-        html += `
-          <div class="section">
-            <div class="section-header static">
-              <span>${escapeHtml(sec.title)}</span>
-              <button class="section-copy-btn copy-btn"
-                      data-target="${id}"
-                      type="button">
-                Copy
-              </button>
-            </div>
-            <div class="section-body static-body"
-                 data-section="${id}">
-              ${inner}
-            </div>
-          </div>`;
-      } else {
-        html += `
-          <div class="section">
-            <div class="collapsible-header">
-              <button class="collapsible"
-                      data-target="${id}"
-                      type="button">
-                ${escapeHtml(sec.title)}
-              </button>
-              <button class="section-copy-btn copy-btn"
-                      data-target="${id}"
-                      type="button">
-                Copy
-              </button>
-            </div>
-            <div class="collapsible-content"
-                 data-section="${id}"
-                 style="display:none;">
-              ${inner}
-            </div>
-          </div>`;
-      }
-    }
-
-    return html;
-  }
-
-  /* ===============================
-     COLLAPSIBLE + COPY HANDLERS
-  =============================== */
-
-  document.addEventListener("click", async (e) => {
-
-    const t = e.target;
-
-    if (t.classList?.contains("collapsible")) {
-
-      const id = t.dataset.target;
-      const content =
-        document.querySelector(
-          `.collapsible-content[data-section="${id}"]`
-        );
-
-      if (!content) return;
-
-      const open =
-        content.style.display === "block";
-
-      content.style.display =
-        open ? "none" : "block";
-
-      t.classList.toggle("active", !open);
-    }
-
-    if (t.classList?.contains("section-copy-btn")) {
-
-      const id = t.dataset.target;
-      const section =
-        document.querySelector(
-          `[data-section="${id}"]`
-        );
-
-      if (!section) return;
-
-      const text =
-        (section.innerText || "").trim();
-
-      if (!text) return;
-
-      await copyText(text);
-    }
-
+  clearWrBtn.addEventListener("click", () => {
+    wrNote.value = "";
+    wrOutput.innerHTML =
+      "Generated consultation note will appear here.";
+    copyWrOutputBtn.disabled = true;
   });
 
-  /* ===============================
-     CLINICAL GENERATE
-  =============================== */
+  /* ========= COPY ========= */
 
-  async function generate(){
+  copyAllBtn.addEventListener("click", async () => {
+    const text = (answerEl.innerText || "").trim();
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+  });
 
-    const query =
-      (clinicalQuestion.value || "").trim();
+  copyWrOutputBtn.addEventListener("click", async () => {
+    const text = (wrOutput.innerText || "").trim();
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+  });
 
+  /* ========= STRUCTURED RENDER ========= */
+
+  function buildStructuredHtml(text) {
+    if (!text) return "";
+    const sections = text.split("\n\n");
+    return sections.map(s =>
+      `<div class="answer-line">${s.trim()}</div>`
+    ).join("");
+  }
+
+  /* ========= CLINICAL GENERATE ========= */
+
+  generateBtn.addEventListener("click", async () => {
+
+    const query = clinicalQuestion.value.trim();
     if (!query) return;
 
-    const mode =
-      (modeSelect && modeSelect.value)
-      ? modeSelect.value
-      : "clinical";
-
     generateBtn.disabled = true;
-    copyAllBtn.disabled = true;
     answerLoader.classList.remove("hidden");
     answerEl.innerHTML = "";
 
     try {
-
-      const res = await apiFetch("/api/generate", {
+      const res = await fetch("/api/generate", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({query,mode})
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ query })
       });
 
-      const data = await res.json();
-
-      if (res.status === 402 &&
-          data?.error === "quota_exceeded") {
-
-        showPaywall(data);
-        answerEl.textContent =
-          "Free limit reached.";
+      if (res.status === 402) {
+        paywallBackdrop.style.display = "flex";
         return;
       }
 
-      if (data.answer) {
+      const data = await res.json();
+      answerEl.innerHTML = buildStructuredHtml(data.answer);
+      copyAllBtn.disabled = false;
 
-        answerEl.innerHTML =
-          buildStructuredHtml(data.answer);
-
-        copyAllBtn.disabled =
-          !(data.answer || "").trim();
-
-        flashStatus(qStatus,"Generated.");
-      }
-      else {
-        answerEl.textContent =
-          data.error || "No response.";
-      }
-
-    } catch (err) {
-
-      console.error(err);
-      answerEl.textContent =
-        "Error generating answer.";
-
+    } catch {
+      answerEl.textContent = "Error generating answer.";
     } finally {
-
       answerLoader.classList.add("hidden");
       generateBtn.disabled = false;
-
     }
-  }
 
-  generateBtn.addEventListener("click", generate);
+  });
 
-  /* ===============================
-     COPY ALL (CLINICAL)
-  =============================== */
+  /* ========= CONSULT GENERATE ========= */
 
-  copyAllBtn.addEventListener("click", async () => {
-    const text =
-      (answerEl.innerText || "").trim();
+  generateWrBtn.addEventListener("click", async () => {
+
+    const text = wrNote.value.trim();
     if (!text) return;
-    await copyText(text);
+
+    generateWrBtn.disabled = true;
+    wrAnswerLoader.classList.remove("hidden");
+    wrOutput.innerHTML = "";
+
+    try {
+      const res = await fetch("/api/consult", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ text })
+      });
+
+      if (res.status === 402) {
+        paywallBackdrop.style.display = "flex";
+        return;
+      }
+
+      const data = await res.json();
+      wrOutput.innerHTML =
+        buildStructuredHtml(data.answer);
+
+      copyWrOutputBtn.disabled = false;
+
+    } catch {
+      wrOutput.textContent =
+        "Error generating consultation.";
+    } finally {
+      wrAnswerLoader.classList.add("hidden");
+      generateWrBtn.disabled = false;
+    }
+
+  });
+
+  /* ========= PAYWALL ========= */
+
+  paywallClose.addEventListener("click", () => {
+    paywallBackdrop.style.display = "none";
+  });
+
+  upgradeBtnModal.addEventListener("click", () => {
+    window.location.href = "/pro";
   });
 
 });
