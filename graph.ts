@@ -29,7 +29,7 @@ const graphBuilder = new SequentialGraphBuilder({
       sampleRate: 24000,
     }),
   ],
-  enableRemoteConfig: false
+  enableRemoteConfig: true
 });
 
 export const graph = graphBuilder.build();
