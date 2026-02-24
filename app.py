@@ -13,7 +13,7 @@
 # - DEEPSEEK_API_KEY
 # - STRIPE_SECRET_KEY (sk_live_...)
 # - STRIPE_WEBHOOK_SECRET (whsec_...)
-# - STRIPE_PRICE_ID_PRO=price_1T3yFlHvfV7kt9wle2LpbpU0
+# - STRIPE_PRICE_ID_PRO=price_...
 # - APP_BASE_URL=https://www.vividmedi.com
 
 import os
@@ -31,11 +31,9 @@ import stripe
 from flask import Flask, request, jsonify, render_template, session, make_response
 from faster_whisper import WhisperModel
 
-# Google ID token verification (server-side)
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
-# Bearer token signing
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 
@@ -45,6 +43,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 if os.getenv("RENDER") is None:
     try:
         from dotenv import load_dotenv
+
         load_dotenv()
     except Exception:
         pass
@@ -67,16 +66,17 @@ STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
 STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()  # MUST be price_...
 APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
 
-# Optional: auto-pro for your own account
 CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
-# HARD GUARD: prevents your old error (plink_ or URL passed as price)
+# HARD GUARD: prevents passing plink_ or URL as price
 if STRIPE_PRICE_ID_PRO:
     if STRIPE_PRICE_ID_PRO.startswith("plink_") or STRIPE_PRICE_ID_PRO.startswith("http"):
-        raise RuntimeError(f"STRIPE_PRICE_ID_PRO must be a price_ id, not a payment link or URL: {STRIPE_PRICE_ID_PRO}")
+        raise RuntimeError(
+            f"STRIPE_PRICE_ID_PRO must be a price_ id, not a payment link or URL: {STRIPE_PRICE_ID_PRO}"
+        )
     if not STRIPE_PRICE_ID_PRO.startswith("price_"):
         raise RuntimeError(f"STRIPE_PRICE_ID_PRO must start with 'price_': {STRIPE_PRICE_ID_PRO}")
 
@@ -87,20 +87,35 @@ if STRIPE_PRICE_ID_PRO:
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or APP_SECRET_KEY or "dev-insecure-change-me")
 
+# Cookie hardening (Flask session cookie)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=APP_BASE_URL.startswith("https://"),
+)
+
 
 # -----------------------------------
 # DB (SQLite)
 # -----------------------------------
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
+
 def db_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+
+    # Pragmas: better concurrency & safety for web apps
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
     return conn
+
 
 def db_init():
     with db_conn() as conn:
-        conn.execute("""
+        conn.execute(
+            """
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
@@ -112,8 +127,10 @@ def db_init():
             stripe_subscription_id TEXT,
             created_at TEXT NOT NULL
         )
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
         CREATE TABLE IF NOT EXISTS usage (
             actor_type TEXT NOT NULL,   -- guest | user
             actor_id TEXT NOT NULL,
@@ -121,8 +138,10 @@ def db_init():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (actor_type, actor_id)
         )
-        """)
+        """
+        )
         conn.commit()
+
 
 db_init()
 
@@ -132,8 +151,10 @@ db_init()
 # -----------------------------------
 serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
 
+
 def sign_token(user_id: str) -> str:
     return serializer.dumps({"uid": user_id})
+
 
 def verify_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 30):
     try:
@@ -141,6 +162,7 @@ def verify_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 30):
         return data.get("uid")
     except (BadSignature, SignatureExpired):
         return None
+
 
 def get_user_from_bearer():
     auth = request.headers.get("Authorization", "")
@@ -153,6 +175,7 @@ def get_user_from_bearer():
     with db_conn() as conn:
         row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     return dict(row) if row else None
+
 
 def get_authed_user():
     # Prefer Bearer (frontend apiFetch), fallback to session cookie
@@ -173,6 +196,7 @@ def get_authed_user():
 def get_guest_id():
     return request.cookies.get("vivid_guest") or ""
 
+
 def ensure_guest_cookie(resp):
     gid = get_guest_id()
     if not gid:
@@ -181,7 +205,7 @@ def ensure_guest_cookie(resp):
             "vivid_guest",
             gid,
             httponly=True,
-            secure=True,
+            secure=APP_BASE_URL.startswith("https://"),  # local dev on http://localhost needs False
             samesite="Lax",
             max_age=60 * 60 * 24 * 365,
             path="/",
@@ -210,6 +234,7 @@ def extract_field(text: str, labels):
             return m.group(1).strip()
     return ""
 
+
 def normalise_card_type(s: str) -> str:
     s = (s or "").strip().lower()
     if not s:
@@ -220,11 +245,15 @@ def normalise_card_type(s: str) -> str:
         return "White"
     return s[:1].upper() + s[1:]
 
+
 def build_dva_header(user_text: str) -> str:
     name = extract_field(user_text, ["DVA patient name", "Patient name", "Name", "Patient"])
     card = extract_field(user_text, ["DVA card", "Card type", "Card", "DVA card type"])
     dva_no = extract_field(user_text, ["DVA number", "DVA no", "File number", "File no"])
-    accepted = extract_field(user_text, ["Accepted conditions", "Accepted condition", "Accepted", "White card accepted conditions"])
+    accepted = extract_field(
+        user_text,
+        ["Accepted conditions", "Accepted condition", "Accepted", "White card accepted conditions"],
+    )
     referral = extract_field(user_text, ["Referral type", "Referral", "Requested referral", "Discipline"])
     contact = extract_field(user_text, ["Contact number", "Phone", "Mobile", "Contact"])
 
@@ -275,6 +304,7 @@ def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -
         row2 = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
         return dict(row2)
 
+
 def upgrade_user_to_pro(user_id: str, stripe_customer_id: str = None, stripe_subscription_id: str = None):
     with db_conn() as conn:
         conn.execute(
@@ -290,6 +320,14 @@ def upgrade_user_to_pro(user_id: str, stripe_customer_id: str = None, stripe_sub
         conn.commit()
 
 
+def downgrade_user_to_free_by_customer(customer_id: str):
+    with db_conn() as conn:
+        row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
+        if row:
+            conn.execute("UPDATE users SET plan='free' WHERE id=?", (row["id"],))
+            conn.commit()
+
+
 # -----------------------------------
 # Usage / quota
 # -----------------------------------
@@ -302,6 +340,7 @@ def usage_get(actor_type: str, actor_id: str) -> int:
             (actor_type, actor_id),
         ).fetchone()
         return int(row["used"]) if row else 0
+
 
 def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
     if not actor_id:
@@ -326,6 +365,7 @@ def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
         conn.commit()
         return used
 
+
 def actor_and_limit():
     """
     Guest: 10 total generations
@@ -341,6 +381,7 @@ def actor_and_limit():
 
     gid = get_guest_id()
     return "guest", gid, 10, None
+
 
 def quota_block_payload(used: int, limit: int, is_logged_in: bool):
     payload = {
@@ -365,11 +406,17 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
         payload["promo"] = {"label": "Create a free account to unlock 1 extra generation today."}
     return payload
 
+
 def enforce_quota_or_402():
+    """
+    Fix: do NOT increment before checking.
+    """
     actor_type, actor_id, limit, u = actor_and_limit()
-    used_after = usage_incr(actor_type, actor_id, 1)
-    if used_after > limit:
-        return jsonify(quota_block_payload(used_after, limit, is_logged_in=bool(u))), 402
+    used_before = usage_get(actor_type, actor_id)
+    if used_before >= limit:
+        return jsonify(quota_block_payload(used_before, limit, is_logged_in=bool(u))), 402
+
+    usage_incr(actor_type, actor_id, 1)
     return None
 
 
@@ -379,6 +426,7 @@ def enforce_quota_or_402():
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
+
 
 def get_whisper_model():
     global _whisper_model
@@ -458,6 +506,7 @@ HANDOVER_SYSTEM_PROMPT = (
 # -----------------------------------
 http = requests.Session()
 
+
 def call_deepseek(system_prompt: str, user_content: str) -> str:
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
@@ -491,9 +540,11 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 def health():
     return "ok", 200
 
+
 @app.get("/healthz")
 def healthz():
     return "ok", 200
+
 
 @app.get("/_ping")
 def ping():
@@ -509,11 +560,13 @@ def index():
     ensure_guest_cookie(resp)
     return resp
 
+
 @app.get("/pro/success")
 def pro_success():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
     return resp
+
 
 @app.get("/pro/cancelled")
 def pro_cancelled():
@@ -541,14 +594,16 @@ def api_me():
     actor_type, actor_id, limit, _u = actor_and_limit()
     used = usage_get(actor_type, actor_id)
 
-    return jsonify({
-        "logged_in": bool(u),
-        "email": u["email"] if u else None,
-        "plan": u["plan"] if u else "guest",
-        "used": used,
-        "limit": limit,
-        "remaining": max(0, limit - used),
-    })
+    return jsonify(
+        {
+            "logged_in": bool(u),
+            "email": u["email"] if u else None,
+            "plan": u["plan"] if u else "guest",
+            "used": used,
+            "limit": limit,
+            "remaining": max(0, limit - used),
+        }
+    )
 
 
 # -----------------------------------
@@ -565,11 +620,7 @@ def auth_google():
         return jsonify({"error": "Missing credential"}), 400
 
     try:
-        info = google_id_token.verify_oauth2_token(
-            token,
-            google_requests.Request(),
-            GOOGLE_CLIENT_ID
-        )
+        info = google_id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
 
         email = (info.get("email") or "").strip().lower()
         name = (info.get("name") or "") or (info.get("given_name") or "")
@@ -585,11 +636,7 @@ def auth_google():
         session["user_id"] = user["id"]
         bearer = sign_token(user["id"])
 
-        return jsonify({
-            "ok": True,
-            "token": bearer,  # ✅ index.html uses this
-            "user": {"email": user["email"], "plan": user["plan"]},
-        })
+        return jsonify({"ok": True, "token": bearer, "user": {"email": user["email"], "plan": user["plan"]}})
 
     except Exception as e:
         print("GOOGLE AUTH ERROR:", repr(e))
@@ -621,16 +668,12 @@ def stripe_create_checkout_session():
 
         # Create Stripe customer ONCE
         if not customer_id:
-            customer = stripe.Customer.create(
-                email=u["email"],
-                metadata={"user_id": u["id"]},
-            )
+            customer = stripe.Customer.create(email=u["email"], metadata={"user_id": u["id"]})
             customer_id = customer.id
             with db_conn() as conn:
                 conn.execute("UPDATE users SET stripe_customer_id=? WHERE id=?", (customer_id, u["id"]))
                 conn.commit()
 
-        # Create subscription checkout session using PRICE id
         sess = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
@@ -638,6 +681,7 @@ def stripe_create_checkout_session():
             success_url=f"{APP_BASE_URL}/pro/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{APP_BASE_URL}/pro/cancelled",
             metadata={"user_id": u["id"], "product": "vividmedi_pro"},
+            client_reference_id=u["id"],
         )
 
         return jsonify({"url": sess.url})
@@ -648,12 +692,14 @@ def stripe_create_checkout_session():
 
 
 # -----------------------------------
-# Stripe webhook — upgrades user via stripe_customer_id
+# Stripe webhook — upgrades user via stripe_customer_id (reliable)
 # -----------------------------------
 @app.post("/api/stripe/webhook")
 def stripe_webhook():
     if not STRIPE_WEBHOOK_SECRET:
         return "Missing webhook secret", 500
+    if not STRIPE_SECRET_KEY:
+        return "Missing stripe key", 500
 
     payload = request.get_data()
     sig_header = request.headers.get("Stripe-Signature", "")
@@ -667,11 +713,25 @@ def stripe_webhook():
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
-    # Upgrade user when checkout completes
+    # 1) Capture IDs at checkout completion (may not yet be paid/active)
     if etype == "checkout.session.completed":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
+        if customer_id and subscription_id:
+            with db_conn() as conn:
+                row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
+                if row:
+                    conn.execute(
+                        "UPDATE users SET stripe_subscription_id=? WHERE id=?",
+                        (subscription_id, row["id"]),
+                    )
+                    conn.commit()
 
+    # 2) Upgrade when payment succeeds (most reliable)
+    # invoice.paid includes subscription + customer
+    if etype == "invoice.paid":
+        customer_id = obj.get("customer")
+        subscription_id = obj.get("subscription")
         if customer_id:
             with db_conn() as conn:
                 row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
@@ -682,17 +742,25 @@ def stripe_webhook():
                     stripe_subscription_id=subscription_id,
                 )
 
-    # Optional: downgrade on cancellation/unpaid
-    if etype in ("customer.subscription.deleted", "customer.subscription.updated"):
+    # 3) Handle subscription status transitions
+    if etype in ("customer.subscription.created", "customer.subscription.updated"):
         sub = obj
         customer_id = sub.get("customer")
         status = (sub.get("status") or "").lower()
-        if customer_id:
+        sub_id = sub.get("id")
+        if customer_id and status in ("active", "trialing"):
             with db_conn() as conn:
                 row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
-                if row and status in ("canceled", "unpaid", "incomplete_expired"):
-                    conn.execute("UPDATE users SET plan='free' WHERE id=?", (row["id"],))
-                    conn.commit()
+            if row:
+                upgrade_user_to_pro(row["id"], stripe_customer_id=customer_id, stripe_subscription_id=sub_id)
+
+        if customer_id and status in ("canceled", "unpaid", "incomplete_expired"):
+            downgrade_user_to_free_by_customer(customer_id)
+
+    if etype == "customer.subscription.deleted":
+        customer_id = obj.get("customer")
+        if customer_id:
+            downgrade_user_to_free_by_customer(customer_id)
 
     return "OK", 200
 
@@ -719,7 +787,13 @@ def generate():
     try:
         if mode.startswith("dva"):
             header = build_dva_header(query)
-            referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
+            referral_intent = (
+                "D0904 new"
+                if mode == "dva_new"
+                else "D0904 renewal"
+                if mode == "dva_renew"
+                else "D0904 (unspecified)"
+            )
             user_content = (
                 f"Referral intent: {referral_intent}\n\n"
                 f"{header}\n\n"
@@ -728,7 +802,9 @@ def generate():
             )
             answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
         else:
-            user_content = f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
+            user_content = (
+                f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
+            )
             answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
 
         return jsonify({"answer": answer})
