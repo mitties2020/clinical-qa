@@ -5,6 +5,7 @@
     <title>VividMedi</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <!-- Google Identity Services (One Tap + button) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
@@ -13,12 +14,12 @@
         --panel: rgba(255, 255, 255, 0.06);
         --panel-2: rgba(255, 255, 255, 0.09);
         --border: rgba(255, 255, 255, 0.12);
-        --text: rgba(255, 255, 255, 0.90);
+        --text: rgba(255, 255, 255, 0.9);
         --muted: rgba(255, 255, 255, 0.68);
         --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 
         --accent: #7c3aed;
-        --accent-2: #22c55e;
+        --accent2: #2563eb;
         --danger: #ef4444;
 
         --chip-bg: rgba(0, 0, 0, 0.18);
@@ -39,7 +40,7 @@
         --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
 
         --accent: #6d28d9;
-        --accent-2: #16a34a;
+        --accent2: #2563eb;
         --danger: #dc2626;
 
         --chip-bg: rgba(15, 23, 42, 0.04);
@@ -55,7 +56,7 @@
         color: var(--text);
       }
 
-      /* ---- Minimal UI additions for auth + paywall (won't affect your existing CSS) ---- */
+      /* Topbar actions */
       .topbar-actions {
         display: flex;
         gap: 10px;
@@ -76,12 +77,11 @@
       .chip strong {
         color: var(--text);
       }
-
       .auth-btn {
         cursor: pointer;
       }
 
-      /* Symmetry helpers */
+      /* Cards/inputs unify */
       .card {
         background: var(--panel);
         border: 1px solid var(--border);
@@ -103,34 +103,29 @@
         box-shadow: 0 0 0 4px var(--input-focus);
       }
 
-      .output-card .output-body,
-      .wr-card {
-        border-color: var(--border);
-      }
-
-      /* Make inputs symmetrical: same max width, consistent spacing */
+      /* Symmetry: match first row panels */
       .grid {
         gap: 18px;
       }
       .input-card,
       .output-card {
-        min-height: 420px;
+        min-height: 440px;
       }
 
-      /* Buttons: gently modernise (won't override your base too hard) */
+      /* Buttons (light touch) */
       .btn.btn-primary {
-        background: linear-gradient(135deg, var(--accent), #2563eb);
-        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
       [data-theme="light"] .btn.btn-primary {
         border: 1px solid rgba(15, 23, 42, 0.12);
       }
       .btn.btn-danger {
         background: linear-gradient(135deg, var(--danger), #fb7185);
-        border: 1px solid rgba(255, 255, 255, 0.10);
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
 
-      /* Day/Night toggle (small side-to-side) */
+      /* Day/Night toggle */
       .theme-toggle {
         display: inline-flex;
         align-items: center;
@@ -167,7 +162,7 @@
         background: #fff;
         transform: translateX(0);
         transition: transform 180ms ease;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.20);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
       }
       [data-theme="light"] .knob {
         background: rgba(15, 23, 42, 0.92);
@@ -292,13 +287,6 @@
         border-color: var(--border);
         background: rgba(255, 255, 255, 0.04);
       }
-
-      /* Fix sidebar saved list id mismatch (your original had a space) */
-      #savedWrList,
-      #savedHandoverList,
-      #savedQuestionsList {
-        min-height: 40px;
-      }
     </style>
   </head>
 
@@ -348,7 +336,6 @@
                 </div>
               </div>
 
-              <!-- top-right usage + auth -->
               <div class="topbar-actions">
                 <div class="theme-toggle" title="Day/Night mode">
                   <span id="themeLabel">Night</span>
@@ -396,7 +383,10 @@
                 <div class="output-header">
                   <div class="output-header-flex">
                     <h2 class="output-title-inline">Answers</h2>
-                    <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                      <button id="sendToConsultBtn" class="copy-btn" type="button">Send to Consult output</button>
+                      <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+                    </div>
                   </div>
                 </div>
 
@@ -455,7 +445,12 @@
 
               <div class="consult-output-wrap">
                 <div class="label">Consult output</div>
-                <textarea id="wrOutput" class="textarea" rows="12" placeholder="Generated output will also appear here (editable)"></textarea>
+                <textarea
+                  id="wrOutput"
+                  class="textarea"
+                  rows="12"
+                  placeholder="Generated output will also appear here (editable)"
+                ></textarea>
               </div>
 
               <div id="wrStatus" class="mic-status">Notes mic: idle</div>
@@ -470,13 +465,7 @@
     <!-- /.app-root -->
 
     <!-- Paywall modal -->
-    <div
-      id="paywallBackdrop"
-      class="vm-modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="paywallTitle"
-    >
+    <div id="paywallBackdrop" class="vm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
       <div class="vm-modal">
         <div class="vm-modal-head">
           <h3 id="paywallTitle" class="vm-modal-title">Free limit reached</h3>
@@ -523,7 +512,6 @@
             return "dark";
           }
         }
-
         function setTheme(theme) {
           const t = theme === "light" ? "light" : "dark";
           document.documentElement.setAttribute("data-theme", t);
@@ -535,11 +523,9 @@
             localStorage.setItem(THEME_KEY, t);
           } catch {}
         }
-
         function toggleTheme() {
           setTheme(getTheme() === "light" ? "dark" : "light");
         }
-
         themeSwitch.addEventListener("click", toggleTheme);
         themeSwitch.addEventListener("keydown", (e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -547,10 +533,9 @@
             toggleTheme();
           }
         });
-
         setTheme(getTheme());
 
-        // Token auth (returned by /auth/google)
+        // Token auth
         const AUTH_TOKEN_KEY = "vm_auth_token";
         function setAuthToken(t) {
           try {
@@ -612,7 +597,7 @@
         const PATH = window.location.pathname || "";
         const IS_STRIPE_RETURN = PATH.startsWith("/pro/success") || PATH.startsWith("/pro/cancelled");
 
-        // Elements used by the rest of the app
+        // App elements
         const modeSelect = document.getElementById("modeSelect");
         const consultModeSelect = document.getElementById("consultModeSelect");
         const clinicalQuestion = document.getElementById("clinicalQuestion");
@@ -623,6 +608,7 @@
 
         const wrNote = document.getElementById("wrNote");
         const wrOutput = document.getElementById("wrOutput");
+
         const connectDeviceBtn = document.getElementById("connectDeviceBtn");
         const deviceMenuPanel = document.getElementById("deviceMenuPanel");
 
@@ -635,6 +621,8 @@
         const answerEl = document.getElementById("answer");
         const answerLoader = document.getElementById("answerLoader");
         const copyAllBtn = document.getElementById("copyAllBtn");
+        const sendToConsultBtn = document.getElementById("sendToConsultBtn");
+
         const qStatus = document.getElementById("qStatus");
         const wrStatus = document.getElementById("wrStatus");
 
@@ -656,10 +644,7 @@
           return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
         }
         function escapeHtml(str) {
-          return (str || "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
+          return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
         function safeJsonParse(s, fallback) {
           try {
@@ -681,12 +666,10 @@
         function showPaywall(payload) {
           const used = payload?.used ?? 10;
           const limit = payload?.limit ?? 10;
-
           paywallLine1.textContent = `You’ve used ${used}/${limit} free generations.`;
           paywallLine2.textContent = "Upgrade to Pro for unlimited access.";
           paywallLine3.textContent = "Cancel anytime. Secure payments via Stripe.";
           paywallPromo.style.display = "none";
-
           paywallBackdrop.style.display = "flex";
           if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
             googleBtnModal.style.display = "block";
@@ -700,7 +683,18 @@
           if (e.target === paywallBackdrop) hidePaywall();
         });
 
-        // Connect smart device menu
+        // Send Answer -> Consult output
+        async function sendAnswerToConsultOutput() {
+          const text = (answerEl?.innerText || "").trim();
+          if (!text) return;
+          wrOutput.value = text;
+          wrOutput.scrollIntoView({ behavior: "smooth", block: "center" });
+          wrOutput.focus();
+          flashStatus(wrStatus, "Sent answer to Consult output.");
+        }
+        sendToConsultBtn.addEventListener("click", sendAnswerToConsultOutput);
+
+        // Connect smart device menu + POST
         function closeDeviceMenu() {
           deviceMenuPanel.style.display = "none";
         }
@@ -711,17 +705,38 @@
         document.addEventListener("click", (e) => {
           if (!deviceMenuPanel.contains(e.target) && e.target !== connectDeviceBtn) closeDeviceMenu();
         });
-        deviceMenuPanel.addEventListener("click", (e) => {
+
+        async function postDeviceConnect(device) {
+          const res = await apiFetch("/api/device/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ device }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.error || "connect_failed");
+          return data;
+        }
+
+        deviceMenuPanel.addEventListener("click", async (e) => {
           const btn = e.target.closest("button[data-device]");
           if (!btn) return;
+
           const nameMap = {
             ai_glasses: "AI glasses",
             smart_watch: "Smart watch",
             smart_ring: "Smart ring",
             ai_necklace: "AI necklace",
           };
-          flashStatus(wrStatus, `Connect smart device: ${nameMap[btn.dataset.device] || "device"} (coming soon).`);
-          closeDeviceMenu();
+
+          try {
+            flashStatus(wrStatus, `Connecting: ${nameMap[btn.dataset.device] || "device"}…`);
+            const out = await postDeviceConnect(btn.dataset.device);
+            flashStatus(wrStatus, `Connected: ${nameMap[out.device] || out.device} ✅`);
+          } catch (err) {
+            flashStatus(wrStatus, "Device connect failed.");
+          } finally {
+            closeDeviceMenu();
+          }
         });
 
         async function ensureSessionCookie() {
@@ -830,6 +845,7 @@
                   return;
                 }
                 if (data?.token) setAuthToken(data.token);
+
                 try {
                   window.google.accounts.id.cancel();
                 } catch {}
@@ -837,6 +853,7 @@
                 hidePaywall();
                 const me = await refreshMe();
                 const plan = String(data?.user?.plan || me?.plan || "free").toLowerCase();
+
                 if (hasCheckoutIntent() && plan !== "pro") {
                   clearCheckoutIntent();
                   await startCheckout();
@@ -850,16 +867,8 @@
           googleBtnTop.style.display = "block";
           googleBtnModal.style.display = "block";
 
-          window.google.accounts.id.renderButton(googleBtnTop, {
-            theme: "outline",
-            size: "large",
-            text: "continue_with",
-          });
-          window.google.accounts.id.renderButton(googleBtnModal, {
-            theme: "outline",
-            size: "large",
-            text: "continue_with",
-          });
+          window.google.accounts.id.renderButton(googleBtnTop, { theme: "outline", size: "large", text: "continue_with" });
+          window.google.accounts.id.renderButton(googleBtnModal, { theme: "outline", size: "large", text: "continue_with" });
 
           if (!IS_STRIPE_RETURN) {
             // intentionally no auto-prompt
@@ -1407,14 +1416,28 @@
         });
 
         // ========= Consult Notes =========
+        function consultPromptForMode(mode) {
+          const map = {
+            consult_note:
+              "Create a structured clinical note from the following raw dictation/pasted data. Do not invent facts; organise clearly.",
+            initial_consult:
+              "Create an initial patient consultation note (history, exam, assessment, plan). Do not invent facts.",
+            follow_up:
+              "Create a follow-up review note (interval history, response to treatment, current issues, plan). Do not invent facts.",
+            specialist_letter:
+              "Draft a concise specialist letter (summary, key findings, impression, recommendations). Do not invent facts.",
+            discharge_summary:
+              "Create a discharge summary (presentation, course, key results, discharge meds, follow-up, safety net). Do not invent facts.",
+            handover:
+              "Create a handover/presentation from the following raw dictation/pasted data. If the context is not ED, adapt appropriately.",
+          };
+          return map[mode] || map.consult_note;
+        }
+
         copyWrBtn.addEventListener("click", async () => {
           const input = (wrNote.value || "").trim();
           const output = (wrOutput.value || "").trim();
-
-          const payload = output
-            ? `INPUT:\n${input}\n\nOUTPUT:\n${output}`.trim()
-            : input;
-
+          const payload = output ? `INPUT:\n${input}\n\nOUTPUT:\n${output}`.trim() : input;
           if (!payload.trim()) return;
           await copyText(payload);
           flashStatus(wrStatus, "Copied.");
@@ -1424,7 +1447,6 @@
           const cmode = consultModeSelect?.value || "consult_note";
           const input = (wrNote.value || "").trim();
           const output = (wrOutput.value || "").trim();
-
           const archiveText = output ? `INPUT:\n${input}\n\nOUTPUT:\n${output}`.trim() : input;
 
           if (archiveText) {
@@ -1438,23 +1460,14 @@
           renderSidebar();
         });
 
-        function consultPromptForMode(mode) {
-          const map = {
-            consult_note: "Create a structured clinical note from the following raw dictation/pasted data. Do not invent facts; organise clearly.",
-            initial_consult: "Create an initial patient consultation note (history, exam, assessment, plan). Do not invent facts.",
-            follow_up: "Create a follow-up review note (interval history, response to treatment, current issues, plan). Do not invent facts.",
-            specialist_letter: "Draft a concise specialist letter (summary, key findings, impression, recommendations). Do not invent facts.",
-            discharge_summary: "Create a discharge summary (presentation, course, key results, discharge meds, follow-up, safety net). Do not invent facts.",
-            handover: "Create a handover/presentation from the following raw dictation/pasted data. If the context is not ED, adapt appropriately.",
-          };
-          return map[mode] || map.consult_note;
-        }
-
         async function generateConsultOutput() {
           const input = (wrNote.value || "").trim();
           if (!input) return;
 
           const cmode = consultModeSelect?.value || "consult_note";
+          const backendMode = cmode === "handover" ? "handover" : "consult_note";
+          const modePrefix = consultPromptForMode(cmode);
+          const text = `${modePrefix}\n\n${input}`.trim();
 
           generateWrBtn.disabled = true;
           copyAllBtn.disabled = true;
@@ -1462,13 +1475,6 @@
           answerEl.innerHTML = "";
 
           try {
-            // Keep backend modes compatible:
-            // - if cmode is "handover" => backend mode "handover"
-            // - else => backend mode "consult_note" (we steer with prompt prefix)
-            const backendMode = cmode === "handover" ? "handover" : "consult_note";
-            const modePrefix = consultPromptForMode(cmode);
-            const text = `${modePrefix}\n\n${input}`.trim();
-
             const res = await apiFetch("/api/consult", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1486,8 +1492,7 @@
             }
 
             if (data.answer) {
-              const structured = buildStructuredHtml(data.answer);
-              answerEl.innerHTML = structured;
+              answerEl.innerHTML = buildStructuredHtml(data.answer);
               wrOutput.value = data.answer || "";
               copyAllBtn.disabled = !(data.answer || "").trim();
               flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Output generated.");
