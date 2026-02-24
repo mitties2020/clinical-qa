@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# clinical-qa
-=======
 # LLM + TTS Pipeline
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -181,4 +178,3 @@ For more information about:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
->>>>>>> 624210a (Initial commit (Codex amendments))
