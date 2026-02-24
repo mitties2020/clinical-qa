@@ -5,29 +5,1069 @@
   <title>VividMedi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <!-- Google Identity Services (One Tap + button) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <style>
+    /* Minimal UI additions for auth + paywall (won't affect your existing CSS) */
+    .topbar-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .chip {
+      font-size: 12px; padding: 6px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.9);
+      background: rgba(0,0,0,0.18);
+    }
+    .chip strong { color: #fff; }
+    .auth-btn { cursor:pointer; }
+
+    /* Paywall modal */
+    .vm-modal-backdrop {
+      position: fixed; inset: 0; display:none;
+      background: rgba(0,0,0,0.55); z-index: 9999;
+      align-items: center; justify-content: center;
+      padding: 18px;
+    }
+    .vm-modal {
+      width: 100%; max-width: 540px;
+      border-radius: 14px; overflow:hidden;
+      background: #0f172a; color: #e5e7eb;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    }
+    .vm-modal-head { padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .vm-modal-title { font-size: 16px; font-weight: 700; margin:0; }
+    .vm-modal-close {
+      background: transparent; border: none; color: rgba(255,255,255,0.85);
+      font-size: 20px; cursor:pointer; line-height: 1;
+    }
+    .vm-modal-body { padding: 16px 18px; }
+    .vm-modal-body p { margin: 0 0 10px 0; line-height: 1.45; }
+    .vm-modal-body em { color: rgba(255,255,255,0.78); }
+    .vm-modal-foot {
+      padding: 16px 18px; border-top: 1px solid rgba(255,255,255,0.08);
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    }
+    .vm-mini { font-size: 12px; color: rgba(255,255,255,0.7); }
+    .vm-spacer { flex: 1 1 auto; }
+    .vm-google-wrap { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  </style>
 </head>
 
 <body>
-  <!-- YOUR FULL UI (unchanged) -->
-  <!-- ... UI HTML EXACTLY AS YOU SENT ... -->
+  <div class="app-root">
+    <div class="shell">
+      <div class="layout">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-brand">
+              <div class="vm-mark vm-mark--sm" aria-hidden="true">
+                <span class="vm-plus"></span>
+              </div>
+              <div class="brand-text">
+                <div class="brand-title">VividMedi</div>
+                <div class="sidebar-title">Clinical Intelligence Engine</div>
+              </div>
+            </div>
+
+            <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
+          </div>
+
+          <div class="sidebar-subhead">Saved Clinical Questions</div>
+          <div id="savedQuestionsList" class="conversation-list"></div>
+
+          <div class="sidebar-subhead">Consultation Notes (saved)</div>
+          <div id="savedWrList" class="conversation-list"></div>
+
+          <div class="sidebar-subhead">Handovers (saved)</div>
+          <div id="savedHandoverList" class="conversation-list"></div>
+
+          <div class="sidebar-footer">
+            <span class="sidebar-hint">Locally stored • Per device</span>
+          </div>
+        </aside>
+
+        <!-- MAIN -->
+        <div class="main-region">
+          <header class="header">
+            <div class="brand-header">
+              <div class="vm-mark vm-mark--lg" aria-hidden="true">
+                <span class="vm-plus"></span>
+              </div>
+              <div class="brand-header__text">
+                <h1 class="brand-header__name">VividMedi</h1>
+                <div class="brand-header__tagline">Clinical Intelligence Engine</div>
+              </div>
+            </div>
+
+            <!-- top-right usage + auth -->
+            <div class="topbar-actions">
+              <span id="usageChip" class="chip">Loading usage…</span>
+              <button id="upgradeTopBtn" class="btn btn-primary" type="button">Upgrade to Pro</button>
+              <button id="logoutBtn" class="btn auth-btn" type="button" style="display:none;">Sign out</button>
+              <div id="googleBtnTop" style="display:none;"></div>
+            </div>
+          </header>
+
+          <!-- TOP ROW -->
+          <main class="grid">
+            <!-- QUESTION -->
+            <section class="card input-card">
+              <label class="label" for="clinicalQuestion">Clinical</label>
+
+              <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
+                <select id="modeSelect" class="topic-search" style="max-width:260px;">
+                  <option value="clinical" selected>Clinical</option>
+                  <option value="dva_new">DVA D0904 (New referral)</option>
+                  <option value="dva_renew">DVA D0904 (Renewal / EoC-based)</option>
+                </select>
+              </div>
+
+              <textarea id="clinicalQuestion" class="textarea" rows="7" placeholder=""></textarea>
+
+              <div class="actions actions-compact">
+                <button id="generateBtn" class="btn btn-primary" type="button">Generate</button>
+                <button id="dictateQuestionBtn" class="btn" type="button">🎙 Dictate</button>
+                <button id="incorrectQuestionBtn" class="btn" type="button">Incorrect</button>
+                <button id="clearQuestionBtn" class="btn btn-danger" type="button">Clear</button>
+              </div>
+
+              <div id="qStatus" class="mic-status">Question mic: idle</div>
+            </section>
+
+            <!-- ANSWER -->
+            <section class="card output-card">
+              <div class="output-header">
+                <div class="output-header-flex">
+                  <h2 class="output-title-inline">Answers</h2>
+                  <button id="copyAllBtn" class="copy-btn main-copy-btn" disabled type="button">Copy All</button>
+                </div>
+              </div>
+
+              <div id="answerLoader" class="answer-loader hidden">
+                <div class="loader"></div>
+                <div class="loader-text">Generating structured answer…</div>
+              </div>
+
+              <div class="output-body">
+                <div id="answer" class="answer placeholder">Your answer will appear here.</div>
+              </div>
+            </section>
+          </main>
+
+          <div class="divider-spacer"></div>
+
+          <!-- CONSULTATION NOTES -->
+          <section class="card wr-card">
+            <div class="wr-head">
+              <div style="min-width:240px;">
+                <div class="label wr-label">Consultation Notes</div>
+
+                <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+                  <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
+                  <select id="consultModeSelect" class="topic-search" style="max-width:260px;">
+                    <option value="consult_note" selected>Create clinical note</option>
+                    <option value="handover">Handover summary</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="actions actions-compact">
+                <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
+                <button id="generateWrBtn" class="btn btn-primary" type="button">Generate</button>
+                <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
+                <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
+                <button id="copyWrBtn" class="btn" type="button">Copy</button>
+                <button id="saveWrBtn" class="btn" type="button">Save</button>
+                <button id="newWrBtn" class="btn btn-danger" type="button">New</button>
+              </div>
+            </div>
+
+            <textarea id="wrNote" class="textarea" rows="16" placeholder=""></textarea>
+            <div id="wrStatus" class="mic-status">Notes mic: idle</div>
+          </section>
+
+        </div><!-- /.main-region -->
+      </div><!-- /.layout -->
+    </div><!-- /.shell -->
+  </div><!-- /.app-root -->
+
+  <!-- Paywall modal -->
+  <div id="paywallBackdrop" class="vm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+    <div class="vm-modal">
+      <div class="vm-modal-head">
+        <h3 id="paywallTitle" class="vm-modal-title">Free limit reached</h3>
+        <button id="paywallClose" class="vm-modal-close" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="vm-modal-body">
+        <p><strong id="paywallLine1">You’ve used 10/10 free generations.</strong></p>
+        <p><strong id="paywallLine2">Upgrade to Pro for unlimited access.</strong></p>
+        <p id="paywallLine3">Pro includes higher limits, priority processing, and ongoing updates.</p>
+        <p id="paywallPromo" style="display:none;"><em>Create a free account to continue to checkout.</em></p>
+
+        <div class="vm-google-wrap" style="margin-top:12px;">
+          <div id="googleBtnModal" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="vm-modal-foot">
+        <button id="upgradeBtnModal" class="btn btn-primary" type="button">Upgrade to Pro</button>
+        <button id="signupBtnModal" class="btn" type="button">Sign in</button>
+        <span class="vm-spacer"></span>
+        <span class="vm-mini">Cancel anytime • Secure payments via Stripe</span>
+      </div>
+    </div>
+  </div>
 
   <script>
   window.addEventListener("DOMContentLoaded", () => {
+    // Storage keys
+    const STORE_Q_CORR = "ebm_q_corrections_v7";
+    const STORE_WR_CORR = "ebm_wr_corrections_v7";
+    const STORE_SAVED_QA = "ebm_saved_qa_v7";
+    const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
+    const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
 
-    /* ===========================
-       EVERYTHING BELOW IS FIXED
-       =========================== */
+    // Token auth (returned by /auth/google)
+    const AUTH_TOKEN_KEY = "vm_auth_token";
+    function setAuthToken(t) { try { localStorage.setItem(AUTH_TOKEN_KEY, t || ""); } catch {} }
+    function getAuthToken() { try { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; } catch { return ""; } }
+    function clearAuthToken(){ try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {} }
+
+    // Upgrade intent
+    const CHECKOUT_INTENT_KEY = "vm_intent_checkout";
+    function setCheckoutIntent() { try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, "1"); } catch {} }
+    function clearCheckoutIntent() { try { sessionStorage.removeItem(CHECKOUT_INTENT_KEY); } catch {} }
+    function hasCheckoutIntent() { try { return sessionStorage.getItem(CHECKOUT_INTENT_KEY) === "1"; } catch { return false; } }
+
+    // Guard
+    let checkoutInProgress = false;
+
+    // UI elements
+    const usageChip = document.getElementById("usageChip");
+    const upgradeTopBtn = document.getElementById("upgradeTopBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const googleBtnTop = document.getElementById("googleBtnTop");
+
+    const paywallBackdrop = document.getElementById("paywallBackdrop");
+    const paywallClose = document.getElementById("paywallClose");
+    const paywallLine1 = document.getElementById("paywallLine1");
+    const paywallLine2 = document.getElementById("paywallLine2");
+    const paywallLine3 = document.getElementById("paywallLine3");
+    const paywallPromo = document.getElementById("paywallPromo");
+    const upgradeBtnModal = document.getElementById("upgradeBtnModal");
+    const signupBtnModal = document.getElementById("signupBtnModal");
+    const googleBtnModal = document.getElementById("googleBtnModal");
+
+    const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
+    const PATH = (window.location.pathname || "");
+    const IS_STRIPE_RETURN = (PATH.startsWith("/pro/success") || PATH.startsWith("/pro/cancelled"));
+
+    // Elements used by the rest of the app
+    const modeSelect = document.getElementById("modeSelect");
+    const consultModeSelect = document.getElementById("consultModeSelect");
+
+    const clinicalQuestion = document.getElementById("clinicalQuestion");
+    const generateBtn = document.getElementById("generateBtn");
+    const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
+    const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
+    const clearQuestionBtn = document.getElementById("clearQuestionBtn");
+
+    const wrNote = document.getElementById("wrNote");
+    const smartDeviceBtn = document.getElementById("smartDeviceBtn");
+    const generateWrBtn = document.getElementById("generateWrBtn");
+    const dictateWrBtn = document.getElementById("dictateWrBtn");
+    const incorrectWrBtn = document.getElementById("incorrectWrBtn");
+    const copyWrBtn = document.getElementById("copyWrBtn");
+    const saveWrBtn = document.getElementById("saveWrBtn");
+    const newWrBtn = document.getElementById("newWrBtn");
+
+    const answerEl = document.getElementById("answer");
+    const answerLoader = document.getElementById("answerLoader");
+    const copyAllBtn = document.getElementById("copyAllBtn");
 
     const qStatus = document.getElementById("qStatus");
     const wrStatus = document.getElementById("wrStatus");
-    const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
-    const dictateWrBtn = document.getElementById("dictateWrBtn");
-    const clinicalQuestion = document.getElementById("clinicalQuestion");
-    const wrNote = document.getElementById("wrNote");
 
+    const savedQuestionsList = document.getElementById("savedQuestionsList");
+    const savedWrList = document.getElementById("savedWrList");
+    const savedHandoverList = document.getElementById("savedHandoverList");
+    const sidebarSearch = document.getElementById("sidebarSearch");
+
+    // ---- fetch helper adding Bearer token if present ----
+    async function apiFetch(url, opts = {}) {
+      const token = getAuthToken();
+      const headers = Object.assign({}, opts.headers || {});
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      return fetch(url, Object.assign({}, opts, { headers }));
+    }
+
+    // Utils
+    function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
+    function escapeHtml(str) { return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function safeJsonParse(s, fallback){ try { return JSON.parse(s); } catch { return fallback; } }
+    async function copyText(text){ if (!text) return; try { await navigator.clipboard.writeText(text); } catch {} }
     function flashStatus(el, msg){ if (el) el.textContent = msg; }
 
+    function showPaywall(payload) {
+      const used = payload?.used ?? 10;
+      const limit = payload?.limit ?? 10;
+
+      paywallLine1.textContent = `You’ve used ${used}/${limit} free generations.`;
+      paywallLine2.textContent = "Upgrade to Pro for unlimited access.";
+      paywallLine3.textContent = "Cancel anytime. Secure payments via Stripe.";
+
+      paywallPromo.style.display = "none";
+      paywallBackdrop.style.display = "flex";
+
+      if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
+        googleBtnModal.style.display = "block";
+      }
+    }
+
+    function hidePaywall() { paywallBackdrop.style.display = "none"; }
+
+    paywallClose.addEventListener("click", hidePaywall);
+    paywallBackdrop.addEventListener("click", (e) => { if (e.target === paywallBackdrop) hidePaywall(); });
+
+    async function ensureSessionCookie() {
+      try { await fetch("/api/session"); } catch {}
+    }
+
+    async function refreshMe() {
+      try {
+        const res = await apiFetch("/api/me");
+        const me = await res.json();
+
+        const plan = me.plan || "guest";
+        const used = Number(me.used || 0);
+        const limit = Number(me.limit || 0);
+        const remaining = Number(me.remaining || 0);
+
+        if (plan === "pro") usageChip.innerHTML = `<strong>Pro</strong> • Unlimited`;
+        else usageChip.innerHTML = `<strong>${remaining}</strong> remaining • ${used}/${limit}`;
+
+        if (me.logged_in) {
+          logoutBtn.style.display = "inline-flex";
+          googleBtnTop.style.display = "none";
+        } else {
+          logoutBtn.style.display = "none";
+          if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) googleBtnTop.style.display = "block";
+        }
+
+        return me;
+      } catch {
+        usageChip.textContent = "Usage unavailable";
+        return null;
+      }
+    }
+
+    async function logout() {
+      try { await fetch("/auth/logout", { method: "POST" }); } catch {}
+      clearAuthToken();
+      clearCheckoutIntent();
+      checkoutInProgress = false;
+      await ensureSessionCookie();
+      await refreshMe();
+    }
+    logoutBtn.addEventListener("click", logout);
+
+    async function startCheckout() {
+      if (checkoutInProgress) return;
+      checkoutInProgress = true;
+
+      try {
+        const res = await apiFetch("/api/stripe/create-checkout-session", { method: "POST" });
+
+        if (res.status === 401) {
+          setCheckoutIntent();
+          checkoutInProgress = false;
+          showPaywall({ used: 10, limit: 10 });
+          return;
+        }
+
+        const data = await res.json();
+        if (!res.ok || !data?.url) {
+          checkoutInProgress = false;
+          alert(data?.error || "Could not start checkout.");
+          return;
+        }
+
+        clearCheckoutIntent();
+        window.location.href = data.url;
+      } catch {
+        checkoutInProgress = false;
+        alert("Could not start checkout. Please try again.");
+      }
+    }
+
+    upgradeTopBtn.addEventListener("click", () => { setCheckoutIntent(); startCheckout(); });
+    upgradeBtnModal.addEventListener("click", () => { setCheckoutIntent(); startCheckout(); });
+
+    signupBtnModal.addEventListener("click", () => {
+      setCheckoutIntent();
+      try { window.google?.accounts?.id?.prompt?.(); } catch {}
+      googleBtnModal.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    async function initGoogleSignIn() {
+      if (!GOOGLE_CLIENT_ID) return;
+      if (!window.google?.accounts?.id) return;
+
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          try {
+            const res = await fetch("/auth/google", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ credential: response.credential })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+              alert(data?.error || "Google sign-in failed.");
+              return;
+            }
+
+            if (data?.token) setAuthToken(data.token);
+            try { window.google.accounts.id.cancel(); } catch {}
+
+            hidePaywall();
+
+            const me = await refreshMe();
+            const plan = String(data?.user?.plan || me?.plan || "free").toLowerCase();
+
+            if (hasCheckoutIntent() && plan !== "pro") {
+              clearCheckoutIntent();
+              await startCheckout();
+            }
+          } catch {
+            alert("Google sign-in failed.");
+          }
+        }
+      });
+
+      googleBtnTop.style.display = "block";
+      googleBtnModal.style.display = "block";
+
+      window.google.accounts.id.renderButton(googleBtnTop, { theme: "outline", size: "large", text: "continue_with" });
+      window.google.accounts.id.renderButton(googleBtnModal, { theme: "outline", size: "large", text: "continue_with" });
+
+      if (!IS_STRIPE_RETURN) {
+        // no-op (do not auto prompt)
+      }
+    }
+
+    // ===== DVA META PARSER =====
+    function parseDvaMeta(raw) {
+      if (!raw) return null;
+      const text = String(raw).replace(/\r/g, "");
+      const start = text.indexOf("DVA_META");
+      const end = text.indexOf("END_DVA_META");
+      if (start === -1 || end === -1) return null;
+
+      const block = text.slice(start, end).split("\n").map(l => l.trim()).filter(Boolean);
+
+      function getVal(label){
+        const line = block.find(x => x.toLowerCase().startsWith(label.toLowerCase()));
+        return line ? line.split(":").slice(1).join(":").trim() : "";
+      }
+      function getBullets(afterLabel){
+        const idx = block.findIndex(x => x.toLowerCase() === afterLabel.toLowerCase());
+        if (idx === -1) return [];
+        const out = [];
+        for (let i = idx + 1; i < block.length; i++) {
+          const l = block[i];
+          if (/^[A-Za-z ].+:\s*/.test(l) && !l.startsWith("-")) break;
+          if (l.startsWith("-")) out.push(l.replace(/^-+\s*/, ""));
+        }
+        return out;
+      }
+
+      return {
+        referralType: getVal("Referral type"),
+        providerType: getVal("Provider type"),
+        providerChecks: getBullets("Provider-type checks:"),
+        renewalChecks: getBullets("Renewal audit checks:"),
+        strength: getVal("Justification strength"),
+        risk: getVal("Audit risk"),
+        missing: getBullets("Missing items:"),
+        amendments: getBullets("Suggested amendments:"),
+        alternatives: getBullets("Alternative legitimate pathways:")
+      };
+    }
+
+    function stripDvaMeta(raw){
+      const text = String(raw || "");
+      const s = text.indexOf("DVA_META");
+      const e = text.indexOf("END_DVA_META");
+      if (s === -1 || e === -1) return text.trim();
+      return text.slice(e + "END_DVA_META".length).trim();
+    }
+
+    function buildDvaMetaHtml(meta){
+      if (!meta) return "";
+      const bullets = (arr) => (arr && arr.length)
+        ? arr.map(x => `<div class="answer-line">• ${escapeHtml(x)}</div>`).join("")
+        : `<div class="answer-line">${escapeHtml("None provided.")}</div>`;
+
+      return `
+        <div class="section">
+          <div class="section-header static">
+            <span>${escapeHtml("DVA Audit (D0904)")}</span>
+            <button class="section-copy-btn copy-btn" data-target="dva-meta" type="button">Copy</button>
+          </div>
+          <div class="section-body static-body" data-section="dva-meta">
+            <div class="answer-line"><b>Referral type:</b> ${escapeHtml(meta.referralType || "unclear")}</div>
+            <div class="answer-line"><b>Provider type:</b> ${escapeHtml(meta.providerType || "unclear")}</div>
+            <div class="answer-line"><b>Justification strength:</b> ${escapeHtml(meta.strength || "")}</div>
+            <div class="answer-line"><b>Audit risk:</b> ${escapeHtml(meta.risk || "")}</div>
+
+            <div style="height:10px;"></div>
+            <div class="answer-line"><b>Provider-type checks</b></div>
+            ${bullets(meta.providerChecks)}
+
+            <div style="height:10px;"></div>
+            <div class="answer-line"><b>Renewal audit checks</b></div>
+            ${bullets(meta.renewalChecks)}
+
+            <div style="height:10px;"></div>
+            <div class="answer-line"><b>Missing items</b></div>
+            ${bullets(meta.missing)}
+
+            <div style="height:10px;"></div>
+            <div class="answer-line"><b>Suggested amendments</b></div>
+            ${bullets(meta.amendments)}
+
+            <div style="height:10px;"></div>
+            <div class="answer-line"><b>Alternative legitimate pathways</b></div>
+            ${bullets(meta.alternatives)}
+          </div>
+        </div>
+      `;
+    }
+
+    // ===== Structured answer builder =====
+    function hasNonEmpty(arr){ return Array.isArray(arr) && arr.some(l => (l||"").trim() !== ""); }
+
+    function buildStructuredHtml(raw) {
+      if (!raw) return "";
+      let text = String(raw)
+        .replace(/\r/g, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/#{1,6}\s*/g, "");
+
+      const sectionOrder = [
+        "Summary","Assessment","Diagnosis","Investigations","Treatment","Monitoring",
+        "Follow-up & Safety Netting","Red Flags","References",
+      ];
+
+      const lines = text.split("\n");
+      const sections = [];
+      let current = { title: "Summary", content: [] };
+      let seenExplicit = false;
+
+      function isHeading(line){
+        const t = (line||"").trim().replace(/:$/, "");
+        const match = sectionOrder.find(h => h.toLowerCase() === t.toLowerCase());
+        return match || null;
+      }
+
+      for (const rawLine of lines) {
+        const line = (rawLine||"").trim();
+        if (!line) { current.content.push(""); continue; }
+        const heading = isHeading(line);
+        if (heading) {
+          if (hasNonEmpty(current.content)) sections.push(current);
+          current = { title: heading, content: [] };
+          seenExplicit = true;
+        } else {
+          current.content.push(line);
+        }
+      }
+      if (hasNonEmpty(current.content)) sections.push(current);
+
+      if (!seenExplicit) return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
+
+      let html = "";
+      let idx = 0;
+
+      for (const sec of sections) {
+        if (!hasNonEmpty(sec.content)) continue;
+        const id = `sec-${idx++}`;
+        const inner = sec.content
+          .filter(l => (l||"").trim() !== "")
+          .map(l => `<div class="answer-line">${escapeHtml(l.trim())}</div>`)
+          .join("");
+
+        const alwaysOpen = (sec.title === "Summary");
+
+        if (alwaysOpen) {
+          html += `
+            <div class="section">
+              <div class="section-header static">
+                <span>${escapeHtml(sec.title)}</span>
+                <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
+              </div>
+              <div class="section-body static-body" data-section="${id}">
+                ${inner}
+              </div>
+            </div>`;
+        } else {
+          html += `
+            <div class="section">
+              <div class="collapsible-header">
+                <button class="collapsible" data-target="${id}" type="button">${escapeHtml(sec.title)}</button>
+                <button class="section-copy-btn copy-btn" data-target="${id}" type="button">Copy</button>
+              </div>
+              <div class="collapsible-content" data-section="${id}" style="display:none;">
+                ${inner}
+              </div>
+            </div>`;
+        }
+      }
+
+      return html || `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
+    }
+
+    document.addEventListener("click", async (e) => {
+      const t = e.target;
+      if (t.classList && t.classList.contains("collapsible")) {
+        const id = t.dataset.target;
+        const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
+        if (!content) return;
+        const open = content.style.display === "block";
+        content.style.display = open ? "none" : "block";
+        t.classList.toggle("active", !open);
+        return;
+      }
+      if (t.classList && t.classList.contains("section-copy-btn")) {
+        const id = t.dataset.target;
+        const section = document.querySelector(`[data-section="${id}"]`);
+        if (!section) return;
+        const text = (section.innerText || "").trim();
+        if (!text) return;
+        await copyText(text);
+        return;
+      }
+    });
+
+    // Corrections
+    function loadCorrections(key){ return safeJsonParse(localStorage.getItem(key) || "{}", {}); }
+    function saveCorrections(key, map){ localStorage.setItem(key, JSON.stringify(map || {})); }
+    function applyCorrections(key, text){
+      let out = text || "";
+      const map = loadCorrections(key);
+      const keys = Object.keys(map).sort((a,b)=>b.length-a.length);
+      for (const k of keys) {
+        const v = map[k];
+        if (!k || !v) continue;
+        const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+        out = out.replace(re, v);
+      }
+      return out;
+    }
+    function addCorrectionFromSelection(textarea, storeKey){
+      const s = textarea.selectionStart;
+      const e = textarea.selectionEnd;
+      const selected = (textarea.value || "").slice(s, e).trim();
+      if (!selected) { alert("Highlight the incorrect words first."); return; }
+      const correct = prompt("What should it be instead?", selected);
+      if (!correct || !correct.trim()) return;
+
+      const map = loadCorrections(storeKey);
+      map[selected] = correct.trim();
+      saveCorrections(storeKey, map);
+
+      const before = textarea.value.slice(0, s);
+      const after = textarea.value.slice(e);
+      textarea.value = before + correct.trim() + after;
+    }
+
+    incorrectQuestionBtn.addEventListener("click", () => addCorrectionFromSelection(clinicalQuestion, STORE_Q_CORR));
+    incorrectWrBtn.addEventListener("click", () => addCorrectionFromSelection(wrNote, STORE_WR_CORR));
+
+    // Sidebar saved items
+    function loadSavedQA(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_QA) || "[]", []); }
+    function saveSavedQA(list){ localStorage.setItem(STORE_SAVED_QA, JSON.stringify(list || [])); }
+    function loadSavedNotes(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_NOTES) || "[]", []); }
+    function saveSavedNotes(list){ localStorage.setItem(STORE_SAVED_NOTES, JSON.stringify(list || [])); }
+    function loadSavedHandovers(){ return safeJsonParse(localStorage.getItem(STORE_SAVED_HANDOVERS) || "[]", []); }
+    function saveSavedHandovers(list){ localStorage.setItem(STORE_SAVED_HANDOVERS, JSON.stringify(list || [])); }
+
+    function addSavedQA(question, answerText){
+      const list = loadSavedQA();
+      const title = question.length > 60 ? question.slice(0, 60).trim() + "…" : question.trim();
+      list.unshift({ id: Date.now(), title, question, answer: answerText || "", ts: Date.now() });
+      saveSavedQA(list.slice(0, 80));
+    }
+    function addSavedNote(content){
+      const list = loadSavedNotes();
+      const title = "Notes " + new Date().toLocaleString();
+      list.unshift({ id: Date.now(), title, content, ts: Date.now() });
+      saveSavedNotes(list.slice(0, 80));
+    }
+    function addSavedHandover(content){
+      const list = loadSavedHandovers();
+      const title = "Handover " + new Date().toLocaleString();
+      list.unshift({ id: Date.now(), title, content, ts: Date.now() });
+      saveSavedHandovers(list.slice(0, 120));
+    }
+
+    function renderSidebar(){
+      const term = norm(sidebarSearch.value || "");
+
+      const qa = loadSavedQA();
+      savedQuestionsList.innerHTML = "";
+      if (!qa.length) {
+        savedQuestionsList.innerHTML = '<div class="conv-empty">No saved questions yet.</div>';
+      } else {
+        qa.forEach((item, idx) => {
+          const show = !term || norm(item.title).includes(term) || norm(item.question).includes(term);
+          if (!show) return;
+
+          const row = document.createElement("div");
+          row.className = "conversation-item";
+
+          const main = document.createElement("div");
+          main.className = "conv-main";
+          main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Question")}</div>`;
+
+          const copy = document.createElement("button");
+          copy.className = "conv-delete";
+          copy.textContent = "⧉";
+          copy.title = "Copy Q+A";
+
+          const del = document.createElement("button");
+          del.className = "conv-delete";
+          del.textContent = "✕";
+          del.title = "Remove";
+
+          main.addEventListener("click", () => {
+            clinicalQuestion.value = item.question || "";
+            answerEl.innerHTML = item.answer ? buildStructuredHtml(item.answer) : "Your answer will appear here.";
+            copyAllBtn.disabled = !(item.answer || "").trim();
+            clinicalQuestion.focus();
+          });
+
+          copy.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const out = `Q: ${item.question || ""}\n\nA:\n${item.answer || ""}`.trim();
+            if (out) await copyText(out);
+          });
+
+          del.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const list = loadSavedQA();
+            list.splice(idx, 1);
+            saveSavedQA(list);
+            renderSidebar();
+          });
+
+          row.appendChild(main);
+          row.appendChild(copy);
+          row.appendChild(del);
+          savedQuestionsList.appendChild(row);
+        });
+      }
+
+      const notes = loadSavedNotes();
+      savedWrList.innerHTML = "";
+      if (!notes.length) {
+        savedWrList.innerHTML = '<div class="conv-empty">No saved notes yet.</div>';
+      } else {
+        notes.forEach((item, idx) => {
+          const show = !term || norm(item.title).includes(term) || norm(item.content).includes(term);
+          if (!show) return;
+
+          const row = document.createElement("div");
+          row.className = "conversation-item";
+
+          const main = document.createElement("div");
+          main.className = "conv-main";
+          main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Notes")}</div>`;
+
+          const copy = document.createElement("button");
+          copy.className = "conv-delete";
+          copy.textContent = "⧉";
+          copy.title = "Copy note";
+
+          const del = document.createElement("button");
+          del.className = "conv-delete";
+          del.textContent = "✕";
+          del.title = "Remove";
+
+          main.addEventListener("click", () => {
+            wrNote.value = item.content || "";
+            wrNote.focus();
+          });
+
+          copy.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if ((item.content || "").trim()) await copyText(item.content.trim());
+          });
+
+          del.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const list = loadSavedNotes();
+            list.splice(idx, 1);
+            saveSavedNotes(list);
+            renderSidebar();
+          });
+
+          row.appendChild(main);
+          row.appendChild(copy);
+          row.appendChild(del);
+          savedWrList.appendChild(row);
+        });
+      }
+
+      const handovers = loadSavedHandovers();
+      savedHandoverList.innerHTML = "";
+      if (!handovers.length) {
+        savedHandoverList.innerHTML = '<div class="conv-empty">No saved handovers yet.</div>';
+      } else {
+        handovers.forEach((item, idx) => {
+          const show = !term || norm(item.title).includes(term) || norm(item.content).includes(term);
+          if (!show) return;
+
+          const row = document.createElement("div");
+          row.className = "conversation-item";
+
+          const main = document.createElement("div");
+          main.className = "conv-main";
+          main.innerHTML = `<div class="conv-title">${escapeHtml(item.title || "Handover")}</div>`;
+
+          const copy = document.createElement("button");
+          copy.className = "conv-delete";
+          copy.textContent = "⧉";
+          copy.title = "Copy handover";
+
+          const del = document.createElement("button");
+          del.className = "conv-delete";
+          del.textContent = "✕";
+          del.title = "Remove";
+
+          main.addEventListener("click", () => {
+            wrNote.value = item.content || "";
+            wrNote.focus();
+            if (consultModeSelect) consultModeSelect.value = "handover";
+          });
+
+          copy.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if ((item.content || "").trim()) await copyText(item.content.trim());
+          });
+
+          del.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const list = loadSavedHandovers();
+            list.splice(idx, 1);
+            saveSavedHandovers(list);
+            renderSidebar();
+          });
+
+          row.appendChild(main);
+          row.appendChild(copy);
+          row.appendChild(del);
+          savedHandoverList.appendChild(row);
+        });
+      }
+    }
+
+    sidebarSearch.addEventListener("input", renderSidebar);
+
+    // === Generate (clinical) ===
+    async function generate(){
+      const query = (clinicalQuestion.value || "").trim();
+      if (!query) return;
+
+      const mode = (modeSelect && modeSelect.value) ? modeSelect.value : "clinical";
+
+      generateBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+      answerEl.innerHTML = "";
+
+      try {
+        const res = await apiFetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, mode })
+        });
+
+        const data = await res.json();
+
+        if (res.status === 402 && data && data.error === "quota_exceeded") {
+          showPaywall(data);
+          await refreshMe();
+          answerEl.textContent = "Free limit reached. Please upgrade to continue.";
+          copyAllBtn.disabled = true;
+          return;
+        }
+
+        if (data.answer) {
+          let raw = data.answer || "";
+
+          if (mode.startsWith("dva")) {
+            const meta = parseDvaMeta(raw);
+            raw = stripDvaMeta(raw);
+            const metaHtml = meta ? buildDvaMetaHtml(meta) : "";
+            const bodyHtml = buildStructuredHtml(raw);
+            answerEl.innerHTML = metaHtml + bodyHtml;
+          } else {
+            answerEl.innerHTML = buildStructuredHtml(raw);
+          }
+
+          copyAllBtn.disabled = !(data.answer || "").trim();
+          flashStatus(qStatus, "Generated.");
+          addSavedQA(query, data.answer);
+          renderSidebar();
+          await refreshMe();
+        } else {
+          answerEl.textContent = (data.error || "No response.").trim();
+          copyAllBtn.disabled = true;
+          flashStatus(qStatus, "Generate failed.");
+        }
+      } catch (e) {
+        console.error(e);
+        answerEl.textContent = "Error generating answer.";
+        copyAllBtn.disabled = true;
+        flashStatus(qStatus, "Generate error.");
+      } finally {
+        answerLoader.classList.add("hidden");
+        generateBtn.disabled = false;
+      }
+    }
+
+    generateBtn.addEventListener("click", generate);
+
+    clinicalQuestion.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        generate();
+      }
+    });
+
+    copyAllBtn.addEventListener("click", async () => {
+      const text = (answerEl.innerText || "").trim();
+      if (!text) return;
+      await copyText(text);
+    });
+
+    clearQuestionBtn.addEventListener("click", () => {
+      const q = (clinicalQuestion.value || "").trim();
+      const a = (answerEl.innerText || "").trim();
+      if (q && a) addSavedQA(q, a);
+
+      clinicalQuestion.value = "";
+      answerEl.innerHTML = "Your answer will appear here.";
+      copyAllBtn.disabled = true;
+      flashStatus(qStatus, "Cleared (saved).");
+      renderSidebar();
+    });
+
+    // ========= Consult Notes =========
+    smartDeviceBtn.addEventListener("click", () => { flashStatus(wrStatus, "Smart device data collection: coming soon."); });
+
+    copyWrBtn.addEventListener("click", async () => {
+      const text = (wrNote.value || "").trim();
+      if (!text) return;
+      await copyText(text);
+      flashStatus(wrStatus, "Copied.");
+    });
+
+    saveWrBtn.addEventListener("click", () => {
+      const text = (wrNote.value || "").trim();
+      if (!text) return;
+
+      const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+      if (cmode === "handover") {
+        addSavedHandover(text);
+        flashStatus(wrStatus, "Saved handover.");
+      } else {
+        addSavedNote(text);
+        flashStatus(wrStatus, "Saved note.");
+      }
+      renderSidebar();
+    });
+
+    async function generateConsultOutput(){
+      const input = (wrNote.value || "").trim();
+      if (!input) return;
+
+      const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+
+      generateWrBtn.disabled = true;
+      copyAllBtn.disabled = true;
+      answerLoader.classList.remove("hidden");
+      answerEl.innerHTML = "";
+
+      try {
+        const res = await apiFetch("/api/consult", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: input, mode: cmode })
+        });
+
+        const data = await res.json();
+
+        if (res.status === 402 && data && data.error === "quota_exceeded") {
+          showPaywall(data);
+          await refreshMe();
+          answerEl.textContent = "Free limit reached. Please upgrade to continue.";
+          copyAllBtn.disabled = true;
+          return;
+        }
+
+        if (data.answer) {
+          answerEl.innerHTML = buildStructuredHtml(data.answer);
+          copyAllBtn.disabled = !(data.answer || "").trim();
+          flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Clinical note generated.");
+          await refreshMe();
+        } else {
+          answerEl.textContent = (data.error || "No response.").trim();
+          copyAllBtn.disabled = true;
+          flashStatus(wrStatus, "Generate failed.");
+        }
+      } catch (e) {
+        console.error(e);
+        answerEl.textContent = "Error generating output.";
+        copyAllBtn.disabled = true;
+        flashStatus(wrStatus, "Generate error.");
+      } finally {
+        answerLoader.classList.add("hidden");
+        generateWrBtn.disabled = false;
+      }
+    }
+
+    generateWrBtn.addEventListener("click", generateConsultOutput);
+
+    wrNote.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        generateConsultOutput();
+      }
+    });
+
+    newWrBtn.addEventListener("click", () => {
+      const current = (wrNote.value || "").trim();
+      if (current) {
+        const save = confirm("Save this before starting a new one?");
+        if (save) {
+          const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+          if (cmode === "handover") addSavedHandover(current);
+          else addSavedNote(current);
+        }
+      }
+      wrNote.value = "";
+      flashStatus(wrStatus, "Cleared.");
+      renderSidebar();
+    });
+
+    // Dictation (MediaRecorder → /api/transcribe)
     function pickMimeType(){
       const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"];
       for (const t of candidates) {
@@ -38,83 +1078,154 @@
 
     async function ensureMicPermission(statusEl){
       if (!window.isSecureContext) { flashStatus(statusEl, "Mic error: must be HTTPS."); return false; }
+      if (!navigator.mediaDevices?.getUserMedia) { flashStatus(statusEl, "Mic error: getUserMedia unsupported."); return false; }
       try {
         const s = await navigator.mediaDevices.getUserMedia({ audio: true });
         s.getTracks().forEach(t => t.stop());
         return true;
-      } catch {
+      } catch (e) {
+        console.warn(e);
         flashStatus(statusEl, "Mic blocked: allow microphone permission.");
         return false;
       }
     }
 
+    function dedupeRepeats(text){
+      if (!text) return "";
+      let t = String(text);
+      t = t.replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1");
+      t = t.replace(/\s{2,}/g, " ").trim();
+      return t;
+    }
+    function normaliseDictation(text){
+      let t = dedupeRepeats(text);
+      t = t.replace(/\b(um|uh|like|you know)\b/gi, "");
+      t = t.replace(/\s{2,}/g, " ").trim();
+      return t;
+    }
+
     async function transcribeBlob(blob){
       const form = new FormData();
       form.append("audio", blob, "audio.webm");
-      const res = await fetch("/api/transcribe", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Transcription failed");
+      const res = await apiFetch("/api/transcribe", { method: "POST", body: form });
+      const raw = await res.text();
+
+      let data = {};
+      try { data = JSON.parse(raw); } catch {}
+      if (!res.ok) throw new Error(data.error || raw || ("HTTP " + res.status));
       return (data.text || "").trim();
     }
 
     function createRecorderController({ statusEl, onText }){
-      let recorder = null;
       let stream = null;
+      let recorder = null;
       let chunks = [];
       let recording = false;
 
       async function start(){
+        if (recording) return;
         recording = true;
         chunks = [];
-        flashStatus(statusEl, "Mic: recording…");
 
+        flashStatus(statusEl, "Mic: starting…");
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        recorder = new MediaRecorder(stream, { mimeType: pickMimeType() || undefined });
 
-        recorder.ondataavailable = e => chunks.push(e.data);
+        const mimeType = pickMimeType();
+        recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+        recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+        recorder.onstart = () => flashStatus(statusEl, "Mic: recording…");
+
         recorder.onstop = async () => {
-          const blob = new Blob(chunks, { type: recorder.mimeType });
-          const text = await transcribeBlob(blob);
-          if (text) onText(text);
-          stream.getTracks().forEach(t => t.stop());
-          recording = false;
-          flashStatus(statusEl, "Mic: done.");
+          try {
+            flashStatus(statusEl, "Mic: transcribing…");
+            const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+            if (!blob || blob.size < 300) { flashStatus(statusEl, "Mic: no audio detected."); return; }
+            const textRaw = await transcribeBlob(blob);
+            const textClean = normaliseDictation(textRaw);
+            if (textClean) onText(textClean);
+            flashStatus(statusEl, "Mic: done.");
+          } catch (e) {
+            console.warn(e);
+            flashStatus(statusEl, "Mic: transcribe failed.");
+          } finally {
+            try { stream?.getTracks()?.forEach(t => t.stop()); } catch {}
+            stream = null; recorder = null; chunks = []; recording = false;
+          }
         };
 
         recorder.start();
       }
 
-      function stop(){ recorder && recorder.stop(); }
+      function stop(){
+        if (!recording || !recorder) return;
+        flashStatus(statusEl, "Mic: stopping…");
+        try { recorder.stop(); } catch(e) {}
+      }
 
       return { start, stop, isRecording: () => recording };
     }
 
-    let qRecorder = createRecorderController({
-      statusEl: qStatus,
-      onText: text => clinicalQuestion.value = text
-    });
+    let qRecorder = null;
+    let nRecorder = null;
 
-    let nRecorder = createRecorderController({
-      statusEl: wrStatus,
-      onText: text => wrNote.value += "\n" + text
-    });
+    async function initRecordersIfNeeded(){
+      if (!qRecorder) {
+        qRecorder = createRecorderController({
+          statusEl: qStatus,
+          onText: (text) => {
+            const fixed = applyCorrections(STORE_Q_CORR, text).trim();
+            clinicalQuestion.value = fixed;
+            flashStatus(qStatus, "Question captured.");
+          }
+        });
+      }
+      if (!nRecorder) {
+        nRecorder = createRecorderController({
+          statusEl: wrStatus,
+          onText: (text) => {
+            const fixed = applyCorrections(STORE_WR_CORR, text).trim();
+            if (!fixed) return;
+            const current = (wrNote.value || "").trim();
+            wrNote.value = current ? (current + "\n" + fixed) : fixed;
+            flashStatus(wrStatus, "Notes captured.");
+          }
+        });
+      }
+    }
 
     dictateQuestionBtn.addEventListener("click", async () => {
-      if (!await ensureMicPermission(qStatus)) return;
+      const ok = await ensureMicPermission(qStatus);
+      if (!ok) return;
+      await initRecordersIfNeeded();
+
       if (!qRecorder.isRecording()) { dictateQuestionBtn.textContent = "⏹ Stop"; qRecorder.start(); }
       else { dictateQuestionBtn.textContent = "🎙 Dictate"; qRecorder.stop(); }
     });
 
     dictateWrBtn.addEventListener("click", async () => {
-      if (!await ensureMicPermission(wrStatus)) return;
+      const ok = await ensureMicPermission(wrStatus);
+      if (!ok) return;
+      await initRecordersIfNeeded();
+
       if (!nRecorder.isRecording()) { dictateWrBtn.textContent = "⏹ Stop"; nRecorder.start(); }
       else { dictateWrBtn.textContent = "🎙 Dictate"; nRecorder.stop(); }
     });
 
-    flashStatus(qStatus, "Ready.");
-    flashStatus(wrStatus, "Notes mic: idle.");
+    // Init
+    renderSidebar();
+    flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
+    flashStatus(wrStatus, "Notes mic: idle. Ctrl/Cmd+Enter generates handover/note.");
 
+    (async () => {
+      await ensureSessionCookie();
+      setTimeout(async () => {
+        await initGoogleSignIn();
+        await refreshMe();
+      }, 250);
+    })();
   });
   </script>
+
 </body>
 </html>
