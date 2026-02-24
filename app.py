@@ -139,6 +139,12 @@ CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 # Flask app
 # -----------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
+from flask import Flask, request, jsonify, render_template
+app = Flask(__name__)
+# ✅ Add this health route right after app = Flask(__name__)
+@app.get("/")
+def health():
+    return "ok", 200
 app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me")
 
 http = requests.Session()
