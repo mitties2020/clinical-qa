@@ -5,11 +5,19 @@
 # ✅ Webhook upgrades user reliably via stripe_customer_id
 # ✅ Quota tracking (guest/free/pro)
 # ✅ DeepSeek generate + consult endpoints
-# ✅ Whisper transcription
+# ✅ Whisper transcription (MediaRecorder -> /api/transcribe)
+#
+# IMPORTANT (Render env vars you MUST set):
+# - FLASK_SECRET_KEY (or APP_SECRET_KEY)
+# - GOOGLE_CLIENT_ID
+# - DEEPSEEK_API_KEY
+# - STRIPE_SECRET_KEY (sk_live_...)
+# - STRIPE_WEBHOOK_SECRET (whsec_...)
+# - STRIPE_PRICE_ID_PRO (price_...)
+# - APP_BASE_URL (https://www.vividmedi.com)
 
 import os
 import re
-import json
 import sqlite3
 import tempfile
 import threading
@@ -20,14 +28,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 import stripe
-from flask import (
-    Flask,
-    request,
-    jsonify,
-    render_template,
-    session,
-    make_response,
-)
+from flask import Flask, request, jsonify, render_template, session, make_response
 
 from faster_whisper import WhisperModel
 
@@ -64,12 +65,12 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
-# ✅ IMPORTANT: this MUST be a Stripe PRICE id like "price_..."
-STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "price_1T3yFlHvfV7kt9wle2LpbpU0").strip()
+# MUST be a Stripe PRICE id like "price_..."
+STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()
 
 APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
 
-# Auto-Pro for your own account (optional)
+# Optional: auto-pro for your own account
 CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 
 if STRIPE_SECRET_KEY:
@@ -193,7 +194,7 @@ def now_awst() -> str:
 
 
 # -----------------------------------
-# DVA header helpers (kept from your code)
+# DVA header helpers
 # -----------------------------------
 def extract_field(text: str, labels: list[str]) -> str:
     if not text:
@@ -338,10 +339,7 @@ def actor_and_limit():
         return actor_type, actor_id, limit, u
 
     gid = get_guest_id()
-    actor_type = "guest"
-    actor_id = gid
-    limit = 10
-    return actor_type, actor_id, limit, None
+    return "guest", gid, 10, None
 
 def quota_block_payload(used: int, limit: int, is_logged_in: bool):
     payload = {
@@ -531,7 +529,7 @@ def api_session():
 
 
 # -----------------------------------
-# Me endpoint (supports Bearer token or session)
+# Me endpoint
 # -----------------------------------
 @app.get("/api/me")
 def api_me():
@@ -575,18 +573,17 @@ def auth_google():
 
         user = create_or_get_user_by_email(email=email, name=name, picture=picture)
 
-        # Optional: auto-pro for your creator email
+        # Optional: auto-pro for creator email
         if CREATOR_EMAIL and email == CREATOR_EMAIL and user.get("plan") != "pro":
             upgrade_user_to_pro(user["id"])
             user["plan"] = "pro"
 
-        # Set session AND return Bearer token for your frontend
         session["user_id"] = user["id"]
         bearer = sign_token(user["id"])
 
         return jsonify({
             "ok": True,
-            "token": bearer,  # ✅ your index.html expects this
+            "token": bearer,
             "user": {"email": user["email"], "plan": user["plan"]},
         })
 
@@ -602,7 +599,7 @@ def auth_logout():
 
 
 # -----------------------------------
-# Stripe checkout (SUBSCRIPTION) — FIXED
+# Stripe checkout (SUBSCRIPTION)
 # -----------------------------------
 @app.post("/api/stripe/create-checkout-session")
 def stripe_create_checkout_session():
@@ -618,7 +615,7 @@ def stripe_create_checkout_session():
     try:
         customer_id = u.get("stripe_customer_id")
 
-        # ✅ Create and store a Stripe customer ONCE
+        # Create Stripe customer ONCE
         if not customer_id:
             customer = stripe.Customer.create(
                 email=u["email"],
@@ -629,11 +626,12 @@ def stripe_create_checkout_session():
                 conn.execute("UPDATE users SET stripe_customer_id=? WHERE id=?", (customer_id, u["id"]))
                 conn.commit()
 
-        # ✅ Create subscription checkout session using PRICE id
+        # Create subscription checkout session using PRICE id
         sess = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
             line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
+            # include CHECKOUT_SESSION_ID for debugging if you need it
             success_url=f"{APP_BASE_URL}/pro/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{APP_BASE_URL}/pro/cancelled",
             metadata={"user_id": u["id"], "product": "vividmedi_pro"},
@@ -647,7 +645,7 @@ def stripe_create_checkout_session():
 
 
 # -----------------------------------
-# Stripe webhook — upgrades user reliably via stripe_customer_id
+# Stripe webhook — upgrades user via stripe_customer_id
 # -----------------------------------
 @app.post("/api/stripe/webhook")
 def stripe_webhook():
@@ -666,7 +664,7 @@ def stripe_webhook():
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
-    # ✅ Upgrade user when checkout completes
+    # Upgrade user when checkout completes
     if etype == "checkout.session.completed":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
@@ -674,13 +672,25 @@ def stripe_webhook():
         if customer_id:
             with db_conn() as conn:
                 row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
-
             if row:
                 upgrade_user_to_pro(
                     user_id=row["id"],
                     stripe_customer_id=customer_id,
                     stripe_subscription_id=subscription_id,
                 )
+
+    # Optional: handle cancellations/delinquent states (keeps pro accurate)
+    if etype in ("customer.subscription.deleted", "customer.subscription.updated"):
+        sub = obj
+        customer_id = sub.get("customer")
+        status = (sub.get("status") or "").lower()
+        if customer_id:
+            with db_conn() as conn:
+                row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
+                if row:
+                    if status in ("canceled", "unpaid", "incomplete_expired"):
+                        conn.execute("UPDATE users SET plan='free' WHERE id=?", (row["id"],))
+                        conn.commit()
 
     return "OK", 200
 
