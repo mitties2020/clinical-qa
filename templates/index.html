@@ -205,7 +205,7 @@
         <p><strong id="paywallLine1">You’ve used 10/10 free generations.</strong></p>
         <p><strong id="paywallLine2">Upgrade to Pro for unlimited access.</strong></p>
         <p id="paywallLine3">Pro includes higher limits, priority processing, and ongoing updates.</p>
-        <p id="paywallPromo" style="display:none;"><em>Create a free account to unlock 1 extra generation today.</em></p>
+        <p id="paywallPromo" style="display:none;"><em>Create a free account to continue to checkout.</em></p>
 
         <div class="vm-google-wrap" style="margin-top:12px;">
           <div id="googleBtnModal" style="display:none;"></div>
@@ -213,7 +213,7 @@
       </div>
       <div class="vm-modal-foot">
         <button id="upgradeBtnModal" class="btn btn-primary" type="button">Upgrade to Pro</button>
-        <button id="signupBtnModal" class="btn" type="button">Create account</button>
+        <button id="signupBtnModal" class="btn" type="button">Sign in</button>
         <span class="vm-spacer"></span>
         <span class="vm-mini">Cancel anytime • Secure payments via Stripe</span>
       </div>
@@ -229,18 +229,18 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
   const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
 
-  // ✅ Checkout intent key: only auto-pay if user intended upgrade
-  const CHECKOUT_INTENT_KEY = "vm_intent_checkout";
+  // ✅ Token auth (returned by /auth/google)
+  const AUTH_TOKEN_KEY = "vm_auth_token";
 
-  function setCheckoutIntent() {
-    try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, "1"); } catch {}
-  }
-  function clearCheckoutIntent() {
-    try { sessionStorage.removeItem(CHECKOUT_INTENT_KEY); } catch {}
-  }
-  function hasCheckoutIntent() {
-    try { return sessionStorage.getItem(CHECKOUT_INTENT_KEY) === "1"; } catch { return false; }
-  }
+  function setAuthToken(t) { try { localStorage.setItem(AUTH_TOKEN_KEY, t || ""); } catch {} }
+  function getAuthToken() { try { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; } catch { return ""; } }
+  function clearAuthToken(){ try { localStorage.removeItem(AUTH_TOKEN_KEY); } catch {} }
+
+  // ✅ Upgrade intent (so we don't auto-redirect randomly)
+  const CHECKOUT_INTENT_KEY = "vm_intent_checkout";
+  function setCheckoutIntent() { try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, "1"); } catch {} }
+  function clearCheckoutIntent() { try { sessionStorage.removeItem(CHECKOUT_INTENT_KEY); } catch {} }
+  function hasCheckoutIntent() { try { return sessionStorage.getItem(CHECKOUT_INTENT_KEY) === "1"; } catch { return false; } }
 
   // ✅ Guard so we don't redirect multiple times
   let checkoutInProgress = false;
@@ -261,12 +261,18 @@ window.addEventListener("DOMContentLoaded", () => {
   const signupBtnModal = document.getElementById("signupBtnModal");
   const googleBtnModal = document.getElementById("googleBtnModal");
 
-  // This comes from Flask render_template(..., google_client_id=GOOGLE_CLIENT_ID)
   const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
 
-  // Stripe return pages (avoid auto prompts/loops)
   const PATH = (window.location.pathname || "");
   const IS_STRIPE_RETURN = (PATH.startsWith("/pro/success") || PATH.startsWith("/pro/cancelled"));
+
+  // ---- Small fetch helper that adds Bearer token if present ----
+  async function apiFetch(url, opts = {}) {
+    const token = getAuthToken();
+    const headers = Object.assign({}, opts.headers || {});
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(url, Object.assign({}, opts, { headers }));
+  }
 
   function showPaywall(payload) {
     const used = payload?.used ?? 10;
@@ -274,11 +280,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
     paywallLine1.textContent = `You’ve used ${used}/${limit} free generations.`;
     paywallLine2.textContent = "Upgrade to Pro for unlimited access.";
-    paywallLine3.textContent = "Pro includes higher limits, priority processing, and ongoing updates.";
+    paywallLine3.textContent = "Cancel anytime. Secure payments via Stripe.";
 
-    const hasPromo = !!payload?.promo?.label;
-    paywallPromo.style.display = hasPromo ? "block" : "none";
-
+    paywallPromo.style.display = "none";
     paywallBackdrop.style.display = "flex";
 
     if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
@@ -286,14 +290,10 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function hidePaywall() {
-    paywallBackdrop.style.display = "none";
-  }
+  function hidePaywall() { paywallBackdrop.style.display = "none"; }
 
   paywallClose.addEventListener("click", hidePaywall);
-  paywallBackdrop.addEventListener("click", (e) => {
-    if (e.target === paywallBackdrop) hidePaywall();
-  });
+  paywallBackdrop.addEventListener("click", (e) => { if (e.target === paywallBackdrop) hidePaywall(); });
 
   async function ensureSessionCookie() {
     try { await fetch("/api/session"); } catch {}
@@ -301,7 +301,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function refreshMe() {
     try {
-      const res = await fetch("/api/me");
+      const res = await apiFetch("/api/me");
       const me = await res.json();
 
       const plan = me.plan || "guest";
@@ -320,9 +320,7 @@ window.addEventListener("DOMContentLoaded", () => {
         googleBtnTop.style.display = "none";
       } else {
         logoutBtn.style.display = "none";
-        if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
-          googleBtnTop.style.display = "block";
-        }
+        if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) googleBtnTop.style.display = "block";
       }
 
       return me;
@@ -334,6 +332,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function logout() {
     try { await fetch("/auth/logout", { method: "POST" }); } catch {}
+    clearAuthToken();
     clearCheckoutIntent();
     checkoutInProgress = false;
     await ensureSessionCookie();
@@ -346,54 +345,35 @@ window.addEventListener("DOMContentLoaded", () => {
     checkoutInProgress = true;
 
     try {
-      const res = await fetch("/api/stripe/create-checkout-session", { method: "POST" });
+      const res = await apiFetch("/api/stripe/create-checkout-session", { method: "POST" });
 
-      // If not logged in, set intent and show paywall
       if (res.status === 401) {
+        // Need sign-in first
         setCheckoutIntent();
         checkoutInProgress = false;
-        showPaywall({
-          used: 10, limit: 10,
-          promo: { label: "Create a free account to unlock 1 extra generation today." }
-        });
+        showPaywall({ used: 10, limit: 10 });
         return;
       }
 
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok || !data?.url) {
         checkoutInProgress = false;
-        showPaywall({
-          used: 10, limit: 10,
-          promo: { label: "Create a free account to unlock 1 extra generation today." }
-        });
+        alert(data?.error || "Could not start checkout.");
         return;
       }
 
-      if (data.url) {
-        // Clear intent so we don't loop on return
-        clearCheckoutIntent();
-        window.location.href = data.url;
-      } else {
-        checkoutInProgress = false;
-      }
-    } catch {
+      clearCheckoutIntent();
+      window.location.href = data.url;
+    } catch (e) {
       checkoutInProgress = false;
       alert("Could not start checkout. Please try again.");
     }
   }
 
-  // Upgrade buttons: explicitly set intent then start checkout
-  upgradeTopBtn.addEventListener("click", () => {
-    setCheckoutIntent();
-    startCheckout();
-  });
-  upgradeBtnModal.addEventListener("click", () => {
-    setCheckoutIntent();
-    startCheckout();
-  });
+  upgradeTopBtn.addEventListener("click", () => { setCheckoutIntent(); startCheckout(); });
+  upgradeBtnModal.addEventListener("click", () => { setCheckoutIntent(); startCheckout(); });
 
-  // "Create account" in modal: set intent (they want Pro), prompt Google
   signupBtnModal.addEventListener("click", () => {
     setCheckoutIntent();
     try { window.google?.accounts?.id?.prompt?.(); } catch {}
@@ -414,12 +394,16 @@ window.addEventListener("DOMContentLoaded", () => {
             body: JSON.stringify({ credential: response.credential })
           });
           const data = await res.json();
+
           if (!res.ok) {
-            alert(data.error || "Google sign-in failed.");
+            alert(data?.error || "Google sign-in failed.");
             return;
           }
 
-          // ✅ stop One Tap from re-triggering loops
+          // ✅ Save token for Bearer auth (fixes checkout auth issues)
+          if (data?.token) setAuthToken(data.token);
+
+          // ✅ stop One Tap loops
           try { window.google.accounts.id.cancel(); } catch {}
 
           hidePaywall();
@@ -427,10 +411,10 @@ window.addEventListener("DOMContentLoaded", () => {
           const me = await refreshMe();
           const plan = String(data?.user?.plan || me?.plan || "free").toLowerCase();
 
-          // ✅ ONLY auto-checkout if the user intended to upgrade
+          // ✅ Only go to checkout if user clicked upgrade first
           if (hasCheckoutIntent() && plan !== "pro") {
             clearCheckoutIntent();
-            await startCheckout(); // redirects to Stripe
+            await startCheckout();
           }
         } catch (e) {
           alert("Google sign-in failed.");
@@ -438,29 +422,17 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Render Google buttons (top bar + modal)
+    // Render Google buttons
     googleBtnTop.style.display = "block";
     googleBtnModal.style.display = "block";
 
-    window.google.accounts.id.renderButton(googleBtnTop, {
-      theme: "outline",
-      size: "large",
-      text: "continue_with"
-    });
-    window.google.accounts.id.renderButton(googleBtnModal, {
-      theme: "outline",
-      size: "large",
-      text: "continue_with"
-    });
+    window.google.accounts.id.renderButton(googleBtnTop, { theme: "outline", size: "large", text: "continue_with" });
+    window.google.accounts.id.renderButton(googleBtnModal, { theme: "outline", size: "large", text: "continue_with" });
 
-    // ✅ CRITICAL: do NOT auto prompt on every load (causes circles)
-    // If you want One Tap sometimes, only do it when NOT on Stripe return pages.
+    // ✅ IMPORTANT: do NOT auto-prompt on load (causes “circles” + breaks checkout return)
+    // If you want One Tap later, enable it deliberately (e.g., on user click).
     if (!IS_STRIPE_RETURN) {
-      const me = await refreshMe();
-      if (!me?.logged_in) {
-        // Optional: enable One Tap once on fresh page loads (safe)
-        // window.google.accounts.id.prompt();
-      }
+      // no-op
     }
   }
 
@@ -497,9 +469,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // Utils
   function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
-  function escapeHtml(str) {
-    return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  }
+  function escapeHtml(str) { return (str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function safeJsonParse(s, fallback){ try { return JSON.parse(s); } catch { return fallback; } }
   async function copyText(text){ if (!text) return; try { await navigator.clipboard.writeText(text); } catch {} }
   function flashStatus(el, msg){ if (el) el.textContent = msg; }
@@ -604,15 +574,8 @@ window.addEventListener("DOMContentLoaded", () => {
       .replace(/#{1,6}\s*/g, "");
 
     const sectionOrder = [
-      "Summary",
-      "Assessment",
-      "Diagnosis",
-      "Investigations",
-      "Treatment",
-      "Monitoring",
-      "Follow-up & Safety Netting",
-      "Red Flags",
-      "References",
+      "Summary","Assessment","Diagnosis","Investigations","Treatment","Monitoring",
+      "Follow-up & Safety Netting","Red Flags","References",
     ];
 
     const lines = text.split("\n");
@@ -640,9 +603,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (hasNonEmpty(current.content)) sections.push(current);
 
-    if (!seenExplicit) {
-      return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
-    }
+    if (!seenExplicit) return `<div class="answer-paragraph">${escapeHtml(text)}</div>`;
 
     let html = "";
     let idx = 0;
@@ -687,7 +648,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.addEventListener("click", async (e) => {
     const t = e.target;
-
     if (t.classList && t.classList.contains("collapsible")) {
       const id = t.dataset.target;
       const content = document.querySelector(`.collapsible-content[data-section="${id}"]`);
@@ -697,7 +657,6 @@ window.addEventListener("DOMContentLoaded", () => {
       t.classList.toggle("active", !open);
       return;
     }
-
     if (t.classList && t.classList.contains("section-copy-btn")) {
       const id = t.dataset.target;
       const section = document.querySelector(`[data-section="${id}"]`);
@@ -758,14 +717,12 @@ window.addEventListener("DOMContentLoaded", () => {
     list.unshift({ id: Date.now(), title, question, answer: answerText || "", ts: Date.now() });
     saveSavedQA(list.slice(0, 80));
   }
-
   function addSavedNote(content){
     const list = loadSavedNotes();
     const title = "Notes " + new Date().toLocaleString();
     list.unshift({ id: Date.now(), title, content, ts: Date.now() });
     saveSavedNotes(list.slice(0, 80));
   }
-
   function addSavedHandover(content){
     const list = loadSavedHandovers();
     const title = "Handover " + new Date().toLocaleString();
@@ -949,7 +906,7 @@ window.addEventListener("DOMContentLoaded", () => {
     answerEl.innerHTML = "";
 
     try {
-      const res = await fetch("/api/generate", {
+      const res = await apiFetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, mode })
@@ -971,10 +928,8 @@ window.addEventListener("DOMContentLoaded", () => {
         if (mode.startsWith("dva")) {
           const meta = parseDvaMeta(raw);
           raw = stripDvaMeta(raw);
-
           const metaHtml = meta ? buildDvaMetaHtml(meta) : "";
           const bodyHtml = buildStructuredHtml(raw);
-
           answerEl.innerHTML = metaHtml + bodyHtml;
         } else {
           answerEl.innerHTML = buildStructuredHtml(raw);
@@ -1003,7 +958,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   generateBtn.addEventListener("click", generate);
 
-  // Enter = Generate, Shift+Enter = newline
   clinicalQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -1017,7 +971,6 @@ window.addEventListener("DOMContentLoaded", () => {
     await copyText(text);
   });
 
-  // Clear saves Q+A to sidebar (if present)
   clearQuestionBtn.addEventListener("click", () => {
     const q = (clinicalQuestion.value || "").trim();
     const a = (answerEl.innerText || "").trim();
@@ -1031,11 +984,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // ========= Consult Notes =========
-  smartDeviceBtn.addEventListener("click", () => {
-    flashStatus(wrStatus, "Smart device data collection: coming soon.");
-  });
+  smartDeviceBtn.addEventListener("click", () => { flashStatus(wrStatus, "Smart device data collection: coming soon."); });
 
-  copyWrBtn.addEventListener("click", async () => {
+  document.getElementById("copyWrBtn").addEventListener("click", async () => {
     const text = (wrNote.value || "").trim();
     if (!text) return;
     await copyText(text);
@@ -1069,7 +1020,7 @@ window.addEventListener("DOMContentLoaded", () => {
     answerEl.innerHTML = "";
 
     try {
-      const res = await fetch("/api/consult", {
+      const res = await apiFetch("/api/consult", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: input, mode: cmode })
@@ -1106,10 +1057,8 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Generate button triggers consult generation
   generateWrBtn.addEventListener("click", generateConsultOutput);
 
-  // Ctrl/Cmd+Enter triggers consult generation too
   wrNote.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -1142,14 +1091,8 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   async function ensureMicPermission(statusEl){
-    if (!window.isSecureContext) {
-      flashStatus(statusEl, "Mic error: must be HTTPS.");
-      return false;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      flashStatus(statusEl, "Mic error: getUserMedia unsupported.");
-      return false;
-    }
+    if (!window.isSecureContext) { flashStatus(statusEl, "Mic error: must be HTTPS."); return false; }
+    if (!navigator.mediaDevices?.getUserMedia) { flashStatus(statusEl, "Mic error: getUserMedia unsupported."); return false; }
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true });
       s.getTracks().forEach(t => t.stop());
@@ -1178,7 +1121,7 @@ window.addEventListener("DOMContentLoaded", () => {
   async function transcribeBlob(blob){
     const form = new FormData();
     form.append("audio", blob, "audio.webm");
-    const res = await fetch("/api/transcribe", { method: "POST", body: form });
+    const res = await apiFetch("/api/transcribe", { method: "POST", body: form });
     const raw = await res.text();
 
     let data = {};
@@ -1204,20 +1147,14 @@ window.addEventListener("DOMContentLoaded", () => {
       const mimeType = pickMimeType();
       recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
-      };
-
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
       recorder.onstart = () => flashStatus(statusEl, "Mic: recording…");
 
       recorder.onstop = async () => {
         try {
           flashStatus(statusEl, "Mic: transcribing…");
           const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-          if (!blob || blob.size < 300) {
-            flashStatus(statusEl, "Mic: no audio detected.");
-            return;
-          }
+          if (!blob || blob.size < 300) { flashStatus(statusEl, "Mic: no audio detected."); return; }
           const textRaw = await transcribeBlob(blob);
           const textClean = normaliseDictation(textRaw);
           if (textClean) onText(textClean);
@@ -1227,10 +1164,7 @@ window.addEventListener("DOMContentLoaded", () => {
           flashStatus(statusEl, "Mic: transcribe failed.");
         } finally {
           try { stream?.getTracks()?.forEach(t => t.stop()); } catch {}
-          stream = null;
-          recorder = null;
-          chunks = [];
-          recording = false;
+          stream = null; recorder = null; chunks = []; recording = false;
         }
       };
 
@@ -1279,13 +1213,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!ok) return;
     await initRecordersIfNeeded();
 
-    if (!qRecorder.isRecording()) {
-      dictateQuestionBtn.textContent = "⏹ Stop";
-      qRecorder.start();
-    } else {
-      dictateQuestionBtn.textContent = "🎙 Dictate";
-      qRecorder.stop();
-    }
+    if (!qRecorder.isRecording()) { dictateQuestionBtn.textContent = "⏹ Stop"; qRecorder.start(); }
+    else { dictateQuestionBtn.textContent = "🎙 Dictate"; qRecorder.stop(); }
   });
 
   dictateWrBtn.addEventListener("click", async () => {
@@ -1293,13 +1222,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!ok) return;
     await initRecordersIfNeeded();
 
-    if (!nRecorder.isRecording()) {
-      dictateWrBtn.textContent = "⏹ Stop";
-      nRecorder.start();
-    } else {
-      dictateWrBtn.textContent = "🎙 Dictate";
-      nRecorder.stop();
-    }
+    if (!nRecorder.isRecording()) { dictateWrBtn.textContent = "⏹ Stop"; nRecorder.start(); }
+    else { dictateWrBtn.textContent = "🎙 Dictate"; nRecorder.stop(); }
   });
 
   // Init
