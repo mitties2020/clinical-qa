@@ -24,7 +24,75 @@ from faster_whisper import WhisperModel
 # Google ID token verification (server-side)
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
+import os
+import re
+import tempfile
+import threading
+import subprocess
+import sqlite3
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from uuid import uuid4
 
+import requests
+import stripe
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    render_template,
+    session,
+    make_response,
+)
+
+from faster_whisper import WhisperModel
+
+# Google ID token verification (server-side)
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+
+# ✅ ADD THIS BLOCK HERE (RIGHT AFTER IMPORTS)
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from functools import wraps
+
+APP_SECRET_KEY = (os.getenv("APP_SECRET_KEY") or os.getenv("FLASK_SECRET_KEY") or "dev-secret-change-me").strip()
+serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
+
+def sign_token(user_id: str) -> str:
+    return serializer.dumps({"uid": user_id})
+
+def verify_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 30):
+    try:
+        data = serializer.loads(token, max_age=max_age_seconds)
+        return data.get("uid")
+    except (BadSignature, SignatureExpired):
+        return None
+
+def require_auth(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return jsonify({"error": "not_authenticated"}), 401
+        token = auth.split(" ", 1)[1].strip()
+        uid = verify_token(token)
+        if not uid:
+            return jsonify({"error": "invalid_token"}), 401
+        # ✅ uses your existing DB helper (defined later) so we import nothing here
+        with db_conn() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        if not row:
+            return jsonify({"error": "user_not_found"}), 401
+        request.user = dict(row)
+        return fn(*args, **kwargs)
+    return wrapper
+
+# -----------------------------------
+# Load .env locally only (not Render)
+# -----------------------------------
+if os.getenv("RENDER") is None:
+    from dotenv import load_dotenv
+    load_dotenv()
 # -----------------------------------
 # Load .env locally only (not Render)
 # -----------------------------------
