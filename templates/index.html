@@ -5,50 +5,62 @@
     <title>VividMedi</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-    <!-- Google Identity Services (One Tap + button) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <style>
+      /* =========================
+         THEME TOKENS (tuned)
+         ========================= */
       :root {
-        --bg: #0b1220;
-        --panel: rgba(255, 255, 255, 0.06);
-        --panel-2: rgba(255, 255, 255, 0.09);
+        --bg: #0a1220;
+        --panel: rgba(255, 255, 255, 0.055);
+        --panel-2: rgba(255, 255, 255, 0.075);
         --border: rgba(255, 255, 255, 0.12);
-        --text: rgba(255, 255, 255, 0.9);
+        --text: rgba(255, 255, 255, 0.92);
         --muted: rgba(255, 255, 255, 0.68);
-        --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+        --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
 
-        --accent: #7c3aed;
-        --accent2: #2563eb;
-        --danger: #ef4444;
+        --input-bg: rgba(255, 255, 255, 0.045);
+        --input-border: rgba(255, 255, 255, 0.12);
+        --input-focus: rgba(140, 180, 255, 0.22);
+
+        /* Metallic buttons */
+        --btn-bg-1: rgba(255, 255, 255, 0.10);
+        --btn-bg-2: rgba(255, 255, 255, 0.06);
+        --btn-border: rgba(255, 255, 255, 0.16);
+        --btn-border-strong: rgba(255, 255, 255, 0.22);
+        --btn-text: rgba(255, 255, 255, 0.92);
+        --btn-glow: rgba(130, 190, 255, 0.16);
+
+        --danger: rgba(255, 90, 90, 0.70);
 
         --chip-bg: rgba(0, 0, 0, 0.18);
         --chip-border: rgba(255, 255, 255, 0.15);
-
-        --input-bg: rgba(255, 255, 255, 0.05);
-        --input-border: rgba(255, 255, 255, 0.12);
-        --input-focus: rgba(124, 58, 237, 0.45);
       }
 
+      /* Light theme: NOT blinding */
       [data-theme="light"] {
-        --bg: #f6f7fb;
-        --panel: rgba(15, 23, 42, 0.04);
+        --bg: #e9edf5; /* softer than white */
+        --panel: rgba(15, 23, 42, 0.045);
         --panel-2: rgba(15, 23, 42, 0.07);
-        --border: rgba(15, 23, 42, 0.12);
-        --text: rgba(15, 23, 42, 0.92);
-        --muted: rgba(15, 23, 42, 0.62);
-        --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+        --border: rgba(15, 23, 42, 0.14);
+        --text: rgba(10, 16, 28, 0.92);
+        --muted: rgba(10, 16, 28, 0.62);
+        --shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
 
-        --accent: #6d28d9;
-        --accent2: #2563eb;
-        --danger: #dc2626;
+        --input-bg: rgba(15, 23, 42, 0.035);
+        --input-border: rgba(15, 23, 42, 0.14);
+        --input-focus: rgba(80, 130, 210, 0.18);
 
-        --chip-bg: rgba(15, 23, 42, 0.04);
-        --chip-border: rgba(15, 23, 42, 0.12);
+        --btn-bg-1: rgba(15, 23, 42, 0.08);
+        --btn-bg-2: rgba(15, 23, 42, 0.05);
+        --btn-border: rgba(15, 23, 42, 0.16);
+        --btn-border-strong: rgba(15, 23, 42, 0.20);
+        --btn-text: rgba(10, 16, 28, 0.92);
+        --btn-glow: rgba(80, 130, 210, 0.14);
 
-        --input-bg: rgba(15, 23, 42, 0.03);
-        --input-border: rgba(15, 23, 42, 0.12);
-        --input-focus: rgba(109, 40, 217, 0.28);
+        --chip-bg: rgba(15, 23, 42, 0.05);
+        --chip-border: rgba(15, 23, 42, 0.14);
       }
 
       body {
@@ -56,32 +68,17 @@
         color: var(--text);
       }
 
-      /* Topbar actions */
-      .topbar-actions {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-        justify-content: flex-end;
+      /* Keep branding readable in both themes */
+      .brand-header__name,
+      .brand-header__tagline,
+      .brand-title,
+      .sidebar-title,
+      .sidebar-subhead,
+      .label {
+        color: var(--text) !important;
       }
 
-      .chip {
-        font-size: 12px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        border: 1px solid var(--chip-border);
-        color: var(--text);
-        background: var(--chip-bg);
-        backdrop-filter: blur(8px);
-      }
-      .chip strong {
-        color: var(--text);
-      }
-      .auth-btn {
-        cursor: pointer;
-      }
-
-      /* Cards/inputs unify */
+      /* Cards / inputs */
       .card {
         background: var(--panel);
         border: 1px solid var(--border);
@@ -103,7 +100,22 @@
         box-shadow: 0 0 0 4px var(--input-focus);
       }
 
-      /* Symmetry: match first row panels */
+      /* Fix: dropdown options invisible (browser uses native option colors) */
+      select option {
+        color: #0b1220;
+        background: #ffffff;
+      }
+      [data-theme="light"] select option {
+        color: #0b1220;
+        background: #ffffff;
+      }
+      /* Dark theme options */
+      :root select option {
+        color: rgba(255, 255, 255, 0.92);
+        background: #0b1220;
+      }
+
+      /* Symmetry */
       .grid {
         gap: 18px;
       }
@@ -112,20 +124,74 @@
         min-height: 440px;
       }
 
-      /* Buttons (light touch) */
-      .btn.btn-primary {
-        background: linear-gradient(135deg, var(--accent), var(--accent2));
-        border: 1px solid rgba(255, 255, 255, 0.1);
-      }
-      [data-theme="light"] .btn.btn-primary {
-        border: 1px solid rgba(15, 23, 42, 0.12);
-      }
-      .btn.btn-danger {
-        background: linear-gradient(135deg, var(--danger), #fb7185);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+      /* Topbar */
+      .topbar-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
       }
 
-      /* Day/Night toggle */
+      .chip {
+        font-size: 12px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--chip-border);
+        color: var(--text);
+        background: var(--chip-bg);
+        backdrop-filter: blur(8px);
+      }
+      .chip strong {
+        color: var(--text);
+      }
+
+      /* =========================
+         Metallic buttons (uniform)
+         ========================= */
+      .btn,
+      .copy-btn {
+        background: linear-gradient(180deg, var(--btn-bg-1), var(--btn-bg-2)) !important;
+        color: var(--btn-text) !important;
+        border: 1px solid var(--btn-border) !important;
+        border-radius: 999px !important;
+        backdrop-filter: blur(10px);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.10),
+          0 10px 26px rgba(0, 0, 0, 0.18);
+        transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+      }
+
+      .btn:hover,
+      .copy-btn:hover {
+        border-color: var(--btn-border-strong) !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.12),
+          0 12px 30px rgba(0, 0, 0, 0.20),
+          0 0 0 4px var(--btn-glow);
+        transform: translateY(-1px);
+      }
+
+      .btn:active,
+      .copy-btn:active {
+        transform: translateY(0);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.10),
+          0 8px 18px rgba(0, 0, 0, 0.16);
+      }
+
+      /* Primary: same metallic but slightly stronger edge */
+      .btn.btn-primary {
+        border-color: var(--btn-border-strong) !important;
+      }
+
+      /* Danger: still metallic, just red-tinted border/text */
+      .btn.btn-danger {
+        border-color: color-mix(in oklab, var(--danger) 55%, var(--btn-border-strong) 45%) !important;
+        color: color-mix(in oklab, var(--danger) 72%, var(--btn-text) 28%) !important;
+      }
+
+      /* Day/Night toggle (subtle, not bright) */
       .theme-toggle {
         display: inline-flex;
         align-items: center;
@@ -145,7 +211,7 @@
         width: 38px;
         height: 20px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.10);
         border: 1px solid var(--border);
         cursor: pointer;
       }
@@ -159,14 +225,10 @@
         width: 16px;
         height: 16px;
         border-radius: 50%;
-        background: #fff;
+        background: color-mix(in oklab, var(--text) 70%, #fff 30%);
         transform: translateX(0);
         transition: transform 180ms ease;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-      }
-      [data-theme="light"] .knob {
-        background: rgba(15, 23, 42, 0.92);
-        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
       }
       .switch.on .knob {
         transform: translateX(18px);
@@ -188,7 +250,7 @@
         max-width: 540px;
         border-radius: 14px;
         overflow: hidden;
-        background: color-mix(in oklab, var(--bg) 70%, #0f172a 30%);
+        background: color-mix(in oklab, var(--bg) 80%, #0f172a 20%);
         color: var(--text);
         border: 1px solid var(--border);
         box-shadow: var(--shadow);
@@ -246,7 +308,7 @@
         flex-wrap: wrap;
       }
 
-      /* Consult output box under consult input */
+      /* Consult output area */
       .consult-output-wrap {
         margin-top: 14px;
         border-top: 1px dashed var(--border);
@@ -286,6 +348,12 @@
       .device-menu-panel button:hover {
         border-color: var(--border);
         background: rgba(255, 255, 255, 0.04);
+      }
+
+      /* Google button discreet wrapper */
+      .google-mini {
+        transform: scale(0.92);
+        transform-origin: right center;
       }
     </style>
   </head>
@@ -339,15 +407,19 @@
               <div class="topbar-actions">
                 <div class="theme-toggle" title="Day/Night mode">
                   <span id="themeLabel">Night</span>
-                  <div id="themeSwitch" class="switch" role="switch" aria-checked="true" tabindex="0">
+                  <div id="themeSwitch" class="switch" role="switch" aria-checked="false" tabindex="0">
                     <div class="knob"></div>
                   </div>
                 </div>
 
                 <span id="usageChip" class="chip">Loading usage…</span>
+
                 <button id="upgradeTopBtn" class="btn btn-primary" type="button">Upgrade to Pro</button>
+
                 <button id="logoutBtn" class="btn auth-btn" type="button" style="display:none;">Sign out</button>
-                <div id="googleBtnTop" style="display:none;"></div>
+
+                <!-- Discreet google button (only shown when logged OUT) -->
+                <div id="googleBtnTop" class="google-mini" style="display:none;"></div>
               </div>
             </header>
 
@@ -456,13 +528,9 @@
               <div id="wrStatus" class="mic-status">Notes mic: idle</div>
             </section>
           </div>
-          <!-- /.main-region -->
         </div>
-        <!-- /.layout -->
       </div>
-      <!-- /.shell -->
     </div>
-    <!-- /.app-root -->
 
     <!-- Paywall modal -->
     <div id="paywallBackdrop" class="vm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
@@ -694,7 +762,7 @@
         }
         sendToConsultBtn.addEventListener("click", sendAnswerToConsultOutput);
 
-        // Connect smart device menu + POST
+        // Device menu + POST
         function closeDeviceMenu() {
           deviceMenuPanel.style.display = "none";
         }
@@ -732,7 +800,7 @@
             flashStatus(wrStatus, `Connecting: ${nameMap[btn.dataset.device] || "device"}…`);
             const out = await postDeviceConnect(btn.dataset.device);
             flashStatus(wrStatus, `Connected: ${nameMap[out.device] || out.device} ✅`);
-          } catch (err) {
+          } catch {
             flashStatus(wrStatus, "Device connect failed.");
           } finally {
             closeDeviceMenu();
@@ -743,6 +811,18 @@
           try {
             await fetch("/api/session");
           } catch {}
+        }
+
+        // IMPORTANT: hide the big Google button once logged in
+        function hideGoogleButtonsHard() {
+          if (googleBtnTop) {
+            googleBtnTop.style.display = "none";
+            googleBtnTop.innerHTML = "";
+          }
+          if (googleBtnModal) {
+            googleBtnModal.style.display = "none";
+            googleBtnModal.innerHTML = "";
+          }
         }
 
         async function refreshMe() {
@@ -760,7 +840,7 @@
 
             if (me.logged_in) {
               logoutBtn.style.display = "inline-flex";
-              googleBtnTop.style.display = "none";
+              hideGoogleButtonsHard();
             } else {
               logoutBtn.style.display = "none";
               if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) googleBtnTop.style.display = "block";
@@ -851,9 +931,9 @@
                 } catch {}
 
                 hidePaywall();
-                const me = await refreshMe();
-                const plan = String(data?.user?.plan || me?.plan || "free").toLowerCase();
+                await refreshMe(); // this hides google hard
 
+                const plan = String(data?.user?.plan || "free").toLowerCase();
                 if (hasCheckoutIntent() && plan !== "pro") {
                   clearCheckoutIntent();
                   await startCheckout();
@@ -864,108 +944,29 @@
             },
           });
 
+          // Render a smaller, discreet button
           googleBtnTop.style.display = "block";
           googleBtnModal.style.display = "block";
 
-          window.google.accounts.id.renderButton(googleBtnTop, { theme: "outline", size: "large", text: "continue_with" });
-          window.google.accounts.id.renderButton(googleBtnModal, { theme: "outline", size: "large", text: "continue_with" });
+          window.google.accounts.id.renderButton(googleBtnTop, {
+            theme: "outline",
+            size: "medium",
+            text: "continue_with",
+            shape: "pill",
+          });
+          window.google.accounts.id.renderButton(googleBtnModal, {
+            theme: "outline",
+            size: "large",
+            text: "continue_with",
+            shape: "pill",
+          });
 
           if (!IS_STRIPE_RETURN) {
             // intentionally no auto-prompt
           }
         }
 
-        // ===== DVA META PARSER =====
-        function parseDvaMeta(raw) {
-          if (!raw) return null;
-          const text = String(raw).replace(/\r/g, "");
-          const start = text.indexOf("DVA_META");
-          const end = text.indexOf("END_DVA_META");
-          if (start === -1 || end === -1) return null;
-
-          const block = text
-            .slice(start, end)
-            .split("\n")
-            .map((l) => l.trim())
-            .filter(Boolean);
-
-          function getVal(label) {
-            const line = block.find((x) => x.toLowerCase().startsWith(label.toLowerCase()));
-            return line ? line.split(":").slice(1).join(":").trim() : "";
-          }
-
-          function getBullets(afterLabel) {
-            const idx = block.findIndex((x) => x.toLowerCase() === afterLabel.toLowerCase());
-            if (idx === -1) return [];
-            const out = [];
-            for (let i = idx + 1; i < block.length; i++) {
-              const l = block[i];
-              if (/^[A-Za-z ].+:\s*/.test(l) && !l.startsWith("-")) break;
-              if (l.startsWith("-")) out.push(l.replace(/^-+\s*/, ""));
-            }
-            return out;
-          }
-
-          return {
-            referralType: getVal("Referral type"),
-            providerType: getVal("Provider type"),
-            providerChecks: getBullets("Provider-type checks:"),
-            renewalChecks: getBullets("Renewal audit checks:"),
-            strength: getVal("Justification strength"),
-            risk: getVal("Audit risk"),
-            missing: getBullets("Missing items:"),
-            amendments: getBullets("Suggested amendments:"),
-            alternatives: getBullets("Alternative legitimate pathways:"),
-          };
-        }
-
-        function stripDvaMeta(raw) {
-          const text = String(raw || "");
-          const s = text.indexOf("DVA_META");
-          const e = text.indexOf("END_DVA_META");
-          if (s === -1 || e === -1) return text.trim();
-          return text.slice(e + "END_DVA_META".length).trim();
-        }
-
-        function buildDvaMetaHtml(meta) {
-          if (!meta) return "";
-          const bullets = (arr) =>
-            arr && arr.length
-              ? arr.map((x) => `<div class="answer-line">• ${escapeHtml(x)}</div>`).join("")
-              : `<div class="answer-line">${escapeHtml("None provided.")}</div>`;
-
-          return `
-            <div class="section">
-              <div class="section-header static">
-                <span>${escapeHtml("DVA Audit (D0904)")}</span>
-                <button class="section-copy-btn copy-btn" data-target="dva-meta" type="button">Copy</button>
-              </div>
-              <div class="section-body static-body" data-section="dva-meta">
-                <div class="answer-line"><b>Referral type:</b> ${escapeHtml(meta.referralType || "unclear")}</div>
-                <div class="answer-line"><b>Provider type:</b> ${escapeHtml(meta.providerType || "unclear")}</div>
-                <div class="answer-line"><b>Justification strength:</b> ${escapeHtml(meta.strength || "")}</div>
-                <div class="answer-line"><b>Audit risk:</b> ${escapeHtml(meta.risk || "")}</div>
-                <div style="height:10px;"></div>
-                <div class="answer-line"><b>Provider-type checks</b></div>
-                ${bullets(meta.providerChecks)}
-                <div style="height:10px;"></div>
-                <div class="answer-line"><b>Renewal audit checks</b></div>
-                ${bullets(meta.renewalChecks)}
-                <div style="height:10px;"></div>
-                <div class="answer-line"><b>Missing items</b></div>
-                ${bullets(meta.missing)}
-                <div style="height:10px;"></div>
-                <div class="answer-line"><b>Suggested amendments</b></div>
-                ${bullets(meta.amendments)}
-                <div style="height:10px;"></div>
-                <div class="answer-line"><b>Alternative legitimate pathways</b></div>
-                ${bullets(meta.alternatives)}
-              </div>
-            </div>
-          `;
-        }
-
-        // ===== Structured answer builder =====
+        // ===== Structured answer builder (unchanged logic) =====
         function hasNonEmpty(arr) {
           return Array.isArray(arr) && arr.some((l) => (l || "").trim() !== "");
         }
@@ -1327,7 +1328,7 @@
 
         sidebarSearch.addEventListener("input", renderSidebar);
 
-        // === Generate (clinical) ===
+        // ===== Generate (clinical) =====
         async function generate() {
           const query = (clinicalQuestion.value || "").trim();
           if (!query) return;
@@ -1357,16 +1358,7 @@
             }
 
             if (data.answer) {
-              let raw = data.answer || "";
-              if (mode.startsWith("dva")) {
-                const meta = parseDvaMeta(raw);
-                raw = stripDvaMeta(raw);
-                const metaHtml = meta ? buildDvaMetaHtml(meta) : "";
-                const bodyHtml = buildStructuredHtml(raw);
-                answerEl.innerHTML = metaHtml + bodyHtml;
-              } else {
-                answerEl.innerHTML = buildStructuredHtml(raw);
-              }
+              answerEl.innerHTML = buildStructuredHtml(data.answer);
               copyAllBtn.disabled = !(data.answer || "").trim();
               flashStatus(qStatus, "Generated.");
               addSavedQA(query, data.answer);
@@ -1389,11 +1381,30 @@
         }
 
         generateBtn.addEventListener("click", generate);
+
+        // Enter in clinical textarea => Generate (Shift+Enter = newline)
         clinicalQuestion.addEventListener("keydown", (e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             generate();
           }
+        });
+
+        // NEW: Global Enter => Generate (when not typing in other inputs / modals)
+        document.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter") return;
+          if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+          if (paywallBackdrop && paywallBackdrop.style.display === "flex") return;
+
+          const tag = (e.target?.tagName || "").toLowerCase();
+          const isEditable = tag === "textarea" || tag === "input" || e.target?.isContentEditable;
+          if (isEditable && e.target !== clinicalQuestion) return;
+
+          const q = (clinicalQuestion.value || "").trim();
+          if (!q) return;
+
+          e.preventDefault();
+          generate();
         });
 
         copyAllBtn.addEventListener("click", async () => {
@@ -1406,16 +1417,14 @@
           const q = (clinicalQuestion.value || "").trim();
           const a = (answerEl.innerText || "").trim();
           if (q && a) addSavedQA(q, a);
-
           clinicalQuestion.value = "";
           answerEl.innerHTML = "Your answer will appear here.";
           copyAllBtn.disabled = true;
-
           flashStatus(qStatus, "Cleared (saved).");
           renderSidebar();
         });
 
-        // ========= Consult Notes =========
+        // Consult modes (prefix prompt)
         function consultPromptForMode(mode) {
           const map = {
             consult_note:
@@ -1433,6 +1442,55 @@
           };
           return map[mode] || map.consult_note;
         }
+
+        async function generateConsultOutput() {
+          const input = (wrNote.value || "").trim();
+          if (!input) return;
+
+          const cmode = consultModeSelect?.value || "consult_note";
+          const backendMode = cmode === "handover" ? "handover" : "consult_note";
+          const modePrefix = consultPromptForMode(cmode);
+          const text = `${modePrefix}\n\n${input}`.trim();
+
+          generateWrBtn.disabled = true;
+          answerLoader.classList.remove("hidden");
+
+          try {
+            const res = await apiFetch("/api/consult", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text, mode: backendMode }),
+            });
+
+            const data = await res.json();
+
+            if (res.status === 402 && data?.error === "quota_exceeded") {
+              showPaywall(data);
+              await refreshMe();
+              flashStatus(wrStatus, "Free limit reached.");
+              return;
+            }
+
+            if (data.answer) {
+              answerEl.innerHTML = buildStructuredHtml(data.answer);
+              wrOutput.value = data.answer || "";
+              flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Output generated.");
+              await refreshMe();
+            } else {
+              wrOutput.value = "";
+              flashStatus(wrStatus, "Generate failed.");
+            }
+          } catch (e) {
+            console.error(e);
+            wrOutput.value = "";
+            flashStatus(wrStatus, "Generate error.");
+          } finally {
+            answerLoader.classList.add("hidden");
+            generateWrBtn.disabled = false;
+          }
+        }
+
+        generateWrBtn.addEventListener("click", generateConsultOutput);
 
         copyWrBtn.addEventListener("click", async () => {
           const input = (wrNote.value || "").trim();
@@ -1460,70 +1518,7 @@
           renderSidebar();
         });
 
-        async function generateConsultOutput() {
-          const input = (wrNote.value || "").trim();
-          if (!input) return;
-
-          const cmode = consultModeSelect?.value || "consult_note";
-          const backendMode = cmode === "handover" ? "handover" : "consult_note";
-          const modePrefix = consultPromptForMode(cmode);
-          const text = `${modePrefix}\n\n${input}`.trim();
-
-          generateWrBtn.disabled = true;
-          copyAllBtn.disabled = true;
-          answerLoader.classList.remove("hidden");
-          answerEl.innerHTML = "";
-
-          try {
-            const res = await apiFetch("/api/consult", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text, mode: backendMode }),
-            });
-
-            const data = await res.json();
-
-            if (res.status === 402 && data?.error === "quota_exceeded") {
-              showPaywall(data);
-              await refreshMe();
-              answerEl.textContent = "Free limit reached. Please upgrade to continue.";
-              copyAllBtn.disabled = true;
-              return;
-            }
-
-            if (data.answer) {
-              answerEl.innerHTML = buildStructuredHtml(data.answer);
-              wrOutput.value = data.answer || "";
-              copyAllBtn.disabled = !(data.answer || "").trim();
-              flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Output generated.");
-              await refreshMe();
-            } else {
-              answerEl.textContent = (data.error || "No response.").trim();
-              wrOutput.value = "";
-              copyAllBtn.disabled = true;
-              flashStatus(wrStatus, "Generate failed.");
-            }
-          } catch (e) {
-            console.error(e);
-            answerEl.textContent = "Error generating output.";
-            wrOutput.value = "";
-            copyAllBtn.disabled = true;
-            flashStatus(wrStatus, "Generate error.");
-          } finally {
-            answerLoader.classList.add("hidden");
-            generateWrBtn.disabled = false;
-          }
-        }
-
-        generateWrBtn.addEventListener("click", generateConsultOutput);
-        wrNote.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            generateConsultOutput();
-          }
-        });
-
-        // Dictation (MediaRecorder → /api/transcribe)
+        // Dictation (unchanged)
         function pickMimeType() {
           const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"];
           for (const t of candidates) {
@@ -1552,16 +1547,9 @@
           }
         }
 
-        function dedupeRepeats(text) {
-          if (!text) return "";
-          let t = String(text);
-          t = t.replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1");
-          t = t.replace(/\s{2,}/g, " ").trim();
-          return t;
-        }
-
         function normaliseDictation(text) {
-          let t = dedupeRepeats(text);
+          let t = String(text || "");
+          t = t.replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1");
           t = t.replace(/\b(um|uh|like|you know)\b/gi, "");
           t = t.replace(/\s{2,}/g, " ").trim();
           return t;
@@ -1591,7 +1579,6 @@
             recording = true;
             chunks = [];
             flashStatus(statusEl, "Mic: starting…");
-
             stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mimeType = pickMimeType();
             recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
@@ -1656,7 +1643,6 @@
               },
             });
           }
-
           if (!nRecorder) {
             nRecorder = createRecorderController({
               statusEl: wrStatus,
@@ -1697,10 +1683,13 @@
           }
         });
 
+        // Sidebar search
+        sidebarSearch.addEventListener("input", renderSidebar);
+
         // Init
         renderSidebar();
         flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
-        flashStatus(wrStatus, "Notes mic: idle. Ctrl/Cmd+Enter generates output.");
+        flashStatus(wrStatus, "Notes mic: idle.");
 
         (async () => {
           await ensureSessionCookie();
