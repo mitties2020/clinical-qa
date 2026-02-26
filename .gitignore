@@ -44,3 +44,17 @@ vividmedi.db
 *.db
 *.sqlite
 *.sqlite3
+
+# Local stuff (do not commit)
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.pyc
+.venv/
+
+
+# Local cloned experiments
+llm-to-tts-node/
+my-project/
+
