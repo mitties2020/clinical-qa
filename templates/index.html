@@ -139,15 +139,13 @@
               <div class="actions actions-compact wr-actions">
                 <button id="consultGenerateBtn" class="btn btn-primary" type="button">Generate</button>
                 <!-- Add inside Consultation Notes actions area -->
-                <div id="wrAnswerLoader" class="mini-loader hidden" aria-live="polite">
                   <span class="spinner"></span>
                   <span class="mini-loader-text">Generating…</span>
                 </div>
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button">Copy</button>
-                <button id="saveWrBtn" class="btn btn-primary" type="button">Save</button>
-                <button id="newWrBtn" class="btn btn-danger" type="button">New</button>
+                <button id="ClearWrBtn" class="btn btn-danger" type="button">Clear</button>
 
                 <!-- Smart device placeholder menu (no DeepSeek prompt change yet) -->
                 <div class="device-menu">
@@ -191,40 +189,46 @@ window.addEventListener("DOMContentLoaded", () => {
   const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v7";
 
   // Elements
-  const modeSelect = document.getElementById("modeSelect");
-  const consultModeSelect = document.getElementById("consultModeSelect");
+const modeSelect = document.getElementById("modeSelect");
+const consultModeSelect = document.getElementById("consultModeSelect");
 
-  const clinicalQuestion = document.getElementById("clinicalQuestion");
-  const generateBtn = document.getElementById("generateBtn");
-  const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
-  const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
-  const clearQuestionBtn = document.getElementById("clearQuestionBtn");
+const clinicalQuestion = document.getElementById("clinicalQuestion");
+const generateBtn = document.getElementById("generateBtn");
+const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
+const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
+const clearQuestionBtn = document.getElementById("clearQuestionBtn");
 
-  const wrNote = document.getElementById("wrNote");
-  const wrOutput = document.getElementById("wrOutput");
-  const consultGenerateBtn = document.getElementById("consultGenerateBtn");
+const wrNote = document.getElementById("wrNote");
+const wrOutput = document.getElementById("wrOutput");
+const consultGenerateBtn = document.getElementById("consultGenerateBtn");
 
-  const connectDeviceBtn = document.getElementById("connectDeviceBtn");
-  const deviceMenuPanel = document.getElementById("deviceMenuPanel");
+// ✅ add this near consult elements (so generateConsult can use it)
+const wrAnswerLoader = document.getElementById("wrAnswerLoader");
 
-  const dictateWrBtn = document.getElementById("dictateWrBtn");
-  const incorrectWrBtn = document.getElementById("incorrectWrBtn");
-  const copyWrBtn = document.getElementById("copyWrBtn");
-  const saveWrBtn = document.getElementById("saveWrBtn");
-  const newWrBtn = document.getElementById("newWrBtn");
+const connectDeviceBtn = document.getElementById("connectDeviceBtn");
+const deviceMenuPanel = document.getElementById("deviceMenuPanel");
 
-  const answerEl = document.getElementById("answer");
-  const answerLoader = document.getElementById("answerLoader");
-  const copyAllBtn = document.getElementById("copyAllBtn");
-  const sendToConsultBtn = document.getElementById("sendToConsultBtn");
+const dictateWrBtn = document.getElementById("dictateWrBtn");
+const incorrectWrBtn = document.getElementById("incorrectWrBtn");
+const copyWrBtn = document.getElementById("copyWrBtn");
+const saveWrBtn = document.getElementById("saveWrBtn");
 
-  const qStatus = document.getElementById("qStatus");
-  const wrStatus = document.getElementById("wrStatus");
+// Keep id as-is so your existing JS doesn’t break.
+// The button label can be "Clear" in HTML, but the id can stay newWrBtn.
+const newWrBtn = document.getElementById("newWrBtn");
 
-  const savedQuestionsList = document.getElementById("savedQuestionsList");
-  const savedWrList = document.getElementById("savedWrList");
-  const savedHandoverList = document.getElementById("savedHandoverList");
-  const sidebarSearch = document.getElementById("sidebarSearch");
+const answerEl = document.getElementById("answer");
+const answerLoader = document.getElementById("answerLoader"); // clinical loader (top section)
+const copyAllBtn = document.getElementById("copyAllBtn");
+const sendToConsultBtn = document.getElementById("sendToConsultBtn");
+
+const qStatus = document.getElementById("qStatus");
+const wrStatus = document.getElementById("wrStatus");
+
+const savedQuestionsList = document.getElementById("savedQuestionsList");
+const savedWrList = document.getElementById("savedWrList");
+const savedHandoverList = document.getElementById("savedHandoverList");
+const sidebarSearch = document.getElementById("sidebarSearch");
 
   // Utils
   function norm(s) { return (s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
@@ -678,50 +682,61 @@ window.addEventListener("DOMContentLoaded", () => {
     flashStatus(qStatus, "Cleared (saved).");
     renderSidebar();
   });
-
   // === Consultation generate ===
-  async function generateConsult(){
-    const input = (wrNote.value || "").trim();
-    if (!input) return;
+async function generateConsult() {
+  const input = (wrNote.value || "").trim();
+  if (!input) return;
 
-    const cmode = consultModeSelect?.value || "consult_note";
+  const cmode = consultModeSelect?.value || "consult_note";
 
-    consultGenerateBtn.disabled = true;
-    answerLoader.classList.remove("hidden");
+  consultGenerateBtn.disabled = true;
 
-    try {
-      const res = await fetch("/api/consult", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, mode: cmode })
-      });
+  // ✅ show loader in Consultation Notes section (not Clinical Answers)
+  wrAnswerLoader?.classList.remove("hidden");
 
-      const data = await res.json();
+  // optional: prevent double inputs while generating
+  // wrNote.disabled = true;
 
-      if (data.answer) {
-        wrOutput.value = data.answer || "";
-        flashStatus(wrStatus, "Generated.");
-      } else {
-        wrOutput.value = "";
-        flashStatus(wrStatus, (data.error || "Generate failed.").trim());
-      }
-    } catch (e) {
-      console.error(e);
+  try {
+    const res = await fetch("/api/consult", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: input, mode: cmode })
+    });
+
+    const data = await res.json();
+
+    if (data.answer) {
+      wrOutput.value = data.answer || "";
+      flashStatus(wrStatus, "Generated.");
+    } else {
       wrOutput.value = "";
-      flashStatus(wrStatus, "Generate error.");
-    } finally {
-      answerLoader.classList.add("hidden");
-      consultGenerateBtn.disabled = false;
+      flashStatus(wrStatus, (data.error || "Generate failed.").trim());
     }
+  } catch (e) {
+    console.error(e);
+    wrOutput.value = "";
+    flashStatus(wrStatus, "Generate error.");
+  } finally {
+    // ✅ hide consult loader
+    wrAnswerLoader?.classList.add("hidden");
+    consultGenerateBtn.disabled = false;
+
+    // wrNote.disabled = false;
   }
+}
 
-  consultGenerateBtn.addEventListener("click", generateConsult);
+consultGenerateBtn.addEventListener("click", generateConsult);
 
-  // Enter = Generate in notes, Shift+Enter newline
-  wrNote.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      generateConsult();
+// Enter = Generate in notes, Shift+Enter newline
+wrNote.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    generateConsult();
+  }
+});
+
+
     }
   });
 
@@ -824,6 +839,11 @@ window.addEventListener("DOMContentLoaded", () => {
       if (recording) return;
       recording = true;
       chunks = [];
+
+
+
+
+
       flashStatus(statusEl, "Mic: starting…");
 
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
