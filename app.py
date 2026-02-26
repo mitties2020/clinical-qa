@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 import stripe
-from flask import Flask, request, jsonify, render_template, session, make_response
+from flask import Flask, request, jsonify, render_template, session, make_response, Response
 WhisperModel = None
 try:
     from faster_whisper import WhisperModel
@@ -549,7 +549,33 @@ def healthz():
 @app.get("/_ping")
 def ping():
     return "pong", 200
+@app.get("/sitemap.xml")
+def sitemap():
+    base = APP_BASE_URL.rstrip("/")
+    lastmod = datetime.utcnow().date().isoformat()
 
+    # Keep this list to your *public* pages only
+    urls = [
+        (f"{base}/", "daily", "1.0"),
+        # (f"{base}/pricing", "weekly", "0.8"),
+        # (f"{base}/about", "monthly", "0.5"),
+    ]
+
+    xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+
+    for loc, changefreq, priority in urls:
+        xml.append("  <url>")
+        xml.append(f"    <loc>{loc}</loc>")
+        xml.append(f"    <lastmod>{lastmod}</lastmod>")
+        xml.append(f"    <changefreq>{changefreq}</changefreq>")
+        xml.append(f"    <priority>{priority}</priority>")
+        xml.append("  </url>")
+
+    xml.append("</urlset>")
+    return Response("\n".join(xml), mimetype="application/xml")
 
 # -----------------------------------
 # Pages
