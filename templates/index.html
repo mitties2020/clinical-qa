@@ -475,24 +475,54 @@
 
             <div class="divider-spacer"></div>
 
-            <!-- CONSULTATION NOTES -->
-            <section class="card wr-card">
-              <div class="wr-head">
-                <div style="min-width:240px;">
-                  <div class="label wr-label">Consultation Notes</div>
+           <!-- CONSULTATION NOTES -->
+<section class="card wr-card">
+  <div class="wr-head">
+    <div style="min-width:320px; flex: 1;">
+      <div class="label wr-label">Consultation Notes</div>
 
-                  <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
-                    <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
-                    <select id="consultModeSelect" class="topic-search" style="max-width:320px;">
-                      <option value="consult_note" selected>Create clinical note</option>
-                      <option value="initial_consult">Initial patient consultation</option>
-                      <option value="follow_up">Follow up review</option>
-                      <option value="specialist_letter">Specialist letter</option>
-                      <option value="discharge_summary">Discharge summary</option>
-                      <option value="handover">Handover summary</option>
-                    </select>
-                  </div>
-                </div>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap;">
+        <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
+
+        <!-- FIX: wider + no clipping -->
+        <select id="consultModeSelect" class="topic-search" style="max-width:520px; width:100%; min-width:320px;">
+          <option value="consult_note" selected>Create clinical note</option>
+          <option value="handover">Handover summary</option>
+
+          <!-- NEW: DVA authority numbers -->
+          <option value="dva_authority">DVA authority numbers</option>
+
+          <!-- Keep your other modes -->
+          <option value="initial_consult">Initial patient consultation</option>
+          <option value="follow_up">Follow up review</option>
+          <option value="specialist_letter">Specialist letter</option>
+          <option value="discharge_summary">Discharge summary</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="actions actions-compact">
+      <!-- NEW: Generate button for Consultation Notes -->
+      <button id="consultGenerateBtn" class="btn btn-primary" type="button">Generate</button>
+
+      <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
+      <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
+      <button id="copyWrBtn" class="btn" type="button">Copy</button>
+      <button id="saveWrBtn" class="btn btn-primary" type="button">Save</button>
+      <button id="newWrBtn" class="btn btn-danger" type="button">New</button>
+
+      <!-- your device menu stays -->
+      <div class="device-menu">
+        <button id="connectDeviceBtn" class="btn" type="button">Connect smart device ▾</button>
+        <div id="deviceMenuPanel" class="device-menu-panel" role="menu" aria-label="Connect smart device">
+          <button type="button" data-device="ai_glasses">AI glasses</button>
+          <button type="button" data-device="smart_watch">Smart watch</button>
+          <button type="button" data-device="smart_ring">Smart ring</button>
+          <button type="button" data-device="ai_necklace">AI necklace</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
                 <div class="actions actions-compact">
                   <div class="device-menu">
