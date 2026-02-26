@@ -559,3 +559,56 @@ select.wr-mode-select {
     width: 420px;
   }
 }
+/* ---- FIX: dropdown clipping in Consultation Notes + device menu ---- */
+.wr-card,
+.wr-head,
+.wr-actions,
+.grid,
+.main-region,
+.shell,
+.layout {
+  overflow: visible !important;
+}
+
+.mode-row { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+.mode-label { margin:0; text-align:left; min-width:52px; }
+.mode-select { max-width:260px; }
+
+/* Ensure selects and their popovers are not under other panels */
+select,
+.topic-search {
+  position: relative;
+  z-index: 20;
+}
+
+/* Device menu dropdown */
+.device-menu { position: relative; display: inline-block; }
+.device-menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 220px;
+  z-index: 9999;
+  display: none;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8,12,18,0.96);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  backdrop-filter: blur(10px);
+}
+.device-menu-panel.open { display: block; }
+.device-menu-panel button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+}
+.device-menu-panel button:hover {
+  background: rgba(255,255,255,0.06);
+}
