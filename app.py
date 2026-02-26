@@ -722,7 +722,11 @@ def generate():
     try:
         if mode.startswith("dva"):
             header = build_dva_header(query)
-            referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
+            referral_intent = (
+                "D0904 new" if mode == "dva_new"
+                else "D0904 renewal" if mode == "dva_renew"
+                else "D0904 (unspecified)"
+            )
             user_content = (
                 f"Referral intent: {referral_intent}\n\n"
                 f"{header}\n\n"
@@ -731,7 +735,10 @@ def generate():
             )
             answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
         else:
-            user_content = f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
+            user_content = (
+                f"Clinical question:\n{query}\n\n"
+                "If pasted data is included (old notes/labs/imaging), extract it and sort it into the correct headings."
+            )
             answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
 
         return jsonify({"answer": answer})
@@ -758,17 +765,48 @@ def consult():
         return blocked
 
     try:
-        if mode == "handover":
+        # --- HANDOVER ---
+        if mode in ("handover", "handover_summary"):
             user_content = (
-                "Create a handover/presentation from the following raw dictation/pasted data. "
-                "If the context is not ED, adapt appropriately.\n\n"
+                "Create a clinician-to-clinician handover/presentation from the following raw dictation/pasted data. "
+                "Default to ED-style handover, but if context clearly fits another setting (ward/ICU/GP/psych), adapt accordingly. "
+                "Do not invent facts. If pasted data is messy, reorganise cleanly.\n\n"
                 f"{text}"
             )
             answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
+
+        # --- DVA AUTHORITY NUMBERS (NEW) ---
+        elif mode in ("dva_authority", "dva_authority_numbers", "dva_script", "authority"):
+            user_content = (
+                "Generate a DVA AUTHORITY NUMBER REQUEST PACK for the following case.\n\n"
+                "OUTPUT MUST INCLUDE THESE SECTIONS (use headings exactly):\n"
+                "Call Prep Summary\n"
+                "Eligibility Check\n"
+                "Key Data for DVA Call\n"
+                "Proposed Authority Script Text\n"
+                "Missing Information\n"
+                "Risks / Audit Sensitivities\n\n"
+                "REQUIREMENTS:\n"
+                "- Identify: current weight, baseline weight if provided, % loss if possible, height, BMI\n"
+                "- Identify: DVA card type (Gold vs White) and what that implies (note if accepted conditions required)\n"
+                "- Identify: accepted conditions IF relevant/required (esp White card) and state if not provided\n"
+                "- Identify: allied health involvement (dietitian, exercise physiologist, other) and dates if available\n"
+                "- Identify: current medication + dose + duration, adherence, and tolerance/side effects\n"
+                "- State: whether the likely DVA criteria are met based ONLY on provided info; if unclear, say so\n"
+                "- Provide: a short phone script for calling DVA (what to say, in order)\n"
+                "- Provide: a concise authority justification paragraph suitable for pasting into the SCRIPT/authority notes\n"
+                "- Provide: a clear list of missing info needed to complete/strengthen the request\n\n"
+                "INPUT (raw notes/dictation/pasted data):\n"
+                f"{text}"
+            )
+            # Reuse your clinical system prompt so it stays in AU style + headings discipline
+            answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+
+        # --- DEFAULT: CONSULT NOTE ---
         else:
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
-                "Do not invent facts; organise clearly.\n\n"
+                "Do not invent facts; organise clearly. If there are pasted investigations/history, format them neatly.\n\n"
                 f"{text}"
             )
             answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
