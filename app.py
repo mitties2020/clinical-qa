@@ -1,5 +1,10 @@
-# app.py — add/replace with these additions (FULL FILE VERSION)
-# NOTE: this is your full app.py including the new /api/device/connect + DB table.
+# app.py — FULL PASTEABLE VERSION (keeps your existing working structure)
+# ✅ Google sign-in (server verified)
+# ✅ Stripe checkout + webhook (plan upgrade)
+# ✅ Quota tracking (guest/free/pro)
+# ✅ Whisper transcription via ffmpeg + faster-whisper
+# ✅ Device connect endpoint + DB table
+# ✅ NEW: Consultation mode "dva_authority" (DVA Authority Numbers pack) via /api/consult
 
 import os
 import re
@@ -21,6 +26,9 @@ from google.auth.transport import requests as google_requests
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
+# -----------------------------------
+# Load .env locally only (not Render)
+# -----------------------------------
 if os.getenv("RENDER") is None:
     try:
         from dotenv import load_dotenv
@@ -29,6 +37,9 @@ if os.getenv("RENDER") is None:
     except Exception:
         pass
 
+# -----------------------------------
+# Config
+# -----------------------------------
 APP_SECRET_KEY = (os.getenv("APP_SECRET_KEY") or os.getenv("FLASK_SECRET_KEY") or "dev-secret-change-me").strip()
 GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
 
@@ -56,6 +67,9 @@ if STRIPE_PRICE_ID_PRO:
     if not STRIPE_PRICE_ID_PRO.startswith("price_"):
         raise RuntimeError(f"STRIPE_PRICE_ID_PRO must start with 'price_': {STRIPE_PRICE_ID_PRO}")
 
+# -----------------------------------
+# Flask app
+# -----------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or APP_SECRET_KEY or "dev-insecure-change-me")
 
@@ -65,6 +79,9 @@ app.config.update(
     SESSION_COOKIE_SECURE=APP_BASE_URL.startswith("https://"),
 )
 
+# -----------------------------------
+# DB
+# -----------------------------------
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
 
@@ -105,7 +122,7 @@ def db_init():
         )
         """
         )
-        # NEW: store device connections by actor (guest/user)
+        # Store device connections by actor (guest/user)
         conn.execute(
             """
         CREATE TABLE IF NOT EXISTS device_connections (
@@ -123,6 +140,9 @@ def db_init():
 
 db_init()
 
+# -----------------------------------
+# Auth token (bearer)
+# -----------------------------------
 serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
 
 
@@ -163,6 +183,9 @@ def get_authed_user():
     return dict(row) if row else None
 
 
+# -----------------------------------
+# Guest cookie
+# -----------------------------------
 def get_guest_id():
     return request.cookies.get("vivid_guest") or ""
 
@@ -183,6 +206,9 @@ def ensure_guest_cookie(resp):
     return gid
 
 
+# -----------------------------------
+# Helpers
+# -----------------------------------
 def now_awst() -> str:
     dt = datetime.now(ZoneInfo("Australia/Perth"))
     return dt.strftime("%d %b %Y, %H:%M (AWST)")
@@ -237,6 +263,9 @@ def build_dva_header(user_text: str) -> str:
     return "\n".join(header).strip()
 
 
+# -----------------------------------
+# Users + plan upgrades
+# -----------------------------------
 def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
     email = (email or "").strip().lower()
     if not email:
@@ -289,6 +318,9 @@ def downgrade_user_to_free_by_customer(customer_id: str):
             conn.commit()
 
 
+# -----------------------------------
+# Usage/quota
+# -----------------------------------
 def usage_get(actor_type: str, actor_id: str) -> int:
     if not actor_id:
         return 0
@@ -370,6 +402,9 @@ def enforce_quota_or_402():
     return None
 
 
+# -----------------------------------
+# Whisper
+# -----------------------------------
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
@@ -384,6 +419,9 @@ def get_whisper_model():
     return _whisper_model
 
 
+# -----------------------------------
+# Prompts
+# -----------------------------------
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
@@ -440,6 +478,31 @@ HANDOVER_SYSTEM_PROMPT = (
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
 
+# NEW: dedicated DVA authority request pack prompt (does NOT alter your existing modes)
+DVA_AUTHORITY_SYSTEM_PROMPT = (
+    "You are an Australian clinician assisting with DVA authority number requests.\n\n"
+    "Do NOT invent details. If missing, list them clearly.\n"
+    "Use Australian spelling. Keep it usable for a real phone call to DVA.\n\n"
+    "OUTPUT MUST USE THESE HEADINGS EXACTLY:\n"
+    "Call Prep Summary\n"
+    "Eligibility Check\n"
+    "Key Data for DVA Call\n"
+    "Proposed Authority Script Text\n"
+    "Missing Information\n"
+    "Risks / Audit Sensitivities\n\n"
+    "REQUIREMENTS:\n"
+    "- Identify: current weight, baseline weight if provided, % loss if possible, height, BMI\n"
+    "- Identify: DVA card type (Gold vs White) and implications (White card needs accepted condition relevance)\n"
+    "- Identify: accepted conditions IF provided; if not provided and White card suspected, flag clearly\n"
+    "- Identify: allied health involvement (dietitian, exercise physiologist, other) and dates if available\n"
+    "- Identify: current medication + dose + duration, adherence, tolerance/side effects\n"
+    "- State: whether likely DVA criteria are met based ONLY on provided info; if unclear, say so\n"
+    "- Provide: a short phone script (what to say, in order) and a concise paste-into-script justification paragraph\n"
+)
+
+# -----------------------------------
+# DeepSeek client
+# -----------------------------------
 http = requests.Session()
 
 
@@ -466,6 +529,9 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
     return answer or "No response."
 
 
+# -----------------------------------
+# Health routes
+# -----------------------------------
 @app.get("/health")
 def health():
     return "ok", 200
@@ -481,6 +547,9 @@ def ping():
     return "pong", 200
 
 
+# -----------------------------------
+# Pages
+# -----------------------------------
 @app.get("/")
 def index():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
@@ -502,6 +571,9 @@ def pro_cancelled():
     return resp
 
 
+# -----------------------------------
+# API: session / me
+# -----------------------------------
 @app.get("/api/session")
 def api_session():
     resp = make_response(jsonify({"ok": True}))
@@ -527,6 +599,9 @@ def api_me():
     )
 
 
+# -----------------------------------
+# Google auth
+# -----------------------------------
 @app.post("/auth/google")
 def auth_google():
     if not GOOGLE_CLIENT_ID:
@@ -566,6 +641,9 @@ def auth_logout():
     return jsonify({"ok": True})
 
 
+# -----------------------------------
+# Stripe: checkout
+# -----------------------------------
 @app.post("/api/stripe/create-checkout-session")
 def stripe_create_checkout_session():
     if not STRIPE_SECRET_KEY:
@@ -602,6 +680,9 @@ def stripe_create_checkout_session():
         return jsonify({"error": str(e)}), 500
 
 
+# -----------------------------------
+# Stripe: webhook
+# -----------------------------------
 @app.post("/api/stripe/webhook")
 def stripe_webhook():
     if not STRIPE_WEBHOOK_SECRET:
@@ -669,7 +750,9 @@ def stripe_webhook():
     return "OK", 200
 
 
-# NEW: device connect endpoint (stores per actor)
+# -----------------------------------
+# Device connect endpoint (stores per actor)
+# -----------------------------------
 @app.post("/api/device/connect")
 def device_connect():
     data = request.get_json(silent=True) or {}
@@ -703,6 +786,9 @@ def device_connect():
     return jsonify({"ok": True, "device": device, "status": "connected"})
 
 
+# -----------------------------------
+# Main generate endpoint (clinical + DVA D0904)
+# -----------------------------------
 @app.post("/api/generate")
 def generate():
     if not DEEPSEEK_API_KEY:
@@ -748,6 +834,9 @@ def generate():
         return jsonify({"error": "AI request failed"}), 502
 
 
+# -----------------------------------
+# Consult endpoint (notes / handover / NEW: DVA authority numbers)
+# -----------------------------------
 @app.post("/api/consult")
 def consult():
     if not DEEPSEEK_API_KEY:
@@ -765,7 +854,7 @@ def consult():
         return blocked
 
     try:
-        # --- HANDOVER ---
+        # HANDOVER
         if mode in ("handover", "handover_summary"):
             user_content = (
                 "Create a clinician-to-clinician handover/presentation from the following raw dictation/pasted data. "
@@ -775,34 +864,15 @@ def consult():
             )
             answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
 
-        # --- DVA AUTHORITY NUMBERS (NEW) ---
+        # NEW: DVA AUTHORITY NUMBERS
         elif mode in ("dva_authority", "dva_authority_numbers", "dva_script", "authority"):
             user_content = (
                 "Generate a DVA AUTHORITY NUMBER REQUEST PACK for the following case.\n\n"
-                "OUTPUT MUST INCLUDE THESE SECTIONS (use headings exactly):\n"
-                "Call Prep Summary\n"
-                "Eligibility Check\n"
-                "Key Data for DVA Call\n"
-                "Proposed Authority Script Text\n"
-                "Missing Information\n"
-                "Risks / Audit Sensitivities\n\n"
-                "REQUIREMENTS:\n"
-                "- Identify: current weight, baseline weight if provided, % loss if possible, height, BMI\n"
-                "- Identify: DVA card type (Gold vs White) and what that implies (note if accepted conditions required)\n"
-                "- Identify: accepted conditions IF relevant/required (esp White card) and state if not provided\n"
-                "- Identify: allied health involvement (dietitian, exercise physiologist, other) and dates if available\n"
-                "- Identify: current medication + dose + duration, adherence, and tolerance/side effects\n"
-                "- State: whether the likely DVA criteria are met based ONLY on provided info; if unclear, say so\n"
-                "- Provide: a short phone script for calling DVA (what to say, in order)\n"
-                "- Provide: a concise authority justification paragraph suitable for pasting into the SCRIPT/authority notes\n"
-                "- Provide: a clear list of missing info needed to complete/strengthen the request\n\n"
-                "INPUT (raw notes/dictation/pasted data):\n"
                 f"{text}"
             )
-            # Reuse your clinical system prompt so it stays in AU style + headings discipline
-            answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(DVA_AUTHORITY_SYSTEM_PROMPT, user_content)
 
-        # --- DEFAULT: CONSULT NOTE ---
+        # DEFAULT: consult note
         else:
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
@@ -818,6 +888,9 @@ def consult():
         return jsonify({"error": "AI request failed"}), 502
 
 
+# -----------------------------------
+# Transcription endpoint
+# -----------------------------------
 @app.post("/api/transcribe")
 def transcribe():
     f = request.files.get("audio")
@@ -853,6 +926,9 @@ def transcribe():
                         pass
 
 
+# -----------------------------------
+# Local run
+# -----------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
