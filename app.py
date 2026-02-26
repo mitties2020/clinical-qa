@@ -19,7 +19,11 @@ from zoneinfo import ZoneInfo
 import requests
 import stripe
 from flask import Flask, request, jsonify, render_template, session, make_response
-from faster_whisper import WhisperModel
+WhisperModel = None
+try:
+    from faster_whisper import WhisperModel
+except Exception:
+    WhisperModel = None
 
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
