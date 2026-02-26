@@ -605,46 +605,45 @@ const sidebarSearch = document.getElementById("sidebarSearch");
 
   sidebarSearch.addEventListener("input", renderSidebar);
 
-  // === Clinical generate ===
-  async function generateClinical(){
-    const query = (clinicalQuestion.value || "").trim();
-    if (!query) return;
+// === Consultation generate ===
+async function generateConsult() {
+  const input = (wrNote.value || "").trim();
+  if (!input) return;
 
-    const mode = (modeSelect && modeSelect.value) ? modeSelect.value : "clinical";
+  const cmode = consultModeSelect?.value || "consult_note";
 
-    generateBtn.disabled = true;
-    copyAllBtn.disabled = true;
-    sendToConsultBtn.disabled = true;
-    answerLoader.classList.remove("hidden");
-    answerEl.innerHTML = "";
+  consultGenerateBtn.disabled = true;
 
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, mode })
-      });
+  // ✅ Correct loader (Consultation section only)
+  wrAnswerLoader?.classList.remove("hidden");
 
-      const data = await res.json();
+  try {
+    const res = await fetch("/api/consult", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: input, mode: cmode })
+    });
 
-      if (data.answer) {
-        answerEl.innerHTML = buildStructuredHtml(data.answer);
-        copyAllBtn.disabled = false;
-        sendToConsultBtn.disabled = false;
-        flashStatus(qStatus, "Generated.");
-      } else {
-        answerEl.textContent = (data.error || "No response.").trim();
-        flashStatus(qStatus, "Generate failed.");
-      }
-    } catch (e) {
-      console.error(e);
-      answerEl.textContent = "Error generating answer.";
-      flashStatus(qStatus, "Generate error.");
-    } finally {
-      answerLoader.classList.add("hidden");
-      generateBtn.disabled = false;
+    const data = await res.json();
+
+    if (data.answer) {
+      wrOutput.value = data.answer || "";
+      flashStatus(wrStatus, "Generated.");
+    } else {
+      wrOutput.value = "";
+      flashStatus(wrStatus, (data.error || "Generate failed.").trim());
     }
+
+  } catch (e) {
+    console.error(e);
+    wrOutput.value = "";
+    flashStatus(wrStatus, "Generate error.");
+  } finally {
+    // ✅ Hide consult loader
+    wrAnswerLoader?.classList.add("hidden");
+    consultGenerateBtn.disabled = false;
   }
+}
 
   generateBtn.addEventListener("click", generateClinical);
 
@@ -839,8 +838,6 @@ wrNote.addEventListener("keydown", (e) => {
       if (recording) return;
       recording = true;
       chunks = [];
-
-
 
 
 
