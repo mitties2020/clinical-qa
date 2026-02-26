@@ -39,3 +39,8 @@ node_modules/
  624210a (Initial commit (Codex amendments))
 
 llm-to-tts-node/
+
+vividmedi.db
+*.db
+*.sqlite
+*.sqlite3
