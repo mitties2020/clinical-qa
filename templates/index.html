@@ -74,13 +74,13 @@
             <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
           </div>
 
-          <div class="sidebar-subhead">Saved Clinical Questions</div>
+          <div class="sidebar-subhead">Clinical Q&A Library</div>
           <div id="savedQuestionsList" class="conversation-list"></div>
 
-          <div class="sidebar-subhead">Consultation Notes (saved)</div>
+          <div class="sidebar-subhead">Consultation Notes</div>
           <div id="savedWrList" class="conversation-list"></div>
 
-          <div class="sidebar-subhead">Handovers (saved)</div>
+          <div class="sidebar-subhead">Handover Summaries</div>
           <div id="savedHandoverList" class="conversation-list"></div>
 
           <div class="sidebar-footer">
@@ -103,12 +103,25 @@
 
             <!-- top-right usage + auth -->
             <div class="topbar-actions">
+              <label class="daylight-toggle" for="daylightToggle" title="Toggle brighter display mode">
+                <span class="daylight-text">Day</span>
+                <input id="daylightToggle" type="checkbox" />
+                <span class="daylight-slider" aria-hidden="true"></span>
+              </label>
               <span id="usageChip" class="chip">Loading usage…</span>
+              <button id="signInTopBtn" class="btn auth-btn" type="button">Sign in</button>
               <button id="upgradeTopBtn" class="btn btn-primary" type="button">Upgrade to Pro</button>
               <button id="logoutBtn" class="btn auth-btn" type="button" style="display:none;">Sign out</button>
               <div id="googleBtnTop" style="display:none;"></div>
             </div>
           </header>
+
+          <section class="hero-strip card">
+            <div>
+              <p class="hero-kicker">Professional Workflow</p>
+              <h2>Faster clinical reasoning, cleaner documentation.</h2>
+            </div>
+          </section>
 
           <!-- TOP ROW -->
           <main class="grid">
@@ -120,6 +133,9 @@
                 <label class="label label-tight" style="margin:0; text-align:left;">Mode</label>
                 <select id="modeSelect" class="topic-search" style="max-width:260px;">
                   <option value="clinical" selected>Clinical</option>
+                  <option value="differential">Differential diagnosis focus</option>
+                  <option value="medication_review">Medication review / optimisation</option>
+                  <option value="investigation_plan">Investigation planning</option>
                   <option value="dva_new">DVA D0904 (New referral)</option>
                   <option value="dva_renew">DVA D0904 (Renewal / EoC-based)</option>
                 </select>
@@ -170,22 +186,46 @@
                   <select id="consultModeSelect" class="topic-search" style="max-width:260px;">
                     <option value="consult_note" selected>Create clinical note</option>
                     <option value="handover">Handover summary</option>
+                    <option value="discharge_summary">Discharge summary</option>
                   </select>
                 </div>
               </div>
 
               <div class="actions actions-compact">
-                <button id="smartDeviceBtn" class="btn" type="button">Smart device data collection</button>
+                <select id="smartDeviceSelect" class="topic-search device-select" aria-label="Connect smart device data input" title="Select wearable or remote monitoring input">
+                  <option value="" selected>Connect smart device</option>
+                  <optgroup label="Wearables">
+                    <option value="ai_glasses">AI glasses</option>
+                    <option value="smart_watch">Smart watch</option>
+                    <option value="smart_ring">Smart ring</option>
+                  </optgroup>
+                  <optgroup label="Remote monitoring inputs">
+                    <option value="ecg_patch">ECG patch / cardiac monitor</option>
+                    <option value="bp_monitor">Bluetooth blood pressure monitor</option>
+                    <option value="cgm">Continuous glucose monitor (CGM)</option>
+                    <option value="pulse_oximeter">Pulse oximeter</option>
+                    <option value="smart_scale">Smart scale / body composition</option>
+                    <option value="sleep_tracker">Sleep / recovery tracker</option>
+                    <option value="spirometer">Connected spirometer</option>
+                    <option value="digital_stethoscope">Digital stethoscope</option>
+                  </optgroup>
+                </select>
+                <span id="connectedDeviceBadge" class="connected-device-badge" style="display:none;"></span>
                 <button id="generateWrBtn" class="btn btn-primary" type="button">Generate</button>
                 <button id="dictateWrBtn" class="btn" type="button">🎙 Dictate</button>
                 <button id="incorrectWrBtn" class="btn" type="button">Incorrect</button>
                 <button id="copyWrBtn" class="btn" type="button">Copy</button>
-                <button id="saveWrBtn" class="btn" type="button">Save</button>
-                <button id="newWrBtn" class="btn btn-danger" type="button">New</button>
+                <button id="clearWrBtn" class="btn btn-danger" type="button">Clear</button>
               </div>
             </div>
 
             <textarea id="wrNote" class="textarea" rows="16" placeholder=""></textarea>
+
+            <div class="generated-note-wrap">
+              <label class="label generated-note-label" for="generatedClinicalNote">Generated Clinical Note</label>
+              <textarea id="generatedClinicalNote" class="textarea generated-note" rows="10" placeholder="Generated output appears here after you click Generate." readonly></textarea>
+            </div>
+
             <div id="wrStatus" class="mic-status">Notes mic: idle</div>
           </section>
 
@@ -228,6 +268,7 @@
     const STORE_SAVED_QA = "ebm_saved_qa_v7";
     const STORE_SAVED_NOTES = "ebm_saved_notes_v7";
     const STORE_SAVED_HANDOVERS = "ebm_saved_handovers_v1";
+    const STORE_CONNECTED_DEVICE = "ebm_connected_device_v1";
 
     // Token auth (returned by /auth/google)
     const AUTH_TOKEN_KEY = "vm_auth_token";
@@ -247,6 +288,7 @@
     // UI elements
     const usageChip = document.getElementById("usageChip");
     const upgradeTopBtn = document.getElementById("upgradeTopBtn");
+    const signInTopBtn = document.getElementById("signInTopBtn");
     const logoutBtn = document.getElementById("logoutBtn");
     const googleBtnTop = document.getElementById("googleBtnTop");
 
@@ -275,13 +317,14 @@
     const clearQuestionBtn = document.getElementById("clearQuestionBtn");
 
     const wrNote = document.getElementById("wrNote");
-    const smartDeviceBtn = document.getElementById("smartDeviceBtn");
+    const generatedClinicalNote = document.getElementById("generatedClinicalNote");
+    const smartDeviceSelect = document.getElementById("smartDeviceSelect");
+    const connectedDeviceBadge = document.getElementById("connectedDeviceBadge");
     const generateWrBtn = document.getElementById("generateWrBtn");
     const dictateWrBtn = document.getElementById("dictateWrBtn");
     const incorrectWrBtn = document.getElementById("incorrectWrBtn");
     const copyWrBtn = document.getElementById("copyWrBtn");
-    const saveWrBtn = document.getElementById("saveWrBtn");
-    const newWrBtn = document.getElementById("newWrBtn");
+    const clearWrBtn = document.getElementById("clearWrBtn");
 
     const answerEl = document.getElementById("answer");
     const answerLoader = document.getElementById("answerLoader");
@@ -294,6 +337,7 @@
     const savedWrList = document.getElementById("savedWrList");
     const savedHandoverList = document.getElementById("savedHandoverList");
     const sidebarSearch = document.getElementById("sidebarSearch");
+    const daylightToggle = document.getElementById("daylightToggle");
 
     // ---- fetch helper adding Bearer token if present ----
     async function apiFetch(url, opts = {}) {
@@ -350,9 +394,11 @@
 
         if (me.logged_in) {
           logoutBtn.style.display = "inline-flex";
+          signInTopBtn.style.display = "none";
           googleBtnTop.style.display = "none";
         } else {
           logoutBtn.style.display = "none";
+          signInTopBtn.style.display = "inline-flex";
           if (GOOGLE_CLIENT_ID && window.google?.accounts?.id) googleBtnTop.style.display = "block";
         }
 
@@ -369,7 +415,7 @@
       clearCheckoutIntent();
       checkoutInProgress = false;
       await ensureSessionCookie();
-      await refreshMe();
+      refreshMe();
     }
     logoutBtn.addEventListener("click", logout);
 
@@ -411,8 +457,21 @@
       googleBtnModal.scrollIntoView({ behavior: "smooth", block: "center" });
     });
 
+    signInTopBtn.addEventListener("click", () => {
+      showPaywall({ used: 0, limit: 10 });
+      if (!GOOGLE_CLIENT_ID) {
+        flashStatus(qStatus, "Google sign-in unavailable: GOOGLE_CLIENT_ID is not configured.");
+      } else {
+        try { window.google?.accounts?.id?.prompt?.(); } catch {}
+      }
+    });
+
     async function initGoogleSignIn() {
-      if (!GOOGLE_CLIENT_ID) return;
+      if (!GOOGLE_CLIENT_ID) {
+        googleBtnTop.style.display = "none";
+        googleBtnModal.style.display = "none";
+        return;
+      }
       if (!window.google?.accounts?.id) return;
 
       window.google.accounts.id.initialize({
@@ -902,7 +961,7 @@
 
         if (res.status === 402 && data && data.error === "quota_exceeded") {
           showPaywall(data);
-          await refreshMe();
+          refreshMe();
           answerEl.textContent = "Free limit reached. Please upgrade to continue.";
           copyAllBtn.disabled = true;
           return;
@@ -925,7 +984,7 @@
           flashStatus(qStatus, "Generated.");
           addSavedQA(query, data.answer);
           renderSidebar();
-          await refreshMe();
+          refreshMe();
         } else {
           answerEl.textContent = (data.error || "No response.").trim();
           copyAllBtn.disabled = true;
@@ -970,28 +1029,53 @@
     });
 
     // ========= Consult Notes =========
-    smartDeviceBtn.addEventListener("click", () => { flashStatus(wrStatus, "Smart device data collection: coming soon."); });
+    const DEVICE_LABELS = {
+      ai_glasses: "AI glasses",
+      smart_watch: "Smart watch",
+      smart_ring: "Smart ring",
+      ecg_patch: "ECG patch / cardiac monitor",
+      bp_monitor: "Bluetooth blood pressure monitor",
+      cgm: "Continuous glucose monitor (CGM)",
+      pulse_oximeter: "Pulse oximeter",
+      smart_scale: "Smart scale / body composition",
+      sleep_tracker: "Sleep / recovery tracker",
+      spirometer: "Connected spirometer",
+      digital_stethoscope: "Digital stethoscope"
+    };
+
+    function updateConnectedDeviceUI(deviceKey){
+      const label = DEVICE_LABELS[deviceKey] || "";
+      if (!label) {
+        connectedDeviceBadge.style.display = "none";
+        connectedDeviceBadge.textContent = "";
+        return;
+      }
+      connectedDeviceBadge.style.display = "inline-flex";
+      connectedDeviceBadge.textContent = `Connected: ${label}`;
+    }
+
+    smartDeviceSelect?.addEventListener("change", () => {
+      const val = smartDeviceSelect.value;
+      try {
+        if (val) localStorage.setItem(STORE_CONNECTED_DEVICE, val);
+        else localStorage.removeItem(STORE_CONNECTED_DEVICE);
+      } catch {}
+
+      if (!val) {
+        updateConnectedDeviceUI("");
+        flashStatus(wrStatus, "Select a smart device to prepare data connection.");
+        return;
+      }
+
+      updateConnectedDeviceUI(val);
+      flashStatus(wrStatus, `${DEVICE_LABELS[val]} selected. Data capture routing and wearable display sync are ready for setup.`);
+    });
 
     copyWrBtn.addEventListener("click", async () => {
-      const text = (wrNote.value || "").trim();
+      const text = (generatedClinicalNote.value || wrNote.value || "").trim();
       if (!text) return;
       await copyText(text);
       flashStatus(wrStatus, "Copied.");
-    });
-
-    saveWrBtn.addEventListener("click", () => {
-      const text = (wrNote.value || "").trim();
-      if (!text) return;
-
-      const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
-      if (cmode === "handover") {
-        addSavedHandover(text);
-        flashStatus(wrStatus, "Saved handover.");
-      } else {
-        addSavedNote(text);
-        flashStatus(wrStatus, "Saved note.");
-      }
-      renderSidebar();
     });
 
     async function generateConsultOutput(){
@@ -1016,17 +1100,18 @@
 
         if (res.status === 402 && data && data.error === "quota_exceeded") {
           showPaywall(data);
-          await refreshMe();
+          refreshMe();
           answerEl.textContent = "Free limit reached. Please upgrade to continue.";
           copyAllBtn.disabled = true;
           return;
         }
 
         if (data.answer) {
+          generatedClinicalNote.value = data.answer;
           answerEl.innerHTML = buildStructuredHtml(data.answer);
           copyAllBtn.disabled = !(data.answer || "").trim();
-          flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Clinical note generated.");
-          await refreshMe();
+          flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : (cmode === "discharge_summary" ? "Discharge summary generated." : "Clinical note generated."));
+          refreshMe();
         } else {
           answerEl.textContent = (data.error || "No response.").trim();
           copyAllBtn.disabled = true;
@@ -1052,18 +1137,26 @@
       }
     });
 
-    newWrBtn.addEventListener("click", () => {
-      const current = (wrNote.value || "").trim();
-      if (current) {
-        const save = confirm("Save this before starting a new one?");
-        if (save) {
-          const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
-          if (cmode === "handover") addSavedHandover(current);
-          else addSavedNote(current);
+    clearWrBtn.addEventListener("click", () => {
+      const cmode = (consultModeSelect && consultModeSelect.value) ? consultModeSelect.value : "consult_note";
+      const generated = (generatedClinicalNote.value || "").trim();
+      const input = (wrNote.value || "").trim();
+      const doc = generated || input;
+
+      if (doc) {
+        if (cmode === "handover") {
+          addSavedHandover(doc);
+          flashStatus(wrStatus, "Cleared and saved to Handovers.");
+        } else {
+          addSavedNote(doc);
+          flashStatus(wrStatus, "Cleared and saved to Consultation Notes.");
         }
+      } else {
+        flashStatus(wrStatus, "Cleared.");
       }
+
       wrNote.value = "";
-      flashStatus(wrStatus, "Cleared.");
+      generatedClinicalNote.value = "";
       renderSidebar();
     });
 
@@ -1194,7 +1287,7 @@
       }
     }
 
-    dictateQuestionBtn.addEventListener("click", async () => {
+    dictateQuestionBtn?.addEventListener("click", async () => {
       const ok = await ensureMicPermission(qStatus);
       if (!ok) return;
       await initRecordersIfNeeded();
@@ -1203,7 +1296,7 @@
       else { dictateQuestionBtn.textContent = "🎙 Dictate"; qRecorder.stop(); }
     });
 
-    dictateWrBtn.addEventListener("click", async () => {
+    dictateWrBtn?.addEventListener("click", async () => {
       const ok = await ensureMicPermission(wrStatus);
       if (!ok) return;
       await initRecordersIfNeeded();
@@ -1212,8 +1305,32 @@
       else { dictateWrBtn.textContent = "🎙 Dictate"; nRecorder.stop(); }
     });
 
+
+    const DAYLIGHT_KEY = "vm_daylight_mode";
+    function applyDaylightMode(on){
+      document.body.classList.toggle("daylight", !!on);
+      if (daylightToggle) daylightToggle.checked = !!on;
+    }
+    if (daylightToggle) {
+      const savedDaylight = localStorage.getItem(DAYLIGHT_KEY) === "1";
+      applyDaylightMode(savedDaylight);
+      daylightToggle.addEventListener("change", () => {
+        const on = !!daylightToggle.checked;
+        localStorage.setItem(DAYLIGHT_KEY, on ? "1" : "0");
+        applyDaylightMode(on);
+      });
+    }
+
     // Init
     renderSidebar();
+
+    const savedDevice = (() => {
+      try { return localStorage.getItem(STORE_CONNECTED_DEVICE) || ""; } catch { return ""; }
+    })();
+    if (smartDeviceSelect && savedDevice && DEVICE_LABELS[savedDevice]) {
+      smartDeviceSelect.value = savedDevice;
+      updateConnectedDeviceUI(savedDevice);
+    }
     flashStatus(qStatus, "Ready. Enter=Generate, Shift+Enter=new line.");
     flashStatus(wrStatus, "Notes mic: idle. Ctrl/Cmd+Enter generates handover/note.");
 
@@ -1221,7 +1338,7 @@
       await ensureSessionCookie();
       setTimeout(async () => {
         await initGoogleSignIn();
-        await refreshMe();
+        refreshMe();
       }, 250);
     })();
   });

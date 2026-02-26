@@ -60,7 +60,20 @@ DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
 DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/completions").strip()
 
-WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
+# Runtime tuning (accuracy/speed)
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "small")
+WHISPER_COMPUTE_TYPE = (os.getenv("WHISPER_COMPUTE_TYPE") or "int8").strip()
+WHISPER_BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "8"))
+WHISPER_BEST_OF = int(os.getenv("WHISPER_BEST_OF", "5"))
+WHISPER_LANGUAGE = (os.getenv("WHISPER_LANGUAGE") or "en").strip() or "en"
+WHISPER_TEMPERATURE = float(os.getenv("WHISPER_TEMPERATURE", "0"))
+WHISPER_INITIAL_PROMPT = (
+    os.getenv("WHISPER_INITIAL_PROMPT")
+    or "Australian clinical dictation. Medical terminology may include: DVA, HbA1c, COPD, AF, eGFR, CRP, troponin, metoprolol, apixaban."
+)
+
+DEEPSEEK_MAX_TOKENS = int(os.getenv("DEEPSEEK_MAX_TOKENS", "1200"))
+DEEPSEEK_TEMPERATURE = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.15"))
 
 STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
@@ -388,7 +401,7 @@ def get_whisper_model():
                 _whisper_model = WhisperModel(
                     WHISPER_MODEL_SIZE,
                     device="cpu",
-                    compute_type="int8",
+                    compute_type=WHISPER_COMPUTE_TYPE,
                 )
     return _whisper_model
 
@@ -453,6 +466,86 @@ HANDOVER_SYSTEM_PROMPT = (
 )
 
 
+CLINICAL_PROMPT_APPEND = {
+    "clinical": "General clinical reasoning mode.",
+    "differential": (
+        "Prioritise broad differential diagnosis: rank likely and dangerous causes, "
+        "state supporting/opposing features for each, and include red-flag exclusion logic."
+    ),
+    "medication_review": (
+        "Focus on medication safety and optimisation: interactions, duplications, contraindications, "
+        "deprescribing opportunities, monitoring, and practical regimen simplification."
+    ),
+    "investigation_plan": (
+        "Focus on pragmatic investigation strategy: first-line tests, escalation triggers, "
+        "and how each result changes management."
+    ),
+}
+
+CONSULT_PROMPT_APPEND = {
+    "consult_note": "Build a polished consultation note from raw dictation.",
+    "handover": "Build a concise, verbal-ready clinical handover.",
+    "discharge_summary": (
+        "Build a concise discharge summary with diagnosis, treatment provided, "
+        "medication changes, pending tests, and explicit follow-up instructions."
+    ),
+}
+
+# -----------------------------------
+# Mode-aware prompt builders
+# -----------------------------------
+def build_generate_prompt(mode: str, query: str):
+    if mode.startswith("dva"):
+        header = build_dva_header(query)
+        referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
+        user_content = (
+            f"Referral intent: {referral_intent}\n\n"
+            f"{header}\n\n"
+            f"DETAILS:\n{query}\n\n"
+            "Follow DVA_META format then clinical headings."
+        )
+        return DVA_SYSTEM_PROMPT, user_content
+
+    mode_guidance = CLINICAL_PROMPT_APPEND.get(mode, CLINICAL_PROMPT_APPEND["clinical"])
+    user_content = (
+        f"Mode: {mode}\n"
+        f"Guidance: {mode_guidance}\n\n"
+        f"Clinical question:\n{query}\n\n"
+        "If pasted data is included, sort it into the correct headings."
+    )
+    return CLINICAL_SYSTEM_PROMPT, user_content
+
+
+def build_consult_prompt(mode: str, text: str):
+    guidance = CONSULT_PROMPT_APPEND.get(mode, CONSULT_PROMPT_APPEND["consult_note"])
+
+    if mode == "handover":
+        user_content = (
+            f"Guidance: {guidance}\n"
+            "Create a handover/presentation from the following raw dictation/pasted data. "
+            "If the context is not ED, adapt appropriately.\n\n"
+            f"{text}"
+        )
+        return HANDOVER_SYSTEM_PROMPT, user_content
+
+    if mode == "discharge_summary":
+        user_content = (
+            f"Guidance: {guidance}\n"
+            "Create a discharge summary from the following raw dictation/pasted data. "
+            "Do not invent facts. Ensure medication changes and follow-up actions are explicit.\n\n"
+            f"{text}"
+        )
+        return CONSULT_NOTE_SYSTEM_PROMPT, user_content
+
+    user_content = (
+        f"Guidance: {guidance}\n"
+        "Create a structured clinical note from the following raw dictation/pasted data. "
+        "Do not invent facts; organise clearly.\n\n"
+        f"{text}"
+    )
+    return CONSULT_NOTE_SYSTEM_PROMPT, user_content
+
+
 # -----------------------------------
 # DeepSeek call
 # -----------------------------------
@@ -468,9 +561,9 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": 0.25,
+        "temperature": DEEPSEEK_TEMPERATURE,
         "top_p": 0.9,
-        "max_tokens": 1800,
+        "max_tokens": DEEPSEEK_MAX_TOKENS,
     }
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -717,19 +810,8 @@ def generate():
         return blocked
 
     try:
-        if mode.startswith("dva"):
-            header = build_dva_header(query)
-            referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
-            user_content = (
-                f"Referral intent: {referral_intent}\n\n"
-                f"{header}\n\n"
-                f"DETAILS:\n{query}\n\n"
-                "Follow DVA_META format then clinical headings."
-            )
-            answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
-        else:
-            user_content = f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
-            answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+        system_prompt, user_content = build_generate_prompt(mode, query)
+        answer = call_deepseek(system_prompt, user_content)
 
         return jsonify({"answer": answer})
 
@@ -755,20 +837,8 @@ def consult():
         return blocked
 
     try:
-        if mode == "handover":
-            user_content = (
-                "Create a handover/presentation from the following raw dictation/pasted data. "
-                "If the context is not ED, adapt appropriately.\n\n"
-                f"{text}"
-            )
-            answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
-        else:
-            user_content = (
-                "Create a structured clinical note from the following raw dictation/pasted data. "
-                "Do not invent facts; organise clearly.\n\n"
-                f"{text}"
-            )
-            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+        system_prompt, user_content = build_consult_prompt(mode, text)
+        answer = call_deepseek(system_prompt, user_content)
 
         return jsonify({"answer": answer})
 
@@ -798,7 +868,15 @@ def transcribe():
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
             model = get_whisper_model()
-            segments, _info = model.transcribe(wav_path, beam_size=5, vad_filter=True)
+            segments, _info = model.transcribe(
+                wav_path,
+                beam_size=WHISPER_BEAM_SIZE,
+                best_of=WHISPER_BEST_OF,
+                language=WHISPER_LANGUAGE,
+                temperature=WHISPER_TEMPERATURE,
+                initial_prompt=WHISPER_INITIAL_PROMPT,
+                vad_filter=True,
+            )
 
             text = " ".join((seg.text or "").strip() for seg in segments).strip()
             return jsonify({"text": text})
