@@ -37,3 +37,5 @@ node_modules/
 .DS_Store
 
  624210a (Initial commit (Codex amendments))
+
+llm-to-tts-node/
