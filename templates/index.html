@@ -493,11 +493,15 @@
           <option value="dva_authority">DVA authority numbers</option>
 
           <!-- Keep your other modes -->
-          <option value="initial_consult">Initial patient consultation</option>
-          <option value="follow_up">Follow up review</option>
-          <option value="specialist_letter">Specialist letter</option>
-          <option value="discharge_summary">Discharge summary</option>
-        </select>
+          <select id="consultModeSelect" class="topic-search" style="max-width:320px;">
+            <option value="consult_note" selected>Create clinical note</option>
+            <option value="initial_consult">Initial patient consultation</option>
+            <option value="follow_up">Follow up review</option>
+            <option value="specialist_letter">Specialist letter</option>
+            <option value="discharge_summary">Discharge summary</option>
+            <option value="handover">Handover summary</option>
+            <option value="dva_authority">DVA authority numbers</option>
+          </select>
       </div>
     </div>
 
@@ -694,28 +698,30 @@
         const GOOGLE_CLIENT_ID = "{{ google_client_id|default('') }}".trim();
         const PATH = window.location.pathname || "";
         const IS_STRIPE_RETURN = PATH.startsWith("/pro/success") || PATH.startsWith("/pro/cancelled");
-
+        
         // App elements
         const modeSelect = document.getElementById("modeSelect");
-        const consultModeSelect = document.getElementById("consultModeSelect");
+        
         const clinicalQuestion = document.getElementById("clinicalQuestion");
         const generateBtn = document.getElementById("generateBtn");
         const dictateQuestionBtn = document.getElementById("dictateQuestionBtn");
         const incorrectQuestionBtn = document.getElementById("incorrectQuestionBtn");
         const clearQuestionBtn = document.getElementById("clearQuestionBtn");
-
+       
         const wrNote = document.getElementById("wrNote");
-        const wrOutput = document.getElementById("wrOutput");
-
+        
+        const consultModeSelect = document.getElementById("consultModeSelect");
+        const consultGenerateBtn = document.getElementById("consultGenerateBtn");
+       
         const connectDeviceBtn = document.getElementById("connectDeviceBtn");
         const deviceMenuPanel = document.getElementById("deviceMenuPanel");
-
-        const generateWrBtn = document.getElementById("generateWrBtn");
+        
         const dictateWrBtn = document.getElementById("dictateWrBtn");
         const incorrectWrBtn = document.getElementById("incorrectWrBtn");
         const copyWrBtn = document.getElementById("copyWrBtn");
-        const clearWrBtn = document.getElementById("clearWrBtn");
-
+        const saveWrBtn = document.getElementById("saveWrBtn");
+        const newWrBtn = document.getElementById("newWrBtn");
+        
         const answerEl = document.getElementById("answer");
         const answerLoader = document.getElementById("answerLoader");
         const copyAllBtn = document.getElementById("copyAllBtn");
@@ -1454,71 +1460,80 @@
           renderSidebar();
         });
 
-        // Consult modes (prefix prompt)
-        function consultPromptForMode(mode) {
-          const map = {
-            consult_note:
-              "Create a structured clinical note from the following raw dictation/pasted data. Do not invent facts; organise clearly.",
-            initial_consult:
-              "Create an initial patient consultation note (history, exam, assessment, plan). Do not invent facts.",
-            follow_up:
-              "Create a follow-up review note (interval history, response to treatment, current issues, plan). Do not invent facts.",
-            specialist_letter:
-              "Draft a concise specialist letter (summary, key findings, impression, recommendations). Do not invent facts.",
-            discharge_summary:
-              "Create a discharge summary (presentation, course, key results, discharge meds, follow-up, safety net). Do not invent facts.",
-            handover:
-              "Create a handover/presentation from the following raw dictation/pasted data. If the context is not ED, adapt appropriately.",
-          };
-          return map[mode] || map.consult_note;
-        }
+<script>
+  // Consult modes (prefix prompt)
+  function consultPromptForMode(mode) {
+    const map = {
+      consult_note:
+        "Create a structured clinical note from the following raw dictation/pasted data. Do not invent facts; organise clearly.",
+      initial_consult:
+        "Create an initial patient consultation note (history, exam, assessment, plan). Do not invent facts.",
+      follow_up:
+        "Create a follow-up review note (interval history, response to treatment, current issues, plan). Do not invent facts.",
+      specialist_letter:
+        "Draft a concise specialist letter (summary, key findings, impression, recommendations). Do not invent facts.",
+      discharge_summary:
+        "Create a discharge summary (presentation, course, key results, discharge meds, follow-up, safety net). Do not invent facts.",
+      handover:
+        "Create a clinician-to-clinician handover/presentation. Infer context (ED/ward/ICU/clinic) and tailor appropriately.",
+      dva_authority:
+        "Generate a DVA authority script justification. Include patient weight, BMI, DVA card type, accepted conditions, allied health involvement, missing info, and a call script for DVA."
+    };
+    return map[mode] || map.consult_note;
+  }
 
-        async function generateConsultOutput() {
-          const input = (wrNote.value || "").trim();
-          if (!input) return;
+  async function consultGenerate() {
+    const input = (wrNote.value || "").trim();
+    if (!input) return;
 
-          const cmode = consultModeSelect?.value || "consult_note";
-          const backendMode = cmode === "handover" ? "handover" : "consult_note";
-          const modePrefix = consultPromptForMode(cmode);
-          const text = `${modePrefix}\n\n${input}`.trim();
+    const cmode = consultModeSelect?.value || "consult_note";
+    const modePrefix = consultPromptForMode(cmode);
 
-          generateWrBtn.disabled = true;
-          answerLoader.classList.remove("hidden");
+    const text = `${modePrefix}\n\n${input}`.trim();
 
-          try {
-            const res = await apiFetch("/api/consult", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text, mode: backendMode }),
-            });
+    consultGenerateBtn.disabled = true;
+    answerLoader.classList.remove("hidden");
 
-            const data = await res.json();
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: text,
+          mode: cmode
+        })
+      });
 
-            if (res.status === 402 && data?.error === "quota_exceeded") {
-              showPaywall(data);
-              await refreshMe();
-              flashStatus(wrStatus, "Free limit reached.");
-              return;
-            }
+      const data = await res.json();
 
-            if (data.answer) {
-              answerEl.innerHTML = buildStructuredHtml(data.answer);
-              wrOutput.value = data.answer || "";
-              flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Output generated.");
-              await refreshMe();
-            } else {
-              wrOutput.value = "";
-              flashStatus(wrStatus, "Generate failed.");
-            }
-          } catch (e) {
-            console.error(e);
-            wrOutput.value = "";
-            flashStatus(wrStatus, "Generate error.");
-          } finally {
-            answerLoader.classList.add("hidden");
-            generateWrBtn.disabled = false;
-          }
-        }
+      if (data.answer) {
+        answerEl.innerHTML = buildStructuredHtml(data.answer);
+        flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : "Consult output generated.");
+      } else {
+        flashStatus(wrStatus, data.error || "Generate failed.");
+      }
+    } catch (e) {
+      console.error(e);
+      flashStatus(wrStatus, "Generate error.");
+    } finally {
+      answerLoader.classList.add("hidden");
+      consultGenerateBtn.disabled = false;
+    }
+  }
+
+  if (consultGenerateBtn) {
+    consultGenerateBtn.addEventListener("click", consultGenerate);
+  }
+
+  if (wrNote) {
+    wrNote.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        consultGenerate();
+      }
+    });
+  }
+</script>
 
         generateWrBtn.addEventListener("click", generateConsultOutput);
 
