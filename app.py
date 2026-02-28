@@ -74,15 +74,22 @@ if STRIPE_PRICE_ID_PRO:
 # -----------------------------------
 # Flask app
 # -----------------------------------
+import os
+# other imports...
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or APP_SECRET_KEY or "dev-insecure-change-me")
-
+app.config["VERSION"] = os.environ.get("RENDER_GIT_COMMIT", "local")
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=APP_BASE_URL.startswith("https://"),
 )
-
+@app.get("/version")
+def version():
+    import os
+    return {
+        "render_git_commit": os.environ.get("RENDER_GIT_COMMIT"),
+        "version": app.config.get("VERSION"),
+    }
 # -----------------------------------
 # DB
 # -----------------------------------
