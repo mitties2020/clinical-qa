@@ -74,15 +74,22 @@ if STRIPE_PRICE_ID_PRO:
 # -----------------------------------
 # Flask app
 # -----------------------------------
+import os
+# other imports...
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or APP_SECRET_KEY or "dev-insecure-change-me")
-
+app.config["VERSION"] = os.environ.get("RENDER_GIT_COMMIT", "local")
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=APP_BASE_URL.startswith("https://"),
 )
-
+@app.get("/version")
+def version():
+    import os
+    return {
+        "render_git_commit": os.environ.get("RENDER_GIT_COMMIT"),
+        "version": app.config.get("VERSION"),
+    }
 # -----------------------------------
 # DB
 # -----------------------------------
@@ -584,6 +591,9 @@ def sitemap():
 def index():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -591,6 +601,9 @@ def index():
 def pro_success():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -598,8 +611,10 @@ def pro_success():
 def pro_cancelled():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
-
 
 # -----------------------------------
 # API: session / me
