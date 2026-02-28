@@ -591,6 +591,9 @@ def sitemap():
 def index():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -598,6 +601,9 @@ def index():
 def pro_success():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -605,8 +611,10 @@ def pro_success():
 def pro_cancelled():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
-
 
 # -----------------------------------
 # API: session / me
