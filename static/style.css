@@ -1,3 +1,5 @@
+/* CSS_MARKER: 2c98837 */
+html { outline: 5px solid magenta !important; }
 :root {
   --bg: #050816;
   --bg-elevated: #0b1220;
