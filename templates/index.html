@@ -645,15 +645,18 @@ async function generateConsult() {
   }
 }
 
-  generateBtn.addEventListener("click", generateConsult);
+if (generateBtn) {
+  generateBtn.addEventListener("click", generateClinical);
+}
 
-  // Enter = Generate, Shift+Enter = newline
+if (clinicalQuestion) {
   clinicalQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      generateConsult();
+      generateClinical();
     }
   });
+}
 
   copyAllBtn.addEventListener("click", async () => {
     const text = (answerEl.innerText || "").trim();
@@ -681,6 +684,36 @@ async function generateConsult() {
     flashStatus(qStatus, "Cleared (saved).");
     renderSidebar();
   });
+// === Clinical Answer generate ===
+async function generateClinical() {
+  const input = (clinicalQuestion?.value || "").trim();
+  if (!input) return;
+
+  try {
+    generateBtn.disabled = true;
+
+    const res = await fetch("/api/clinical", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: input })
+    });
+
+    const data = await res.json();
+
+    if (data.answer) {
+      answerEl.innerText = data.answer;
+      copyAllBtn.disabled = false;
+      sendToConsultBtn.disabled = false;
+    } else {
+      answerEl.innerText = data.error || "Generate failed.";
+    }
+  } catch (e) {
+    console.error(e);
+    answerEl.innerText = "Generate error.";
+  } finally {
+    generateBtn.disabled = false;
+  }
+}
   // === Consultation generate ===
 async function generateConsult() {
   const input = (wrNote.value || "").trim();
