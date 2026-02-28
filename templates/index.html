@@ -645,13 +645,13 @@ async function generateConsult() {
   }
 }
 
-  generateBtn.addEventListener("click", generateClinical);
+  generateBtn.addEventListener("click", generateConsult);
 
   // Enter = Generate, Shift+Enter = newline
   clinicalQuestion.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      generateClinical();
+      generateConsult();
     }
   });
 
