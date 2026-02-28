@@ -1,3 +1,18 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.container,
+.main-container,
+.app-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
 /* CSS_MARKER: 2c98837 */
 html { outline: 5px solid magenta !important; }
 :root {
