@@ -58,3 +58,6 @@ __pycache__/
 llm-to-tts-node/
 my-project/
 
+*.db-wal
+*.db-shm*.db-wal
+*.db-shm
