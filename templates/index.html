@@ -981,7 +981,7 @@
           }
 
           copyAllBtn.disabled = !(data.answer || "").trim();
-          flashStatus(qStatus, "Generated.");
+          flashStatus(qStatus, data.fallback ? "Generated (local fallback mode)." : "Generated.");
           addSavedQA(query, data.answer);
           renderSidebar();
           refreshMe();
@@ -1110,7 +1110,8 @@
           generatedClinicalNote.value = data.answer;
           answerEl.innerHTML = buildStructuredHtml(data.answer);
           copyAllBtn.disabled = !(data.answer || "").trim();
-          flashStatus(wrStatus, cmode === "handover" ? "Handover generated." : (cmode === "discharge_summary" ? "Discharge summary generated." : "Clinical note generated."));
+          const baseMsg = cmode === "handover" ? "Handover generated." : (cmode === "discharge_summary" ? "Discharge summary generated." : "Clinical note generated.");
+          flashStatus(wrStatus, data.fallback ? `${baseMsg} (local fallback mode).` : baseMsg);
           refreshMe();
         } else {
           answerEl.textContent = (data.error || "No response.").trim();

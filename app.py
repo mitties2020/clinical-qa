@@ -546,6 +546,57 @@ def build_consult_prompt(mode: str, text: str):
     return CONSULT_NOTE_SYSTEM_PROMPT, user_content
 
 
+def local_fallback_answer(source_text: str, mode: str = "clinical") -> str:
+    """Return a safe local fallback so UI still works when AI provider is unavailable."""
+    snippet = (source_text or "").strip()
+    if len(snippet) > 1200:
+        snippet = snippet[:1200].rstrip() + "…"
+
+    if mode == "discharge_summary":
+        return (
+            "Summary\n"
+            "- Local fallback generated because AI provider is unavailable.\n"
+            "- Source details captured below.\n\n"
+            "Assessment\n"
+            f"- {snippet or 'No input provided.'}\n\n"
+            "Diagnosis\n"
+            "- Pending clinician confirmation.\n\n"
+            "Investigations\n"
+            "- Review available results and outstanding tests.\n\n"
+            "Treatment\n"
+            "- Continue/adjust treatment according to clinical judgement.\n\n"
+            "Monitoring\n"
+            "- Monitor symptoms and objective observations.\n\n"
+            "Follow-up & Safety Netting\n"
+            "- Arrange GP/specialist follow-up and provide return precautions.\n\n"
+            "Red Flags\n"
+            "- Escalate immediately for deterioration or concerning symptoms.\n\n"
+            "References\n"
+            "- Local fallback (no external AI response)."
+        )
+
+    return (
+        "Summary\n"
+        "- Local fallback generated because AI provider is unavailable.\n\n"
+        "Assessment\n"
+        f"- Source input: {snippet or 'No input provided.'}\n\n"
+        "Diagnosis\n"
+        "- Working diagnosis to be confirmed clinically.\n\n"
+        "Investigations\n"
+        "- Consider baseline investigations guided by presentation.\n\n"
+        "Treatment\n"
+        "- Provide management aligned with local policy and patient context.\n\n"
+        "Monitoring\n"
+        "- Reassess response and vital trends.\n\n"
+        "Follow-up & Safety Netting\n"
+        "- Document review timeframe and return precautions.\n\n"
+        "Red Flags\n"
+        "- Escalate urgent symptoms and clinical deterioration.\n\n"
+        "References\n"
+        "- Local fallback (no external AI response)."
+    )
+
+
 # -----------------------------------
 # DeepSeek call
 # -----------------------------------
@@ -795,9 +846,6 @@ def stripe_webhook():
 # -----------------------------------
 @app.post("/api/generate")
 def generate():
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     mode = (data.get("mode") or "clinical").strip().lower()
@@ -809,6 +857,9 @@ def generate():
     if blocked:
         return blocked
 
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"answer": local_fallback_answer(query, mode), "fallback": True, "warning": "DEEPSEEK_API_KEY missing"})
+
     try:
         system_prompt, user_content = build_generate_prompt(mode, query)
         answer = call_deepseek(system_prompt, user_content)
@@ -817,14 +868,11 @@ def generate():
 
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
+        return jsonify({"answer": local_fallback_answer(query, mode), "fallback": True, "warning": "AI provider unavailable"})
 
 
 @app.post("/api/consult")
 def consult():
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
     mode = (data.get("mode") or "consult_note").strip().lower()
@@ -836,6 +884,9 @@ def consult():
     if blocked:
         return blocked
 
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"answer": local_fallback_answer(text, mode), "fallback": True, "warning": "DEEPSEEK_API_KEY missing"})
+
     try:
         system_prompt, user_content = build_consult_prompt(mode, text)
         answer = call_deepseek(system_prompt, user_content)
@@ -844,7 +895,7 @@ def consult():
 
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
+        return jsonify({"answer": local_fallback_answer(text, mode), "fallback": True, "warning": "AI provider unavailable"})
 
 
 # -----------------------------------

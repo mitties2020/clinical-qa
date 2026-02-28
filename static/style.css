@@ -684,6 +684,12 @@ select.wr-mode-select {
   max-width: 100%;
 }
 
+.wr-card textarea {
+  float: none !important;
+  clear: both;
+  width: 100% !important;
+}
+
 .wr-card .generated-note-wrap {
   margin-left: 0;
 }
