@@ -1,10 +1,20 @@
-# app.py — FULL PASTEABLE VERSION (keeps your existing working structure)
-# ✅ Google sign-in (server verified)
-# ✅ Stripe checkout + webhook (plan upgrade)
+# app.py — VividMedi (Flask) — FULL PASTEABLE VERSION (Stripe SUBSCRIPTION via PRICE ID)
+# ✅ Google Sign-In (server verified)
+# ✅ Returns Bearer token to frontend (index.html expects data.token)
+# ✅ Stripe subscription checkout: $30/month, NO trial, uses PRICE id (price_...)
+# ✅ Webhook upgrades user via stripe_customer_id (reliable)
 # ✅ Quota tracking (guest/free/pro)
-# ✅ Whisper transcription via ffmpeg + faster-whisper
-# ✅ Device connect endpoint + DB table
-# ✅ NEW: Consultation mode "dva_authority" (DVA Authority Numbers pack) via /api/consult
+# ✅ DeepSeek generate + consult endpoints
+# ✅ Whisper transcription (MediaRecorder -> /api/transcribe)
+#
+# Render env vars you MUST set:
+# - FLASK_SECRET_KEY (or APP_SECRET_KEY)
+# - GOOGLE_CLIENT_ID
+# - DEEPSEEK_API_KEY
+# - STRIPE_SECRET_KEY (sk_live_...)
+# - STRIPE_WEBHOOK_SECRET (whsec_...)
+# - STRIPE_PRICE_ID_PRO=price_...
+# - APP_BASE_URL=https://www.vividmedi.com
 
 import os
 import re
@@ -18,17 +28,14 @@ from zoneinfo import ZoneInfo
 
 import requests
 import stripe
-from flask import Flask, request, jsonify, render_template, session, make_response, Response
-WhisperModel = None
-try:
-    from faster_whisper import WhisperModel
-except Exception:
-    WhisperModel = None
+from flask import Flask, request, jsonify, render_template, session, make_response
+from faster_whisper import WhisperModel
 
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
 
 # -----------------------------------
 # Load .env locally only (not Render)
@@ -40,6 +47,7 @@ if os.getenv("RENDER") is None:
         load_dotenv()
     except Exception:
         pass
+
 
 # -----------------------------------
 # Config
@@ -55,7 +63,7 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
-STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()
+STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()  # MUST be price_...
 APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
 
 CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
@@ -63,6 +71,7 @@ CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
+# HARD GUARD: prevents passing plink_ or URL as price
 if STRIPE_PRICE_ID_PRO:
     if STRIPE_PRICE_ID_PRO.startswith("plink_") or STRIPE_PRICE_ID_PRO.startswith("http"):
         raise RuntimeError(
@@ -71,27 +80,23 @@ if STRIPE_PRICE_ID_PRO:
     if not STRIPE_PRICE_ID_PRO.startswith("price_"):
         raise RuntimeError(f"STRIPE_PRICE_ID_PRO must start with 'price_': {STRIPE_PRICE_ID_PRO}")
 
+
 # -----------------------------------
 # Flask app
 # -----------------------------------
-import os
-# other imports...
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.config["VERSION"] = os.environ.get("RENDER_GIT_COMMIT", "local")
+app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or APP_SECRET_KEY or "dev-insecure-change-me")
+
+# Cookie hardening (Flask session cookie)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=APP_BASE_URL.startswith("https://"),
 )
-@app.get("/version")
-def version():
-    import os
-    return {
-        "render_git_commit": os.environ.get("RENDER_GIT_COMMIT"),
-        "version": app.config.get("VERSION"),
-    }
+
+
 # -----------------------------------
-# DB
+# DB (SQLite)
 # -----------------------------------
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
@@ -99,6 +104,8 @@ DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 def db_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+
+    # Pragmas: better concurrency & safety for web apps
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
@@ -114,7 +121,7 @@ def db_init():
             email TEXT UNIQUE NOT NULL,
             name TEXT,
             picture TEXT,
-            plan TEXT NOT NULL DEFAULT 'free',
+            plan TEXT NOT NULL DEFAULT 'free',         -- free | pro
             email_verified INTEGER NOT NULL DEFAULT 1,
             stripe_customer_id TEXT,
             stripe_subscription_id TEXT,
@@ -125,24 +132,11 @@ def db_init():
         conn.execute(
             """
         CREATE TABLE IF NOT EXISTS usage (
-            actor_type TEXT NOT NULL,
+            actor_type TEXT NOT NULL,   -- guest | user
             actor_id TEXT NOT NULL,
             used INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (actor_type, actor_id)
-        )
-        """
-        )
-        # Store device connections by actor (guest/user)
-        conn.execute(
-            """
-        CREATE TABLE IF NOT EXISTS device_connections (
-            actor_type TEXT NOT NULL,         -- guest | user
-            actor_id TEXT NOT NULL,
-            device TEXT NOT NULL,             -- ai_glasses | smart_watch | smart_ring | ai_necklace
-            status TEXT NOT NULL DEFAULT 'connected',
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (actor_type, actor_id, device)
         )
         """
         )
@@ -151,8 +145,9 @@ def db_init():
 
 db_init()
 
+
 # -----------------------------------
-# Auth token (bearer)
+# Token auth helpers (Bearer)
 # -----------------------------------
 serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
 
@@ -183,6 +178,7 @@ def get_user_from_bearer():
 
 
 def get_authed_user():
+    # Prefer Bearer (frontend apiFetch), fallback to session cookie
     u = get_user_from_bearer()
     if u:
         return u
@@ -195,7 +191,7 @@ def get_authed_user():
 
 
 # -----------------------------------
-# Guest cookie
+# Guest cookie (quota tracking)
 # -----------------------------------
 def get_guest_id():
     return request.cookies.get("vivid_guest") or ""
@@ -209,7 +205,7 @@ def ensure_guest_cookie(resp):
             "vivid_guest",
             gid,
             httponly=True,
-            secure=APP_BASE_URL.startswith("https://"),
+            secure=APP_BASE_URL.startswith("https://"),  # local dev on http://localhost needs False
             samesite="Lax",
             max_age=60 * 60 * 24 * 365,
             path="/",
@@ -218,13 +214,16 @@ def ensure_guest_cookie(resp):
 
 
 # -----------------------------------
-# Helpers
+# Time helpers
 # -----------------------------------
 def now_awst() -> str:
     dt = datetime.now(ZoneInfo("Australia/Perth"))
     return dt.strftime("%d %b %Y, %H:%M (AWST)")
 
 
+# -----------------------------------
+# DVA header helpers
+# -----------------------------------
 def extract_field(text: str, labels):
     if not text:
         return ""
@@ -275,7 +274,7 @@ def build_dva_header(user_text: str) -> str:
 
 
 # -----------------------------------
-# Users + plan upgrades
+# User DB helpers
 # -----------------------------------
 def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
     email = (email or "").strip().lower()
@@ -330,7 +329,7 @@ def downgrade_user_to_free_by_customer(customer_id: str):
 
 
 # -----------------------------------
-# Usage/quota
+# Usage / quota
 # -----------------------------------
 def usage_get(actor_type: str, actor_id: str) -> int:
     if not actor_id:
@@ -368,6 +367,11 @@ def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
 
 
 def actor_and_limit():
+    """
+    Guest: 10 total generations
+    Logged-in free: 11 total generations
+    Pro: effectively unlimited
+    """
     u = get_authed_user()
     if u:
         actor_type = "user"
@@ -404,6 +408,9 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
 
 
 def enforce_quota_or_402():
+    """
+    Fix: do NOT increment before checking.
+    """
     actor_type, actor_id, limit, u = actor_and_limit()
     used_before = usage_get(actor_type, actor_id)
     if used_before >= limit:
@@ -414,7 +421,7 @@ def enforce_quota_or_402():
 
 
 # -----------------------------------
-# Whisper
+# Whisper model (load once)
 # -----------------------------------
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
@@ -426,7 +433,11 @@ def get_whisper_model():
     if _whisper_model is None:
         with _whisper_init_lock:
             if _whisper_model is None:
-                _whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
+                _whisper_model = WhisperModel(
+                    WHISPER_MODEL_SIZE,
+                    device="cpu",
+                    compute_type="int8",
+                )
     return _whisper_model
 
 
@@ -489,30 +500,9 @@ HANDOVER_SYSTEM_PROMPT = (
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
 
-# NEW: dedicated DVA authority request pack prompt (does NOT alter your existing modes)
-DVA_AUTHORITY_SYSTEM_PROMPT = (
-    "You are an Australian clinician assisting with DVA authority number requests.\n\n"
-    "Do NOT invent details. If missing, list them clearly.\n"
-    "Use Australian spelling. Keep it usable for a real phone call to DVA.\n\n"
-    "OUTPUT MUST USE THESE HEADINGS EXACTLY:\n"
-    "Call Prep Summary\n"
-    "Eligibility Check\n"
-    "Key Data for DVA Call\n"
-    "Proposed Authority Script Text\n"
-    "Missing Information\n"
-    "Risks / Audit Sensitivities\n\n"
-    "REQUIREMENTS:\n"
-    "- Identify: current weight, baseline weight if provided, % loss if possible, height, BMI\n"
-    "- Identify: DVA card type (Gold vs White) and implications (White card needs accepted condition relevance)\n"
-    "- Identify: accepted conditions IF provided; if not provided and White card suspected, flag clearly\n"
-    "- Identify: allied health involvement (dietitian, exercise physiologist, other) and dates if available\n"
-    "- Identify: current medication + dose + duration, adherence, tolerance/side effects\n"
-    "- State: whether likely DVA criteria are met based ONLY on provided info; if unclear, say so\n"
-    "- Provide: a short phone script (what to say, in order) and a concise paste-into-script justification paragraph\n"
-)
 
 # -----------------------------------
-# DeepSeek client
+# DeepSeek call
 # -----------------------------------
 http = requests.Session()
 
@@ -531,7 +521,10 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
         "top_p": 0.9,
         "max_tokens": 1800,
     }
-    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
     resp = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=70)
     resp.raise_for_status()
@@ -541,7 +534,7 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 
 
 # -----------------------------------
-# Health routes
+# Health checks
 # -----------------------------------
 @app.get("/health")
 def health():
@@ -556,33 +549,7 @@ def healthz():
 @app.get("/_ping")
 def ping():
     return "pong", 200
-@app.get("/sitemap.xml")
-def sitemap():
-    base = APP_BASE_URL.rstrip("/")
-    lastmod = datetime.utcnow().date().isoformat()
 
-    # Keep this list to your *public* pages only
-    urls = [
-        (f"{base}/", "daily", "1.0"),
-        # (f"{base}/pricing", "weekly", "0.8"),
-        # (f"{base}/about", "monthly", "0.5"),
-    ]
-
-    xml = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ]
-
-    for loc, changefreq, priority in urls:
-        xml.append("  <url>")
-        xml.append(f"    <loc>{loc}</loc>")
-        xml.append(f"    <lastmod>{lastmod}</lastmod>")
-        xml.append(f"    <changefreq>{changefreq}</changefreq>")
-        xml.append(f"    <priority>{priority}</priority>")
-        xml.append("  </url>")
-
-    xml.append("</urlset>")
-    return Response("\n".join(xml), mimetype="application/xml")
 
 # -----------------------------------
 # Pages
@@ -591,9 +558,6 @@ def sitemap():
 def index():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -601,9 +565,6 @@ def index():
 def pro_success():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
     return resp
 
 
@@ -611,13 +572,11 @@ def pro_success():
 def pro_cancelled():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
     return resp
 
+
 # -----------------------------------
-# API: session / me
+# Session utility endpoint
 # -----------------------------------
 @app.get("/api/session")
 def api_session():
@@ -626,6 +585,9 @@ def api_session():
     return resp
 
 
+# -----------------------------------
+# Me endpoint
+# -----------------------------------
 @app.get("/api/me")
 def api_me():
     u = get_authed_user()
@@ -662,10 +624,11 @@ def auth_google():
 
         email = (info.get("email") or "").strip().lower()
         name = (info.get("name") or "") or (info.get("given_name") or "")
-        picture = info.get("picture") or ""
+        picture = (info.get("picture") or "")
 
         user = create_or_get_user_by_email(email=email, name=name, picture=picture)
 
+        # Optional: auto-pro for creator email
         if CREATOR_EMAIL and email == CREATOR_EMAIL and user.get("plan") != "pro":
             upgrade_user_to_pro(user["id"])
             user["plan"] = "pro"
@@ -687,7 +650,7 @@ def auth_logout():
 
 
 # -----------------------------------
-# Stripe: checkout
+# Stripe checkout (SUBSCRIPTION)
 # -----------------------------------
 @app.post("/api/stripe/create-checkout-session")
 def stripe_create_checkout_session():
@@ -702,6 +665,8 @@ def stripe_create_checkout_session():
 
     try:
         customer_id = u.get("stripe_customer_id")
+
+        # Create Stripe customer ONCE
         if not customer_id:
             customer = stripe.Customer.create(email=u["email"], metadata={"user_id": u["id"]})
             customer_id = customer.id
@@ -718,6 +683,7 @@ def stripe_create_checkout_session():
             metadata={"user_id": u["id"], "product": "vividmedi_pro"},
             client_reference_id=u["id"],
         )
+
         return jsonify({"url": sess.url})
 
     except Exception as e:
@@ -726,7 +692,7 @@ def stripe_create_checkout_session():
 
 
 # -----------------------------------
-# Stripe: webhook
+# Stripe webhook — upgrades user via stripe_customer_id (reliable)
 # -----------------------------------
 @app.post("/api/stripe/webhook")
 def stripe_webhook():
@@ -747,6 +713,7 @@ def stripe_webhook():
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
+    # 1) Capture IDs at checkout completion (may not yet be paid/active)
     if etype == "checkout.session.completed":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
@@ -760,6 +727,8 @@ def stripe_webhook():
                     )
                     conn.commit()
 
+    # 2) Upgrade when payment succeeds (most reliable)
+    # invoice.paid includes subscription + customer
     if etype == "invoice.paid":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
@@ -773,6 +742,7 @@ def stripe_webhook():
                     stripe_subscription_id=subscription_id,
                 )
 
+    # 3) Handle subscription status transitions
     if etype in ("customer.subscription.created", "customer.subscription.updated"):
         sub = obj
         customer_id = sub.get("customer")
@@ -796,43 +766,7 @@ def stripe_webhook():
 
 
 # -----------------------------------
-# Device connect endpoint (stores per actor)
-# -----------------------------------
-@app.post("/api/device/connect")
-def device_connect():
-    data = request.get_json(silent=True) or {}
-    device = (data.get("device") or "").strip().lower()
-
-    allowed = {"ai_glasses", "smart_watch", "smart_ring", "ai_necklace"}
-    if device not in allowed:
-        return jsonify({"error": "invalid_device"}), 400
-
-    u = get_authed_user()
-    if u:
-        actor_type, actor_id = "user", u["id"]
-    else:
-        gid = get_guest_id()
-        if not gid:
-            return jsonify({"error": "missing_guest"}), 400
-        actor_type, actor_id = "guest", gid
-
-    with db_conn() as conn:
-        conn.execute(
-            """
-            INSERT INTO device_connections (actor_type, actor_id, device, status, updated_at)
-            VALUES (?, ?, ?, 'connected', ?)
-            ON CONFLICT(actor_type, actor_id, device)
-            DO UPDATE SET status='connected', updated_at=excluded.updated_at
-            """,
-            (actor_type, actor_id, device, datetime.utcnow().isoformat()),
-        )
-        conn.commit()
-
-    return jsonify({"ok": True, "device": device, "status": "connected"})
-
-
-# -----------------------------------
-# Main generate endpoint (clinical + DVA D0904)
+# AI endpoints
 # -----------------------------------
 @app.post("/api/generate")
 def generate():
@@ -854,8 +788,10 @@ def generate():
         if mode.startswith("dva"):
             header = build_dva_header(query)
             referral_intent = (
-                "D0904 new" if mode == "dva_new"
-                else "D0904 renewal" if mode == "dva_renew"
+                "D0904 new"
+                if mode == "dva_new"
+                else "D0904 renewal"
+                if mode == "dva_renew"
                 else "D0904 (unspecified)"
             )
             user_content = (
@@ -867,8 +803,7 @@ def generate():
             answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
         else:
             user_content = (
-                f"Clinical question:\n{query}\n\n"
-                "If pasted data is included (old notes/labs/imaging), extract it and sort it into the correct headings."
+                f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
             )
             answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
 
@@ -879,9 +814,6 @@ def generate():
         return jsonify({"error": "AI request failed"}), 502
 
 
-# -----------------------------------
-# Consult endpoint (notes / handover / NEW: DVA authority numbers)
-# -----------------------------------
 @app.post("/api/consult")
 def consult():
     if not DEEPSEEK_API_KEY:
@@ -899,29 +831,17 @@ def consult():
         return blocked
 
     try:
-        # HANDOVER
-        if mode in ("handover", "handover_summary"):
+        if mode == "handover":
             user_content = (
-                "Create a clinician-to-clinician handover/presentation from the following raw dictation/pasted data. "
-                "Default to ED-style handover, but if context clearly fits another setting (ward/ICU/GP/psych), adapt accordingly. "
-                "Do not invent facts. If pasted data is messy, reorganise cleanly.\n\n"
+                "Create a handover/presentation from the following raw dictation/pasted data. "
+                "If the context is not ED, adapt appropriately.\n\n"
                 f"{text}"
             )
             answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
-
-        # NEW: DVA AUTHORITY NUMBERS
-        elif mode in ("dva_authority", "dva_authority_numbers", "dva_script", "authority"):
-            user_content = (
-                "Generate a DVA AUTHORITY NUMBER REQUEST PACK for the following case.\n\n"
-                f"{text}"
-            )
-            answer = call_deepseek(DVA_AUTHORITY_SYSTEM_PROMPT, user_content)
-
-        # DEFAULT: consult note
         else:
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
-                "Do not invent facts; organise clearly. If there are pasted investigations/history, format them neatly.\n\n"
+                "Do not invent facts; organise clearly.\n\n"
                 f"{text}"
             )
             answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
@@ -934,7 +854,7 @@ def consult():
 
 
 # -----------------------------------
-# Transcription endpoint
+# Transcribe endpoint
 # -----------------------------------
 @app.post("/api/transcribe")
 def transcribe():
