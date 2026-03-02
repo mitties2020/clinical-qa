@@ -654,3 +654,88 @@ select,
   border-right-color: var(--accent-2);
   animation: spin 0.7s linear infinite;
 }
+/* ===== UI FIX PATCH (centering + modern layout) ===== */
+
+/* Centre the app on wide screens */
+:root {
+  --app-max: 1200px;
+}
+
+body {
+  margin: 0;
+}
+
+.main-container,
+.app-wrapper,
+.container {
+  max-width: var(--app-max);
+  margin: 0 auto;          /* centres */
+  padding: 18px 16px;
+}
+
+/* Section blocks */
+.section,
+.panel,
+.card {
+  width: 100%;
+}
+
+/* Two big areas: Consultation + Answers */
+.vm-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+/* Panels */
+.vm-panel {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(6px);
+  padding: 14px;
+}
+
+/* Inputs/outputs should be big and centred */
+.vm-textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.20);
+  color: rgba(255,255,255,0.92);
+  padding: 12px 12px;
+  outline: none;
+}
+
+.vm-textarea:focus {
+  border-color: rgba(51,230,166,0.55);
+  box-shadow: 0 0 0 3px rgba(51,230,166,0.12);
+}
+
+/* Button row stays tidy */
+.vm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Make small status text look nicer */
+.vm-hint {
+  margin-top: 8px;
+  opacity: 0.78;
+  font-size: 0.92rem;
+}
+
+/* On very wide screens, keep it centred with breathing room */
+@media (min-width: 1400px) {
+  .main-container,
+  .app-wrapper,
+  .container {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+}
