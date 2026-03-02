@@ -739,3 +739,47 @@ body {
     padding-right: 22px;
   }
 }
+/* ===== Layout centring + nicer cards ===== */
+
+:root { --app-max: 1200px; }
+
+/* Centre the whole content area */
+.container, .main-container, .app-wrapper, main {
+  max-width: var(--app-max);
+  margin: 0 auto;
+  padding: 18px 16px;
+}
+
+/* Cards should take full width (prevents left-squash) */
+.card, .wr-card {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Textareas should always be full width */
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 220px;
+  border-radius: 12px;
+}
+
+/* Make the Answer box bigger */
+#answer.textarea { min-height: 320px; }
+
+/* Keep buttons aligned neatly */
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Optional: subtle premium look */
+.card {
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(6px);
+}
