@@ -1,9 +1,6 @@
 services:
   - type: web
     name: clinical-qa
-    env: python
+    env: docker
     plan: standard
-    buildCommand: |
-      apt-get update && apt-get install -y ffmpeg
-      pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 180 --access-logfile - --error-logfile -
+    dockerfilePath: ./Dockerfile
