@@ -35,7 +35,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Answers section
   bind("wrNote", "generateBtn");       // if your input box is wrNote
+  
   // If your answers input is different, add another bind line.
+  function setAnswerText(text) {
+  const el = document.getElementById("answer");
+  if (!el) return;
+  if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") el.value = text;
+  else el.textContent = text;
+}
 
   // Consultation section
   bind("wrNoteConsult", "consultGenerateBtn"); // if your consult input is wrNoteConsult
