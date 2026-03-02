@@ -18,6 +18,26 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("Checkout error:", err);
       alert("Could not start checkout: " + err.message);
-    }
-  });
-});
+      // ===== Enter-to-Generate patch (Shift+Enter keeps newline) =====
+(function bindEnterToGenerate() {
+  function bind(textareaId, buttonId) {
+    const ta = document.getElementById(textareaId);
+    const btn = document.getElementById(buttonId);
+    if (!ta || !btn) return;
+
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  }
+
+  // Answers section
+  bind("wrNote", "generateBtn");       // if your input box is wrNote
+  // If your answers input is different, add another bind line.
+
+  // Consultation section
+  bind("wrNoteConsult", "consultGenerateBtn"); // if your consult input is wrNoteConsult
+})();
+
