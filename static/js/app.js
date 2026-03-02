@@ -32,7 +32,24 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+  // Enter = Generate, Shift+Enter = newline (doesn't change backend)
+(function bindEnterToGenerate() {
+  function bind(textareaId, buttonId) {
+    const ta = document.getElementById(textareaId);
+    const btn = document.getElementById(buttonId);
+    if (!ta || !btn) return;
 
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  }
+
+  bind("clinicalQuestion", "generateBtn"); // Clinical box
+  bind("wrNote", "consultGenerateBtn");    // Consult box
+})();
   // Answers section
   bind("wrNote", "generateBtn");       // if your input box is wrNote
   
