@@ -120,7 +120,7 @@
               <textarea id="clinicalInput" class="input-area" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
               <div class="card-footer">
                 <button id="generateBtn" class="btn-primary">Generate</button>
-                <span class="hint">Press Shift+Enter or click Generate</span>
+                <span class="hint">Press Enter to generate</span>
               </div>
             </section>
 
@@ -152,7 +152,7 @@
 
             <div class="card-footer">
               <button id="generateConsultBtn" class="btn-primary">Generate Note</button>
-              <span class="hint">Shift+Enter or click Generate</span>
+              <span class="hint">Press Enter to generate</span>
             </div>
 
             <div class="divider"></div>
@@ -446,7 +446,7 @@ async function generateClinical() {
 
 generateBtn.addEventListener('click', generateClinical);
 clinicalInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.shiftKey) {
+  if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
     e.preventDefault();
     generateClinical();
   }
@@ -523,7 +523,7 @@ async function generateConsult() {
 
 generateConsultBtn.addEventListener('click', generateConsult);
 consultInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.shiftKey) {
+  if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
     e.preventDefault();
     generateConsult();
   }
