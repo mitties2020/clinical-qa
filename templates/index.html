@@ -2,201 +2,314 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VividMedi</title>
+  <title>VividMedi - Clinical AI Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=config['VERSION']) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
 <div class="app-root">
-<div class="shell">
-<div class="layout">
+  <div class="shell">
+    <div class="layout">
 
-<!-- ================= SIDEBAR ================= -->
-<aside class="sidebar">
-  <div class="sidebar-header">
-    <div class="brand-title">VividMedi</div>
-    <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
-  </div>
+      <!-- ================= SIDEBAR ================= -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="brand-title">VividMedi</div>
+          <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
+        </div>
 
-  <div class="sidebar-subhead">Saved Clinical Questions</div>
-  <div id="savedQuestionsList" class="conversation-list"></div>
+        <div class="sidebar-subhead">Saved Clinical Questions</div>
+        <div id="savedQuestionsList" class="conversation-list"></div>
 
-  <div class="sidebar-subhead">Consultation Notes</div>
-  <div id="savedWrList" class="conversation-list"></div>
+        <div class="sidebar-subhead">Consultation Notes</div>
+        <div id="savedWrList" class="conversation-list"></div>
 
-  <div class="sidebar-subhead">Handovers</div>
-  <div id="savedHandoverList" class="conversation-list"></div>
-</aside>
+        <div class="sidebar-subhead">Handovers</div>
+        <div id="savedHandoverList" class="conversation-list"></div>
 
-<!-- ================= MAIN ================= -->
-<div class="main-region">
+        <div class="sidebar-footer">
+          <div id="userStatus" style="font-size:11px; padding: 10px 0; border-top: 1px solid rgba(148,163,253,0.15); margin-top: 10px; color: rgba(229,231,235,0.70);">
+            Loading...
+          </div>
+        </div>
+      </aside>
 
-<header class="header">
-  <h1 class="brand-header__name">VividMedi</h1>
-  <div id="gSignIn"></div>
-</header>
+      <!-- ================= MAIN ================= -->
+      <div class="main-region">
 
-<main>
+        <header class="header">
+          <div class="header-top">
+            <h1 class="brand-header__name">VividMedi</h1>
+            <div class="header-actions">
+              <div id="gSignIn"></div>
+              <button id="upgradeBtn" class="btn btn-primary" style="display: none;">Upgrade to Pro</button>
+              <button id="logoutBtn" class="btn btn-secondary" style="display: none;">Logout</button>
+            </div>
+          </div>
+        </header>
 
-<div class="grid">
+        <main>
+          <div class="grid">
 
-<!-- ========= CLINICAL QUESTION ========= -->
-<section class="card">
-  <label class="label">Clinical</label>
+            <!-- ========= CLINICAL QUESTION ========= -->
+            <section class="card">
+              <label class="label">Clinical Question</label>
+              <textarea id="clinicalQuestion" class="textarea" rows="8" placeholder="Paste clinical notes, exam findings, or ask a clinical question..."></textarea>
+              <div class="actions">
+                <button id="generateBtn" class="btn btn-primary">Generate Answer</button>
+              </div>
+              <div id="qStatus" class="mic-status"></div>
+            </section>
 
-  <textarea id="clinicalQuestion" class="textarea" rows="7"></textarea>
+            <!-- ========= ANSWER ========= -->
+            <section class="card">
+              <div class="output-header">
+                <h2 class="output-title">Answer</h2>
+                <button id="copyAllBtn" class="btn btn-secondary" disabled>Copy</button>
+              </div>
+              <div id="answerLoader" class="hidden loading-state">
+                <span class="loader"></span>
+                <span>Generating…</span>
+              </div>
+              <textarea id="answer" class="textarea" rows="14" placeholder="Your answer will appear here..."></textarea>
+            </section>
 
-  <div class="actions">
-    <button id="generateBtn" class="btn btn-primary">Generate</button>
-  </div>
+            <!-- ========= CONSULTATION NOTES ========= -->
+            <section class="card wr-card">
+              <div class="wr-head">
+                <label class="label" style="margin: 0;">Consultation Notes</label>
+                <div class="actions">
+                  <button id="consultGenerateBtn" class="btn btn-primary">Generate</button>
+                  <span id="wrAnswerLoader" class="hidden loading-state">
+                    <span class="loader"></span>
+                    <span>Generating…</span>
+                  </span>
+                </div>
+              </div>
 
-  <div id="qStatus" class="mic-status"></div>
-</section>
+              <textarea id="wrNote" class="textarea" rows="10" placeholder="Paste raw dictation or consultation notes..."></textarea>
+              <div id="wrStatus" class="mic-status"></div>
 
-<!-- ========= ANSWER ========= -->
-<section class="card">
-  <div class="output-header">
-    <h2>Answer</h2>
-    <button id="copyAllBtn" class="btn" disabled>Copy</button>
-  </div>
+              <div class="divider-spacer"></div>
 
-  <div id="answerLoader" class="hidden">Generating…</div>
+              <label class="label">Consult Output</label>
+              <textarea id="wrOutput" class="textarea" rows="10" placeholder="Structured output will appear here..."></textarea>
+            </section>
 
-  <!-- single big editable output box -->
-  <textarea id="answer" class="textarea" rows="12" placeholder="Your answer will appear here..."></textarea>
-</section>
+          </div>
+        </main>
 
-<!-- ========= CONSULTATION ========= -->
-<section class="card wr-card">
-
-  <div class="wr-head">
-    <div class="label">Consultation Notes</div>
-
-    <div class="actions">
-      <button id="consultGenerateBtn" class="btn btn-primary">Generate</button>
-      <span id="wrAnswerLoader" class="hidden">Generating…</span>
+      </div>
     </div>
   </div>
-
-  <textarea id="wrNote" class="textarea" rows="10"></textarea>
-  <div id="wrStatus" class="mic-status"></div>
-
-  <div class="divider-spacer"></div>
-
-  <div class="label">Consult Output</div>
-  <textarea id="wrOutput" class="textarea" rows="10"></textarea>
-
-</section>
-
-</main>
-
-</div>
-</div>
 </div>
 
 <script>
-window.addEventListener("DOMContentLoaded", () => {
+// ===== Initialize app state =====
+let currentUser = null;
 
+async function updateUserStatus() {
+  try {
+    const res = await fetch("/api/me");
+    const data = await res.json();
+    
+    currentUser = data;
+    
+    const upgradeBtn = document.getElementById("upgradeBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const userStatus = document.getElementById("userStatus");
+    
+    if (data.logged_in) {
+      userStatus.innerHTML = `
+        <div style="font-weight: 600; color: rgba(245,247,255,0.92);">${data.email}</div>
+        <div style="margin-top: 4px; font-size: 10px;">Plan: <strong>${data.plan.toUpperCase()}</strong></div>
+        <div style="margin-top: 2px; font-size: 10px;">Usage: ${data.used}/${data.limit}</div>
+      `;
+      upgradeBtn.style.display = data.plan === "pro" ? "none" : "block";
+      logoutBtn.style.display = "block";
+    } else {
+      userStatus.innerHTML = `<div style="color: rgba(229,231,235,0.70);">Not logged in</div>`;
+      upgradeBtn.style.display = "none";
+      logoutBtn.style.display = "none";
+    }
+  } catch (e) {
+    console.error("Failed to get user status:", e);
+  }
+}
+
+// Google Sign-In
+function onSignIn(response) {
+  fetch("/auth/google", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential: response.credential })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.ok && data.token) {
+      localStorage.setItem("auth_token", data.token);
+      updateUserStatus();
+      document.getElementById("gSignIn").style.display = "none";
+    }
+  })
+  .catch(e => console.error("Sign-in error:", e));
+}
+
+// Logout
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await fetch("/auth/logout", { method: "POST" });
+  localStorage.removeItem("auth_token");
+  window.location.reload();
+});
+
+// Upgrade to Pro
+document.getElementById("upgradeBtn").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/stripe/create-checkout-session", { method: "POST" });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert("Failed to start checkout");
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+});
+
+// ===== Clinical Generation =====
 const clinicalQuestion = document.getElementById("clinicalQuestion");
 const generateBtn = document.getElementById("generateBtn");
 const answerEl = document.getElementById("answer");
 const answerLoader = document.getElementById("answerLoader");
 const copyAllBtn = document.getElementById("copyAllBtn");
-
-const wrNote = document.getElementById("wrNote");
-const wrOutput = document.getElementById("wrOutput");
-const consultGenerateBtn = document.getElementById("consultGenerateBtn");
-const wrAnswerLoader = document.getElementById("wrAnswerLoader");
-
 const qStatus = document.getElementById("qStatus");
-const wrStatus = document.getElementById("wrStatus");
-
-function flash(el,msg){ if(el) el.textContent = msg }
 
 async function generateClinical() {
   const input = (clinicalQuestion.value || "").trim();
-  if (!input) return;
+  if (!input) {
+    alert("Please enter a clinical question or notes");
+    return;
+  }
 
   generateBtn.disabled = true;
   answerLoader.classList.remove("hidden");
+  answerEl.value = "";
 
   try {
-    const res = await fetch("/api/clinical", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ text: input })
+    const token = localStorage.getItem("auth_token");
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query: input, mode: "clinical" })
     });
 
     const data = await res.json();
 
-    if (data.answer){
-      answerEl.innerText = data.answer;
+    if (res.status === 402) {
+      alert("Quota exceeded. " + (data.headline || ""));
+    } else if (data.answer) {
+      answerEl.value = data.answer;
       copyAllBtn.disabled = false;
     } else {
-      answerEl.innerText = data.error || "Generate failed.";
+      answerEl.value = data.error || "Generation failed";
     }
-
-  } catch(e){
-    answerEl.innerText = "Generate error.";
+  } catch (e) {
+    answerEl.value = "Error: " + e.message;
   } finally {
     answerLoader.classList.add("hidden");
     generateBtn.disabled = false;
   }
 }
 
+generateBtn.addEventListener("click", generateClinical);
+clinicalQuestion.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    generateClinical();
+  }
+});
+
+copyAllBtn.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(answerEl.value || "");
+  copyAllBtn.textContent = "Copied!";
+  setTimeout(() => { copyAllBtn.textContent = "Copy"; }, 2000);
+});
+
+// ===== Consultation Generation =====
+const wrNote = document.getElementById("wrNote");
+const wrOutput = document.getElementById("wrOutput");
+const consultGenerateBtn = document.getElementById("consultGenerateBtn");
+const wrAnswerLoader = document.getElementById("wrAnswerLoader");
+const wrStatus = document.getElementById("wrStatus");
+
 async function generateConsult() {
   const input = (wrNote.value || "").trim();
-  if (!input) return;
+  if (!input) {
+    alert("Please enter consultation notes");
+    return;
+  }
 
   consultGenerateBtn.disabled = true;
   wrAnswerLoader.classList.remove("hidden");
+  wrOutput.value = "";
 
   try {
+    const token = localStorage.getItem("auth_token");
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     const res = await fetch("/api/consult", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ text: input })
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text: input, mode: "consult_note" })
     });
 
     const data = await res.json();
 
-    if (data.answer){
+    if (res.status === 402) {
+      alert("Quota exceeded. " + (data.headline || ""));
+    } else if (data.answer) {
       wrOutput.value = data.answer;
     } else {
-      wrOutput.value = data.error || "Generate failed.";
+      wrOutput.value = data.error || "Generation failed";
     }
-
-  } catch(e){
-    wrOutput.value = "Generate error.";
+  } catch (e) {
+    wrOutput.value = "Error: " + e.message;
   } finally {
     wrAnswerLoader.classList.add("hidden");
     consultGenerateBtn.disabled = false;
   }
 }
 
-generateBtn.addEventListener("click", generateClinical);
 consultGenerateBtn.addEventListener("click", generateConsult);
-
-clinicalQuestion.addEventListener("keydown", (e)=>{
-  if(e.key==="Enter" && !e.shiftKey){
-    e.preventDefault();
-    generateClinical();
-  }
-});
-
-wrNote.addEventListener("keydown",(e)=>{
-  if(e.key==="Enter" && !e.shiftKey){
+wrNote.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     generateConsult();
   }
 });
 
-copyAllBtn.addEventListener("click", async ()=>{
-  await navigator.clipboard.writeText(answerEl.innerText || "");
-});
+// ===== Initialize =====
+window.addEventListener("DOMContentLoaded", () => {
+  updateUserStatus();
 
+  // Google Sign-In render
+  if (window.google && window.google.accounts) {
+    window.google.accounts.id.initialize({
+      client_id: "{{ google_client_id }}",
+      callback: onSignIn
+    });
+    window.google.accounts.id.renderButton(
+      document.getElementById("gSignIn"),
+      { theme: "dark", size: "large" }
+    );
+  }
 });
 </script>
 
