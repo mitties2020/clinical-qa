@@ -1,20 +1,5 @@
-# app.py — VividMedi (Flask) — FULL PASTEABLE VERSION (Stripe SUBSCRIPTION via PRICE ID)
-# ✅ Google Sign-In (server verified)
-# ✅ Returns Bearer token to frontend (index.html expects data.token)
-# ✅ Stripe subscription checkout: $30/month, NO trial, uses PRICE id (price_...)
-# ✅ Webhook upgrades user via stripe_customer_id (reliable)
-# ✅ Quota tracking (guest/free/pro)
-# ✅ DeepSeek generate + consult endpoints
-# ✅ Whisper transcription (MediaRecorder -> /api/transcribe)
-#
-# Render env vars you MUST set:
-# - FLASK_SECRET_KEY (or APP_SECRET_KEY)
-# - GOOGLE_CLIENT_ID
-# - DEEPSEEK_API_KEY
-# - STRIPE_SECRET_KEY (sk_live_...)
-# - STRIPE_WEBHOOK_SECRET (whsec_...)
-# - STRIPE_PRICE_ID_PRO=price_...
-# - APP_BASE_URL=https://www.vividmedi.com
+# app.py — VividMedi with Expert Clinical AI Intelligence
+# Enhanced with: user context, conversation history, clinical reasoning chains, expert analysis
 
 import os
 import re
@@ -22,6 +7,7 @@ import sqlite3
 import tempfile
 import threading
 import subprocess
+import json
 from uuid import uuid4
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -35,13 +21,9 @@ from google.auth.transport import requests as google_requests
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 
-# -----------------------------------
-# Load .env locally only (not Render)
-# -----------------------------------
 if os.getenv("RENDER") is None:
     try:
         from dotenv import load_dotenv
-
         load_dotenv()
     except Exception:
         pass
@@ -61,7 +43,7 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
 STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
-STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()  # MUST be price_...
+STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "").strip()
 APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
 
 CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
@@ -69,12 +51,9 @@ CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 
-# HARD GUARD: prevents passing plink_ or URL as price
 if STRIPE_PRICE_ID_PRO:
     if STRIPE_PRICE_ID_PRO.startswith("plink_") or STRIPE_PRICE_ID_PRO.startswith("http"):
-        raise RuntimeError(
-            f"STRIPE_PRICE_ID_PRO must be a price_ id, not a payment link or URL: {STRIPE_PRICE_ID_PRO}"
-        )
+        raise RuntimeError(f"STRIPE_PRICE_ID_PRO must be a price_ id, not a payment link or URL: {STRIPE_PRICE_ID_PRO}")
     if not STRIPE_PRICE_ID_PRO.startswith("price_"):
         raise RuntimeError(f"STRIPE_PRICE_ID_PRO must start with 'price_': {STRIPE_PRICE_ID_PRO}")
 
@@ -85,7 +64,6 @@ if STRIPE_PRICE_ID_PRO:
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or APP_SECRET_KEY or "dev-insecure-change-me")
 
-# Cookie hardening (Flask session cookie)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -102,8 +80,6 @@ DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 def db_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-
-    # Pragmas: better concurrency & safety for web apps
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys=ON;")
@@ -119,10 +95,12 @@ def db_init():
             email TEXT UNIQUE NOT NULL,
             name TEXT,
             picture TEXT,
-            plan TEXT NOT NULL DEFAULT 'free',         -- free | pro
+            plan TEXT NOT NULL DEFAULT 'free',
             email_verified INTEGER NOT NULL DEFAULT 1,
             stripe_customer_id TEXT,
             stripe_subscription_id TEXT,
+            specialty TEXT,
+            expertise_level TEXT,
             created_at TEXT NOT NULL
         )
         """
@@ -130,11 +108,24 @@ def db_init():
         conn.execute(
             """
         CREATE TABLE IF NOT EXISTS usage (
-            actor_type TEXT NOT NULL,   -- guest | user
+            actor_type TEXT NOT NULL,
             actor_id TEXT NOT NULL,
             used INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (actor_type, actor_id)
+        )
+        """
+        )
+        conn.execute(
+            """
+        CREATE TABLE IF NOT EXISTS conversation_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            query TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            mode TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
         """
         )
@@ -145,7 +136,7 @@ db_init()
 
 
 # -----------------------------------
-# Token auth helpers (Bearer)
+# Token auth helpers
 # -----------------------------------
 serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
 
@@ -176,7 +167,6 @@ def get_user_from_bearer():
 
 
 def get_authed_user():
-    # Prefer Bearer (frontend apiFetch), fallback to session cookie
     u = get_user_from_bearer()
     if u:
         return u
@@ -189,7 +179,7 @@ def get_authed_user():
 
 
 # -----------------------------------
-# Guest cookie (quota tracking)
+# Guest cookie
 # -----------------------------------
 def get_guest_id():
     return request.cookies.get("vivid_guest") or ""
@@ -203,7 +193,7 @@ def ensure_guest_cookie(resp):
             "vivid_guest",
             gid,
             httponly=True,
-            secure=APP_BASE_URL.startswith("https://"),  # local dev on http://localhost needs False
+            secure=APP_BASE_URL.startswith("https://"),
             samesite="Lax",
             max_age=60 * 60 * 24 * 365,
             path="/",
@@ -365,11 +355,6 @@ def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
 
 
 def actor_and_limit():
-    """
-    Guest: 10 total generations
-    Logged-in free: 11 total generations
-    Pro: effectively unlimited
-    """
     u = get_authed_user()
     if u:
         actor_type = "user"
@@ -388,7 +373,7 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
         "limit": limit,
         "headline": "Free limit reached",
         "copy": [
-            f"You’ve used {min(used, limit)}/{limit} free generations.",
+            f"You've used {min(used, limit)}/{limit} free generations.",
             "Upgrade to Pro for unlimited access.",
             "Pro includes higher limits, priority processing, and ongoing updates.",
         ],
@@ -406,9 +391,6 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
 
 
 def enforce_quota_or_402():
-    """
-    Fix: do NOT increment before checking.
-    """
     actor_type, actor_id, limit, u = actor_and_limit()
     used_before = usage_get(actor_type, actor_id)
     if used_before >= limit:
@@ -419,7 +401,7 @@ def enforce_quota_or_402():
 
 
 # -----------------------------------
-# Whisper model (load once)
+# Whisper model
 # -----------------------------------
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
@@ -431,6 +413,7 @@ def get_whisper_model():
     if _whisper_model is None:
         with _whisper_init_lock:
             if _whisper_model is None:
+                from faster_whisper import WhisperModel
                 _whisper_model = WhisperModel(
                     WHISPER_MODEL_SIZE,
                     device="cpu",
@@ -440,84 +423,169 @@ def get_whisper_model():
 
 
 # -----------------------------------
-# Prompts
+# ENHANCED SYSTEM PROMPTS WITH CLINICAL REASONING
 # -----------------------------------
-CLINICAL_SYSTEM_PROMPT = (
-    "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
-    "OUTPUT FORMAT (MANDATORY):\n"
-    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n\n"
-    "STYLE:\n"
-    "Plain text only. Registrar-level depth. Australian practice framing.\n"
-    "If the user pastes mixed notes/results, organise them cleanly under the correct headings.\n"
-)
 
-DVA_SYSTEM_PROMPT = (
-    "You are an Australian medical practitioner assisting other qualified clinicians with DVA documentation.\n\n"
-    "Primary use-case: DVA D0904 allied health referrals (new + renewal).\n\n"
-    "IMPORTANT:\n"
-    "Do not invent accepted conditions or entitlements. Do not advise misrepresentation.\n"
-    "You may propose legitimate alternative pathways.\n\n"
-    "OUTPUT FORMAT (MANDATORY):\n"
-    "DVA_META\n"
-    "Referral type: <D0904 new | D0904 renewal | other/unclear>\n"
-    "Provider type: <dietitian | physiotherapist | exercise physiologist | psychologist | OT | podiatrist | other/unclear>\n"
-    "Provider-type checks:\n"
-    "- <bullet>\n"
-    "Renewal audit checks:\n"
-    "- <bullet>\n"
-    "Justification strength: <strong | moderate | weak>\n"
-    "Audit risk: <low | medium | high>\n"
-    "Missing items:\n"
-    "- <bullet>\n"
-    "Suggested amendments:\n"
-    "- <bullet>\n"
-    "Alternative legitimate pathways:\n"
-    "- <bullet>\n"
-    "END_DVA_META\n\n"
-    "Then output clinical sections:\n"
-    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
-)
+CLINICAL_SYSTEM_PROMPT = """You are an expert Australian clinical assistant for qualified medical doctors.
 
-CONSULT_NOTE_SYSTEM_PROMPT = (
-    "You are an Australian clinician assistant.\n\n"
-    "Task: Convert the provided raw dictation/pasted data into a high-quality clinical note.\n"
-    "If content is messy or partial, infer structure but do not invent facts.\n"
-    "Use Australian spelling.\n\n"
-    "OUTPUT FORMAT (MANDATORY):\n"
-    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
-)
+REASONING CHAIN (mandatory):
+1. CONTEXT: Extract patient age, comorbidities, allergies, current meds
+2. DIFFERENTIAL: List 3-5 most likely diagnoses with probability scores
+3. RED FLAGS: Identify urgent/dangerous features immediately
+4. EVIDENCE: Reference Australian guidelines (TGA, NHMRC, Therapeutic Guidelines)
+5. PERSONALIZATION: Tailor recommendations based on patient risk profile
 
-HANDOVER_SYSTEM_PROMPT = (
-    "You are an Australian emergency medicine handover assistant.\n\n"
-    "Task: Produce a crisp handover/presentation from the provided raw dictation/pasted data.\n"
-    "Primary default is ED handover, BUT if the content clearly matches another context "
-    "(e.g., ward round, ICU, theatre, psych, GP), adapt the handover style accordingly.\n"
-    "Do not invent facts.\n"
-    "Make it usable for verbal handover.\n\n"
-    "OUTPUT FORMAT (MANDATORY):\n"
-    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
-)
+OUTPUT FORMAT:
+Summary
+Assessment
+Diagnosis
+Investigations
+Treatment
+Monitoring
+Follow-up & Safety Netting
+Red Flags
+References
+
+STYLE: Registrar-level, evidence-based, actionable. Use Australian practice standards."""
+
+CONSULT_NOTE_SYSTEM_PROMPT = """You are an expert Australian clinician assistant for structured clinical documentation.
+
+REASONING CHAIN:
+1. PARSE: Extract key clinical data from raw dictation
+2. ORGANIZE: Structure into clinical sections
+3. FLAG: Highlight any red flags or concerning findings
+4. CONTEXT: Consider patient demographics and comorbidities
+5. SAFETY: Ensure follow-up and safety netting are explicit
+
+OUTPUT FORMAT:
+Summary (brief, 2-3 sentences)
+Assessment (history, exam, severity)
+Diagnosis (primary + differentials with reasoning)
+Investigations (prioritized by urgency)
+Treatment (evidence-based recommendations)
+Monitoring (specific triggers for review)
+Follow-up & Safety Netting (explicit warning signs)
+Red Flags (life-threatening features)
+References (guidelines used)
+
+Do NOT invent facts. Organize clearly."""
+
+DVA_SYSTEM_PROMPT = """You are an expert Australian medical practitioner assisting with DVA D0904 referrals.
+
+CRITICAL ANALYSIS:
+1. REFERRAL TYPE: Identify if new, renewal, or EoC-based
+2. PROVIDER FIT: Verify provider type matches accepted DVA disciplines
+3. JUSTIFICATION STRENGTH: Assess how defensible the referral is in audit
+4. AUDIT RISK: Flag problematic elements likely to trigger denial
+5. ALTERNATIVES: Suggest legitimate pathways if weak
+
+OUTPUT FORMAT:
+DVA_META
+Referral type: [type]
+Provider type: [discipline]
+Justification strength: [strong|moderate|weak]
+Audit risk: [low|medium|high]
+Provider-type checks:
+- [findings]
+Renewal audit checks:
+- [findings]
+Missing items:
+- [missing]
+Suggested amendments:
+- [amendments]
+Alternative legitimate pathways:
+- [alternatives]
+END_DVA_META
+
+Then: Summary, Assessment, Diagnosis, Investigations, Treatment, Monitoring, Follow-up, Red Flags, References
+
+IMPORTANT: Do not invent entitlements. Do not advise misrepresentation."""
+
+HANDOVER_SYSTEM_PROMPT = """You are an expert Australian handover specialist (ED default, adapt if needed).
+
+REASONING CHAIN:
+1. CONTEXT: Identify specialty from content (ED, ward, ICU, etc.)
+2. CRITICALITY: Highlight immediate concerns first
+3. NARRATIVE: Build cohesive story for verbal handover
+4. SAFETY: Explicit danger zones and contingencies
+5. SIGN-OFF: Clear plan and follow-up
+
+OUTPUT FORMAT:
+Summary (critical features first)
+Assessment (current status, trends)
+Diagnosis (primary + key differentials)
+Investigations (results + pending)
+Treatment (current regimen + rationale)
+Monitoring (vital parameters, observations)
+Follow-up & Safety Netting (what could go wrong)
+Red Flags (escalation triggers)
+References (relevant guidelines)
+
+Make it usable for verbal handover."""
 
 
 # -----------------------------------
-# DeepSeek call
+# Context-aware conversation builder
+# -----------------------------------
+def get_conversation_context(user_id: str, limit: int = 5) -> str:
+    """Retrieve recent conversation history for context"""
+    if not user_id:
+        return ""
+    
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT query, answer FROM conversation_history WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    
+    if not rows:
+        return ""
+    
+    context_lines = ["PREVIOUS CONTEXT (recent questions):\n"]
+    for row in reversed(rows):
+        q = (row["query"] or "")[:100]
+        context_lines.append(f"Q: {q}...")
+    
+    return "\n".join(context_lines)
+
+
+def save_conversation(user_id: str, query: str, answer: str, mode: str = "clinical"):
+    """Save Q&A to history for learning"""
+    if not user_id:
+        return
+    
+    with db_conn() as conn:
+        conn.execute(
+            "INSERT INTO conversation_history (user_id, query, answer, mode, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, query, answer, mode, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+
+
+# -----------------------------------
+# DeepSeek call with enhanced reasoning
 # -----------------------------------
 http = requests.Session()
 
 
-def call_deepseek(system_prompt: str, user_content: str) -> str:
+def call_deepseek(system_prompt: str, user_content: str, user_context: str = "") -> str:
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
+
+    # Prepend user context for awareness
+    full_content = user_content
+    if user_context:
+        full_content = f"{user_context}\n\n{user_content}"
 
     payload = {
         "model": DEEPSEEK_MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": full_content},
         ],
-        "temperature": 0.25,
+        "temperature": 0.3,  # Slightly higher for nuance, lower for consistency
         "top_p": 0.9,
-        "max_tokens": 1800,
+        "max_tokens": 2000,
     }
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -626,7 +694,6 @@ def auth_google():
 
         user = create_or_get_user_by_email(email=email, name=name, picture=picture)
 
-        # Optional: auto-pro for creator email
         if CREATOR_EMAIL and email == CREATOR_EMAIL and user.get("plan") != "pro":
             upgrade_user_to_pro(user["id"])
             user["plan"] = "pro"
@@ -648,7 +715,7 @@ def auth_logout():
 
 
 # -----------------------------------
-# Stripe checkout (SUBSCRIPTION)
+# Stripe checkout
 # -----------------------------------
 @app.post("/api/stripe/create-checkout-session")
 def stripe_create_checkout_session():
@@ -664,7 +731,6 @@ def stripe_create_checkout_session():
     try:
         customer_id = u.get("stripe_customer_id")
 
-        # Create Stripe customer ONCE
         if not customer_id:
             customer = stripe.Customer.create(email=u["email"], metadata={"user_id": u["id"]})
             customer_id = customer.id
@@ -690,7 +756,7 @@ def stripe_create_checkout_session():
 
 
 # -----------------------------------
-# Stripe webhook — upgrades user via stripe_customer_id (reliable)
+# Stripe webhook
 # -----------------------------------
 @app.post("/api/stripe/webhook")
 def stripe_webhook():
@@ -711,7 +777,6 @@ def stripe_webhook():
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
 
-    # 1) Capture IDs at checkout completion (may not yet be paid/active)
     if etype == "checkout.session.completed":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
@@ -725,8 +790,6 @@ def stripe_webhook():
                     )
                     conn.commit()
 
-    # 2) Upgrade when payment succeeds (most reliable)
-    # invoice.paid includes subscription + customer
     if etype == "invoice.paid":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
@@ -740,7 +803,6 @@ def stripe_webhook():
                     stripe_subscription_id=subscription_id,
                 )
 
-    # 3) Handle subscription status transitions
     if etype in ("customer.subscription.created", "customer.subscription.updated"):
         sub = obj
         customer_id = sub.get("customer")
@@ -764,7 +826,7 @@ def stripe_webhook():
 
 
 # -----------------------------------
-# AI endpoints
+# AI endpoints with enhanced intelligence
 # -----------------------------------
 @app.post("/api/generate")
 def generate():
@@ -783,6 +845,12 @@ def generate():
         return blocked
 
     try:
+        u = get_authed_user()
+        user_id = u["id"] if u else None
+        
+        # Get conversation context for personalization
+        context = get_conversation_context(user_id) if user_id else ""
+
         if mode.startswith("dva"):
             header = build_dva_header(query)
             referral_intent = (
@@ -798,12 +866,16 @@ def generate():
                 f"DETAILS:\n{query}\n\n"
                 "Follow DVA_META format then clinical headings."
             )
-            answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content, context)
         else:
             user_content = (
                 f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
             )
-            answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content, context)
+
+        # Save to conversation history for learning
+        if user_id:
+            save_conversation(user_id, query, answer, mode)
 
         return jsonify({"answer": answer})
 
@@ -829,20 +901,30 @@ def consult():
         return blocked
 
     try:
+        u = get_authed_user()
+        user_id = u["id"] if u else None
+        
+        # Get conversation context
+        context = get_conversation_context(user_id) if user_id else ""
+
         if mode == "handover":
             user_content = (
                 "Create a handover/presentation from the following raw dictation/pasted data. "
                 "If the context is not ED, adapt appropriately.\n\n"
                 f"{text}"
             )
-            answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content, context)
         else:
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
                 "Do not invent facts; organise clearly.\n\n"
                 f"{text}"
             )
-            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content, context)
+
+        # Save to conversation history
+        if user_id:
+            save_conversation(user_id, text[:200], answer, mode)
 
         return jsonify({"answer": answer})
 
