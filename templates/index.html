@@ -5,7 +5,6 @@
   <title>VividMedi - Clinical AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body data-theme="dark">
@@ -15,25 +14,12 @@
   <aside class="sidebar">
     <div class="sidebar-top">
       <div class="logo-section">
-        <svg class="vm-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="vmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#33e6a6;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#2dd4bf;stop-opacity:1" />
-            </linearGradient>
-          </defs>
-          <circle cx="50" cy="50" r="45" fill="none" stroke="url(#vmGrad)" stroke-width="2" opacity="0.3"/>
-          <circle cx="50" cy="50" r="35" fill="none" stroke="url(#vmGrad)" stroke-width="1.5" opacity="0.5"/>
-          <path d="M 50 25 L 65 50 L 50 75 L 35 50 Z" fill="url(#vmGrad)" opacity="0.8"/>
-          <circle cx="50" cy="50" r="8" fill="url(#vmGrad)"/>
-        </svg>
+        <div class="vm-logo-icon">▲</div>
         <div class="brand-name">VividMedi</div>
       </div>
-
       <input class="search-input" type="text" id="sidebarSearch" placeholder="Search saved..." />
     </div>
 
-    <!-- Saved items sections -->
     <div class="sidebar-section">
       <div class="section-title">Clinical Questions</div>
       <div class="saved-items" id="savedQuestions"></div>
@@ -44,12 +30,12 @@
       <div class="saved-items" id="savedConsults"></div>
     </div>
 
-    <!-- User info at bottom -->
     <div class="sidebar-bottom">
       <div class="user-card">
         <div class="user-email">michael.addis101@gmail.com</div>
         <div class="user-plan">PRO • Unlimited</div>
       </div>
+      <button class="btn-logout" id="logoutBtn">Logout</button>
     </div>
   </aside>
 
@@ -59,14 +45,10 @@
       <h1 class="header-title">VividMedi</h1>
       <div class="header-controls">
         <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode">
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
           </svg>
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-          </svg>
         </button>
-        <button class="btn-logout" id="logoutBtn">Logout</button>
       </div>
     </header>
 
@@ -75,12 +57,15 @@
       <section class="card clinical-card">
         <div class="card-header">
           <h2>Clinical Question</h2>
-          <button class="btn-small" id="clearClinicalBtn" title="Clear input">✕</button>
+          <button class="btn-icon" id="clearClinicalBtn" title="Clear">✕</button>
         </div>
-        <textarea id="clinicalInput" class="input-field" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="8"></textarea>
+        <textarea id="clinicalInput" class="input-field" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
         <div class="card-actions">
-          <button class="btn-primary" id="generateClinicalBtn">Generate</button>
-          <div class="status-text" id="clinicalStatus"></div>
+          <button class="btn-primary" id="generateClinicalBtn">
+            <span class="btn-text">Generate</span>
+            <span class="btn-hint">Enter ⏎</span>
+          </button>
+          <div class="status-indicator" id="clinicalStatus"></div>
         </div>
       </section>
 
@@ -89,17 +74,16 @@
         <div class="card-header">
           <h2>Answer</h2>
           <div class="answer-controls">
-            <button class="btn-small" id="saveAnswerBtn" title="Save this answer">💾</button>
-            <button class="btn-small" id="copyAllAnswerBtn" title="Copy all">📋</button>
+            <button class="btn-icon" id="copyAllAnswerBtn" title="Copy all">📋</button>
+            <button class="btn-icon" id="saveAnswerBtn" title="Save">💾</button>
           </div>
         </div>
 
-        <div class="answer-sections" id="answerSections">
-          <!-- Populated dynamically -->
-        </div>
-
-        <div class="answer-placeholder" id="answerPlaceholder">
-          Generate an answer to see structured sections here
+        <div class="answer-container">
+          <div class="answer-placeholder" id="answerPlaceholder">
+            Generate an answer to see results here
+          </div>
+          <div class="answer-content" id="answerContent"></div>
         </div>
       </section>
 
@@ -107,10 +91,9 @@
       <section class="card consult-card">
         <div class="card-header">
           <h2>Consult Data Input</h2>
-          <button class="btn-small" id="clearConsultBtn" title="Clear input">✕</button>
+          <button class="btn-icon" id="clearConsultBtn" title="Clear">✕</button>
         </div>
 
-        <!-- Device selector -->
         <div class="control-row">
           <div class="control-group">
             <label class="control-label">Smart Device</label>
@@ -124,14 +107,18 @@
           </div>
         </div>
 
-        <textarea id="consultInput" class="input-field" placeholder="Paste raw dictation or consultation notes..." rows="8"></textarea>
+        <textarea id="consultInput" class="input-field" placeholder="Paste raw dictation or consultation notes..." rows="9"></textarea>
+        
         <div class="card-actions">
-          <button class="btn-primary" id="generateConsultBtn">Generate</button>
-          <div class="status-text" id="consultStatus"></div>
+          <button class="btn-primary" id="generateConsultBtn">
+            <span class="btn-text">Generate</span>
+            <span class="btn-hint">Enter ⏎</span>
+          </button>
+          <div class="status-indicator" id="consultStatus"></div>
         </div>
 
-        <!-- Output type selector -->
         <div class="divider"></div>
+
         <div class="control-row">
           <div class="control-group">
             <label class="control-label">Output Type</label>
@@ -146,12 +133,17 @@
           </div>
         </div>
 
-        <div class="consult-output-label">Output</div>
-        <textarea id="consultOutput" class="output-field" readonly rows="10"></textarea>
+        <div class="consult-output-container">
+          <div class="consult-output-label">Output</div>
+          <div class="answer-sections" id="consultSections">
+            <div class="output-placeholder">Output will appear here</div>
+          </div>
+        </div>
+
         <div class="card-actions">
-          <button class="btn-small" id="saveConsultBtn" title="Save this output">💾</button>
-          <button class="btn-small" id="copyConsultBtn" title="Copy output">📋</button>
-          <button class="btn-small" id="clearConsultOutputBtn" title="Clear output">✕</button>
+          <button class="btn-small" id="copyConsultBtn" title="Copy">📋 Copy</button>
+          <button class="btn-small" id="clearConsultOutputBtn" title="Clear">✕ Clear</button>
+          <button class="btn-small" id="saveConsultBtn" title="Save">💾 Save</button>
         </div>
       </section>
     </main>
@@ -169,7 +161,6 @@ themeToggle.addEventListener('click', () => {
   localStorage.setItem('theme', isDark ? 'light' : 'dark');
 });
 
-// Load saved theme
 const savedTheme = localStorage.getItem('theme') || 'dark';
 html.setAttribute('data-theme', savedTheme);
 
@@ -180,23 +171,114 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   window.location.reload();
 });
 
+// ===== Helper: Detect if response is structured or simple =====
+function isStructuredResponse(text) {
+  const structuredKeywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigation', 'Treatment', 'Monitoring', 'Follow-up'];
+  return structuredKeywords.some(keyword => text.includes(keyword));
+}
+
+// ===== Parse Answer Sections =====
+function parseAnswerSections(text) {
+  const keywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigation', 'Treatment', 'Monitoring', 'Follow-up', 'Red Flag', 'Reference'];
+  const sections = [];
+  
+  let remaining = text;
+  for (let keyword of keywords) {
+    const regex = new RegExp(`\\*\\*${keyword}\\*\\*(.+?)(?=\\*\\*|$)`, 'is');
+    const match = remaining.match(regex);
+    if (match) {
+      const content = match[1].trim().replace(/^\*\*/g, '').replace(/\*\*$/g, '');
+      if (content) {
+        sections.push({
+          title: keyword,
+          content: content
+        });
+      }
+    }
+  }
+  
+  return sections;
+}
+
+// ===== Display Answer =====
+function displayAnswer(text) {
+  const answerContent = document.getElementById('answerContent');
+  const answerPlaceholder = document.getElementById('answerPlaceholder');
+  
+  const isStructured = isStructuredResponse(text);
+  
+  if (isStructured) {
+    const sections = parseAnswerSections(text);
+    if (sections.length > 0) {
+      answerPlaceholder.style.display = 'none';
+      answerContent.innerHTML = sections.map((section, idx) => `
+        <div class="answer-section" data-index="${idx}">
+          <div class="section-header">
+            <span class="section-title">${section.title}</span>
+            <span class="section-controls">
+              <button class="btn-section-copy" onclick="copySectionContent(${idx})">📋</button>
+              <span class="expand-icon">▼</span>
+            </span>
+          </div>
+          <div class="section-content">
+            <div class="content-text">${section.content.replace(/\n/g, '<br>')}</div>
+          </div>
+        </div>
+      `).join('');
+      
+      document.querySelectorAll('.section-header').forEach(header => {
+        header.addEventListener('click', () => {
+          header.closest('.answer-section').classList.toggle('open');
+        });
+      });
+      return;
+    }
+  }
+  
+  // Simple response (not structured)
+  answerPlaceholder.style.display = 'none';
+  answerContent.innerHTML = `
+    <div class="answer-simple">
+      <div class="simple-content">${text.replace(/\n/g, '<br>')}</div>
+    </div>
+  `;
+}
+
+function copySectionContent(idx) {
+  const section = document.querySelector(`[data-index="${idx}"] .content-text`);
+  if (section) {
+    const text = section.textContent;
+    navigator.clipboard.writeText(text);
+    alert('Copied!');
+  }
+}
+
 // ===== Clinical Question =====
 const clinicalInput = document.getElementById('clinicalInput');
 const generateClinicalBtn = document.getElementById('generateClinicalBtn');
 const clearClinicalBtn = document.getElementById('clearClinicalBtn');
-const answerSections = document.getElementById('answerSections');
+const answerContent = document.getElementById('answerContent');
 const answerPlaceholder = document.getElementById('answerPlaceholder');
 const saveAnswerBtn = document.getElementById('saveAnswerBtn');
 const copyAllAnswerBtn = document.getElementById('copyAllAnswerBtn');
 
 clearClinicalBtn.addEventListener('click', () => {
   clinicalInput.value = '';
-  answerSections.innerHTML = '';
+  answerContent.innerHTML = '';
   answerPlaceholder.style.display = 'block';
-  saveAnswerBtn.disabled = true;
 });
 
-generateClinicalBtn.addEventListener('click', async () => {
+generateClinicalBtn.addEventListener('click', generateClinical);
+
+// Enter key support
+clinicalInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    generateClinical();
+  }
+});
+
+async function generateClinical() {
   const input = clinicalInput.value.trim();
   if (!input) {
     alert('Please enter a clinical question');
@@ -205,7 +287,7 @@ generateClinicalBtn.addEventListener('click', async () => {
 
   generateClinicalBtn.disabled = true;
   answerPlaceholder.style.display = 'block';
-  answerSections.innerHTML = '<div class="loading">Generating...</div>';
+  answerContent.innerHTML = '';
 
   try {
     const token = localStorage.getItem('auth_token');
@@ -222,75 +304,31 @@ generateClinicalBtn.addEventListener('click', async () => {
 
     if (data.answer) {
       displayAnswer(data.answer);
-      answerPlaceholder.style.display = 'none';
       saveAnswerBtn.disabled = false;
     } else {
-      answerSections.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
+      answerContent.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
+      answerPlaceholder.style.display = 'none';
     }
   } catch (e) {
-    answerSections.innerHTML = `<div class="error">Error: ${e.message}</div>`;
+    answerContent.innerHTML = `<div class="error">Error: ${e.message}</div>`;
+    answerPlaceholder.style.display = 'none';
   } finally {
     generateClinicalBtn.disabled = false;
   }
-});
-
-function displayAnswer(text) {
-  const sections = parseAnswerSections(text);
-  answerSections.innerHTML = sections.map(section => `
-    <div class="answer-section">
-      <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
-        <span class="section-title">${section.title}</span>
-        <span class="expand-icon">▼</span>
-        <button class="btn-tiny" onclick="copySection(event, '${section.title}')">📋</button>
-      </div>
-      <div class="section-content">${section.content}</div>
-    </div>
-  `).join('');
-}
-
-function parseAnswerSections(text) {
-  const titles = ['Summary', 'Assessment', 'Diagnosis', 'Investigations', 'Treatment', 'Monitoring', 'Follow-up & Safety Netting', 'Red Flags', 'References'];
-  const sections = [];
-
-  let current = text;
-  for (let title of titles) {
-    const regex = new RegExp(`(${title})[\\s\\n]*([^]*?)(?=\\n(?:${titles.join('|')})\\b|$)`, 'i');
-    const match = current.match(regex);
-    if (match) {
-      const content = match[2].trim();
-      sections.push({ title: match[1], content: `<pre>${content}</pre>` });
-      current = current.substring(match.index + match[0].length);
-    }
-  }
-
-  if (sections.length === 0) {
-    sections.push({ title: 'Response', content: `<pre>${text}</pre>` });
-  }
-
-  return sections;
-}
-
-function copySection(e, title) {
-  e.stopPropagation();
-  const section = e.target.closest('.answer-section');
-  const content = section.querySelector('.section-content').textContent;
-  navigator.clipboard.writeText(content);
-  alert('Copied!');
 }
 
 copyAllAnswerBtn.addEventListener('click', () => {
-  const allText = Array.from(answerSections.querySelectorAll('.section-content'))
-    .map(el => el.textContent)
-    .join('\n\n');
-  navigator.clipboard.writeText(allText);
-  alert('All sections copied!');
+  const allText = document.querySelectorAll('.content-text');
+  const combined = Array.from(allText).map(el => el.textContent).join('\n\n');
+  navigator.clipboard.writeText(combined);
+  alert('Copied!');
 });
 
 // ===== Consultation Data =====
 const consultInput = document.getElementById('consultInput');
 const generateConsultBtn = document.getElementById('generateConsultBtn');
 const clearConsultBtn = document.getElementById('clearConsultBtn');
-const consultOutput = document.getElementById('consultOutput');
+const consultSections = document.getElementById('consultSections');
 const outputTypeSelect = document.getElementById('outputTypeSelect');
 const saveConsultBtn = document.getElementById('saveConsultBtn');
 const copyConsultBtn = document.getElementById('copyConsultBtn');
@@ -301,10 +339,19 @@ clearConsultBtn.addEventListener('click', () => {
 });
 
 clearConsultOutputBtn.addEventListener('click', () => {
-  consultOutput.value = '';
+  consultSections.innerHTML = '<div class="output-placeholder">Output will appear here</div>';
 });
 
-generateConsultBtn.addEventListener('click', async () => {
+generateConsultBtn.addEventListener('click', generateConsult);
+
+consultInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    generateConsult();
+  }
+});
+
+async function generateConsult() {
   const input = consultInput.value.trim();
   if (!input) {
     alert('Please enter consultation data');
@@ -312,7 +359,7 @@ generateConsultBtn.addEventListener('click', async () => {
   }
 
   generateConsultBtn.disabled = true;
-  consultOutput.value = 'Generating...';
+  consultSections.innerHTML = '<div class="loading">Generating...</div>';
 
   try {
     const token = localStorage.getItem('auth_token');
@@ -328,20 +375,63 @@ generateConsultBtn.addEventListener('click', async () => {
     const data = await res.json();
 
     if (data.answer) {
-      consultOutput.value = data.answer;
+      const isStructured = isStructuredResponse(data.answer);
+      if (isStructured) {
+        const sections = parseAnswerSections(data.answer);
+        if (sections.length > 0) {
+          consultSections.innerHTML = sections.map((section, idx) => `
+            <div class="answer-section" data-index="${idx}">
+              <div class="section-header">
+                <span class="section-title">${section.title}</span>
+                <span class="section-controls">
+                  <button class="btn-section-copy" onclick="copyConsultSection(${idx})">📋</button>
+                  <span class="expand-icon">▼</span>
+                </span>
+              </div>
+              <div class="section-content">
+                <div class="content-text">${section.content.replace(/\n/g, '<br>')}</div>
+              </div>
+            </div>
+          `).join('');
+          
+          document.querySelectorAll('.section-header').forEach(header => {
+            header.addEventListener('click', () => {
+              header.closest('.answer-section').classList.toggle('open');
+            });
+          });
+          return;
+        }
+      }
+      
+      consultSections.innerHTML = `
+        <div class="answer-simple">
+          <div class="simple-content">${data.answer.replace(/\n/g, '<br>')}</div>
+        </div>
+      `;
       saveConsultBtn.disabled = false;
     } else {
-      consultOutput.value = data.error || 'Generation failed';
+      consultSections.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
     }
   } catch (e) {
-    consultOutput.value = `Error: ${e.message}`;
+    consultSections.innerHTML = `<div class="error">Error: ${e.message}</div>`;
   } finally {
     generateConsultBtn.disabled = false;
   }
-});
+}
+
+function copyConsultSection(idx) {
+  const section = document.querySelector(`[data-index="${idx}"] .content-text`);
+  if (section) {
+    const text = section.textContent;
+    navigator.clipboard.writeText(text);
+    alert('Copied!');
+  }
+}
 
 copyConsultBtn.addEventListener('click', () => {
-  navigator.clipboard.writeText(consultOutput.value);
+  const allText = document.querySelectorAll('#consultSections .content-text');
+  const combined = Array.from(allText).map(el => el.textContent).join('\n\n');
+  navigator.clipboard.writeText(combined);
   alert('Copied!');
 });
 
@@ -349,13 +439,13 @@ copyConsultBtn.addEventListener('click', () => {
 saveAnswerBtn.addEventListener('click', () => {
   const text = clinicalInput.value;
   if (!text) return;
-  addSavedItem('questions', text.substring(0, 50) + '...');
+  addSavedItem('questions', text.substring(0, 40) + '...');
 });
 
 saveConsultBtn.addEventListener('click', () => {
-  const text = consultOutput.value;
+  const text = Array.from(document.querySelectorAll('#consultSections .content-text')).map(el => el.textContent).join(' ');
   if (!text) return;
-  addSavedItem('consults', text.substring(0, 50) + '...');
+  addSavedItem('consults', text.substring(0, 40) + '...');
 });
 
 function addSavedItem(type, label) {
