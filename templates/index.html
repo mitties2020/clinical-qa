@@ -7,162 +7,157 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
-<body data-theme="dark">
-<div class="app-container">
-  
-  <!-- ===== SIDEBAR ===== -->
-  <aside class="sidebar">
-    <div class="sidebar-top">
-      <div class="logo-section">
-        <div class="vm-logo-icon">▲</div>
-        <div class="brand-name">VividMedi</div>
+<body>
+<div class="app-root">
+  <div class="shell">
+    <div class="layout">
+
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-brand">
+            <div class="vm-logo"></div>
+            <div class="brand-text">
+              <div class="brand-title">VividMedi</div>
+              <div class="brand-subtitle">Clinical Intelligence</div>
+            </div>
+          </div>
+          <input id="sidebarSearch" class="search-input" type="text" placeholder="Search saved..." />
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Clinical Questions</div>
+          <div id="savedQuestions" class="saved-list"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Consultation Notes</div>
+          <div id="savedConsults" class="saved-list"></div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="user-info">
+            <div class="user-email">michael.addis101@gmail.com</div>
+            <div class="user-plan">PRO • Unlimited</div>
+          </div>
+          <button id="logoutBtn" class="btn-logout">Logout</button>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <div class="main-content">
+        <header class="header">
+          <h1 class="header-title">VividMedi</h1>
+          <div class="header-actions">
+            <button id="themeToggle" class="btn-theme" title="Dark/Light">🌙</button>
+          </div>
+        </header>
+
+        <main class="workspace">
+          <!-- ROW 1: Clinical Question + Answer -->
+          <div class="grid-row">
+            <!-- CLINICAL QUESTION -->
+            <section class="card input-card">
+              <div class="card-header">
+                <h2>Clinical Question</h2>
+                <button class="btn-clear" id="clearClinicalBtn" title="Clear">✕</button>
+              </div>
+              <textarea id="clinicalInput" class="input-area" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
+              <div class="card-footer">
+                <button id="generateBtn" class="btn-primary">Generate</button>
+                <span class="hint">Press Enter ⏎</span>
+              </div>
+            </section>
+
+            <!-- ANSWER -->
+            <section class="card answer-card">
+              <div class="card-header">
+                <h2>Answer</h2>
+                <div class="header-buttons">
+                  <button id="copyAnswerBtn" class="btn-icon" title="Copy">📋</button>
+                  <button id="saveAnswerBtn" class="btn-icon" title="Save">💾</button>
+                </div>
+              </div>
+              <div class="answer-content">
+                <div id="answerDisplay" class="answer-display">
+                  <div class="placeholder">Generate an answer to see results here</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ROW 2: Consultation -->
+          <section class="card consult-card">
+            <div class="card-header">
+              <h2>Consultation Data Input</h2>
+              <button class="btn-clear" id="clearConsultBtn" title="Clear">✕</button>
+            </div>
+
+            <div class="control-group">
+              <label>Smart Device</label>
+              <select id="deviceSelect" class="control-select">
+                <option value="">Connect Smart Device</option>
+                <option value="glasses">AI Glasses</option>
+                <option value="ring">AI Ring</option>
+                <option value="watch">Smart Watch</option>
+                <option value="headset">Headset</option>
+              </select>
+            </div>
+
+            <textarea id="consultInput" class="input-area" placeholder="Paste raw dictation or consultation notes..." rows="8"></textarea>
+
+            <div class="card-footer">
+              <button id="generateConsultBtn" class="btn-primary">Generate</button>
+              <span class="hint">Press Enter ⏎</span>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="control-group">
+              <label>Output Type</label>
+              <select id="outputTypeSelect" class="control-select">
+                <option value="consult_note">Initial Consultation</option>
+                <option value="medical_review">Medical Review</option>
+                <option value="discharge">Discharge Summary</option>
+                <option value="referral">Referral Letter</option>
+                <option value="dva">DVA Assessment</option>
+                <option value="handover">Handover Note</option>
+              </select>
+            </div>
+
+            <div class="output-label">Output</div>
+            <div class="answer-content">
+              <div id="consultDisplay" class="answer-display">
+                <div class="placeholder">Output will appear here</div>
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <button id="copyConsultBtn" class="btn-icon" title="Copy">📋</button>
+              <button id="saveConsultBtn" class="btn-icon" title="Save">💾</button>
+              <button id="clearConsultOutputBtn" class="btn-icon" title="Clear">✕</button>
+            </div>
+          </section>
+        </main>
       </div>
-      <input class="search-input" type="text" id="sidebarSearch" placeholder="Search saved..." />
     </div>
-
-    <div class="sidebar-section">
-      <div class="section-title">Clinical Questions</div>
-      <div class="saved-items" id="savedQuestions"></div>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="section-title">Consultation Data</div>
-      <div class="saved-items" id="savedConsults"></div>
-    </div>
-
-    <div class="sidebar-bottom">
-      <div class="user-card">
-        <div class="user-email">michael.addis101@gmail.com</div>
-        <div class="user-plan">PRO • Unlimited</div>
-      </div>
-      <button class="btn-logout" id="logoutBtn">Logout</button>
-    </div>
-  </aside>
-
-  <!-- ===== MAIN ===== -->
-  <div class="main-container">
-    <header class="header">
-      <h1 class="header-title">VividMedi</h1>
-      <div class="header-controls">
-        <button class="theme-toggle" id="themeToggle" title="Toggle dark/light mode">
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-        </button>
-      </div>
-    </header>
-
-    <main class="workspace">
-      <!-- ===== CLINICAL QUESTION SECTION ===== -->
-      <section class="card clinical-card">
-        <div class="card-header">
-          <h2>Clinical Question</h2>
-          <button class="btn-icon" id="clearClinicalBtn" title="Clear">✕</button>
-        </div>
-        <textarea id="clinicalInput" class="input-field" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
-        <div class="card-actions">
-          <button class="btn-primary" id="generateClinicalBtn">
-            <span class="btn-text">Generate</span>
-            <span class="btn-hint">Enter ⏎</span>
-          </button>
-          <div class="status-indicator" id="clinicalStatus"></div>
-        </div>
-      </section>
-
-      <!-- ===== ANSWER SECTION ===== -->
-      <section class="card answer-card">
-        <div class="card-header">
-          <h2>Answer</h2>
-          <div class="answer-controls">
-            <button class="btn-icon" id="copyAllAnswerBtn" title="Copy all">📋</button>
-            <button class="btn-icon" id="saveAnswerBtn" title="Save">💾</button>
-          </div>
-        </div>
-
-        <div class="answer-container">
-          <div class="answer-placeholder" id="answerPlaceholder">
-            Generate an answer to see results here
-          </div>
-          <div class="answer-content" id="answerContent"></div>
-        </div>
-      </section>
-
-      <!-- ===== CONSULTATION DATA SECTION ===== -->
-      <section class="card consult-card">
-        <div class="card-header">
-          <h2>Consult Data Input</h2>
-          <button class="btn-icon" id="clearConsultBtn" title="Clear">✕</button>
-        </div>
-
-        <div class="control-row">
-          <div class="control-group">
-            <label class="control-label">Smart Device</label>
-            <select id="deviceSelect" class="control-select">
-              <option value="">Connect Smart Device</option>
-              <option value="glasses">AI Glasses</option>
-              <option value="ring">AI Ring</option>
-              <option value="watch">Smart Watch</option>
-              <option value="headset">Headset</option>
-            </select>
-          </div>
-        </div>
-
-        <textarea id="consultInput" class="input-field" placeholder="Paste raw dictation or consultation notes..." rows="9"></textarea>
-        
-        <div class="card-actions">
-          <button class="btn-primary" id="generateConsultBtn">
-            <span class="btn-text">Generate</span>
-            <span class="btn-hint">Enter ⏎</span>
-          </button>
-          <div class="status-indicator" id="consultStatus"></div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="control-row">
-          <div class="control-group">
-            <label class="control-label">Output Type</label>
-            <select id="outputTypeSelect" class="control-select">
-              <option value="consult_note">Initial Consultation</option>
-              <option value="medical_review">Medical Review</option>
-              <option value="discharge">Discharge Summary</option>
-              <option value="referral">Referral Letter</option>
-              <option value="dva">DVA Assessment</option>
-              <option value="handover">Handover Note</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="consult-output-container">
-          <div class="consult-output-label">Output</div>
-          <div class="answer-sections" id="consultSections">
-            <div class="output-placeholder">Output will appear here</div>
-          </div>
-        </div>
-
-        <div class="card-actions">
-          <button class="btn-small" id="copyConsultBtn" title="Copy">📋 Copy</button>
-          <button class="btn-small" id="clearConsultOutputBtn" title="Clear">✕ Clear</button>
-          <button class="btn-small" id="saveConsultBtn" title="Save">💾 Save</button>
-        </div>
-      </section>
-    </main>
   </div>
 </div>
 
 <script>
-// ===== Theme Toggle =====
+// ===== Theme =====
 const themeToggle = document.getElementById('themeToggle');
 const html = document.documentElement;
+const theme = localStorage.getItem('theme') || 'dark';
+html.setAttribute('data-theme', theme);
 
 themeToggle.addEventListener('click', () => {
-  const isDark = html.getAttribute('data-theme') === 'dark';
-  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+  const current = html.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
 });
-
-const savedTheme = localStorage.getItem('theme') || 'dark';
-html.setAttribute('data-theme', savedTheme);
 
 // ===== Logout =====
 document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -171,123 +166,95 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   window.location.reload();
 });
 
-// ===== Helper: Detect if response is structured or simple =====
-function isStructuredResponse(text) {
-  const structuredKeywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigation', 'Treatment', 'Monitoring', 'Follow-up'];
-  return structuredKeywords.some(keyword => text.includes(keyword));
+// ===== Smart Response Parser =====
+function detectStructuredResponse(text) {
+  const keywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigations', 'Treatment', 'Monitoring', 'Follow-up', 'Red Flag'];
+  return keywords.some(kw => text.includes(kw + ':') || text.includes(`**${kw}**`));
 }
 
-// ===== Parse Answer Sections =====
-function parseAnswerSections(text) {
-  const keywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigation', 'Treatment', 'Monitoring', 'Follow-up', 'Red Flag', 'Reference'];
-  const sections = [];
+function parseStructuredResponse(text) {
+  // Remove asterisks
+  text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
   
-  let remaining = text;
-  for (let keyword of keywords) {
-    const regex = new RegExp(`\\*\\*${keyword}\\*\\*(.+?)(?=\\*\\*|$)`, 'is');
-    const match = remaining.match(regex);
-    if (match) {
-      const content = match[1].trim().replace(/^\*\*/g, '').replace(/\*\*$/g, '');
-      if (content) {
-        sections.push({
-          title: keyword,
-          content: content
-        });
+  const sections = [];
+  const lines = text.split('\n');
+  let currentSection = null;
+  let currentContent = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Check if line is a section header
+    if (/^(Summary|Assessment|Diagnosis|Investigations|Treatment|Monitoring|Follow-up|Red Flags?|References?):?$/.test(trimmed)) {
+      if (currentSection) {
+        sections.push({ title: currentSection, content: currentContent.join('\n').trim() });
       }
+      currentSection = trimmed.replace(/:$/, '');
+      currentContent = [];
+    } else if (currentSection) {
+      currentContent.push(trimmed);
     }
   }
-  
+
+  if (currentSection && currentContent.length) {
+    sections.push({ title: currentSection, content: currentContent.join('\n').trim() });
+  }
+
   return sections;
 }
 
-// ===== Display Answer =====
-function displayAnswer(text) {
-  const answerContent = document.getElementById('answerContent');
-  const answerPlaceholder = document.getElementById('answerPlaceholder');
-  
-  const isStructured = isStructuredResponse(text);
-  
-  if (isStructured) {
-    const sections = parseAnswerSections(text);
-    if (sections.length > 0) {
-      answerPlaceholder.style.display = 'none';
-      answerContent.innerHTML = sections.map((section, idx) => `
-        <div class="answer-section" data-index="${idx}">
-          <div class="section-header">
-            <span class="section-title">${section.title}</span>
-            <span class="section-controls">
-              <button class="btn-section-copy" onclick="copySectionContent(${idx})">📋</button>
-              <span class="expand-icon">▼</span>
-            </span>
-          </div>
-          <div class="section-content">
-            <div class="content-text">${section.content.replace(/\n/g, '<br>')}</div>
-          </div>
+function renderStructuredResponse(sections) {
+  if (!sections || sections.length === 0) return '<div class="placeholder">No structured sections found</div>';
+
+  let html = '';
+  sections.forEach((sec, idx) => {
+    const isOpen = idx === 0; // First section always open
+    html += `
+      <div class="answer-section ${isOpen ? 'open' : ''}">
+        <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+          <span class="section-title">${sec.title}</span>
+          <span class="expand-icon">▼</span>
+          <button class="btn-copy-section" onclick="copySectionText(event, '${sec.title}')">📋</button>
         </div>
-      `).join('');
-      
-      document.querySelectorAll('.section-header').forEach(header => {
-        header.addEventListener('click', () => {
-          header.closest('.answer-section').classList.toggle('open');
-        });
-      });
-      return;
-    }
-  }
-  
-  // Simple response (not structured)
-  answerPlaceholder.style.display = 'none';
-  answerContent.innerHTML = `
-    <div class="answer-simple">
-      <div class="simple-content">${text.replace(/\n/g, '<br>')}</div>
-    </div>
-  `;
+        <div class="section-body">${sec.content.replace(/\n/g, '<br>')}</div>
+      </div>
+    `;
+  });
+  return html;
 }
 
-function copySectionContent(idx) {
-  const section = document.querySelector(`[data-index="${idx}"] .content-text`);
-  if (section) {
-    const text = section.textContent;
-    navigator.clipboard.writeText(text);
-    alert('Copied!');
-  }
+function renderSimpleResponse(text) {
+  return `<div class="answer-simple">${text.replace(/\n/g, '<br>')}</div>`;
 }
 
-// ===== Clinical Question =====
+window.copySectionText = function(e, title) {
+  e.stopPropagation();
+  const section = e.target.closest('.answer-section');
+  const text = section.querySelector('.section-body').textContent;
+  navigator.clipboard.writeText(text);
+  alert('Copied!');
+};
+
+// ===== Clinical Generation =====
 const clinicalInput = document.getElementById('clinicalInput');
-const generateClinicalBtn = document.getElementById('generateClinicalBtn');
-const clearClinicalBtn = document.getElementById('clearClinicalBtn');
-const answerContent = document.getElementById('answerContent');
-const answerPlaceholder = document.getElementById('answerPlaceholder');
+const generateBtn = document.getElementById('generateBtn');
+const answerDisplay = document.getElementById('answerDisplay');
+const copyAnswerBtn = document.getElementById('copyAnswerBtn');
 const saveAnswerBtn = document.getElementById('saveAnswerBtn');
-const copyAllAnswerBtn = document.getElementById('copyAllAnswerBtn');
+const clearClinicalBtn = document.getElementById('clearClinicalBtn');
 
 clearClinicalBtn.addEventListener('click', () => {
   clinicalInput.value = '';
-  answerContent.innerHTML = '';
-  answerPlaceholder.style.display = 'block';
-});
-
-generateClinicalBtn.addEventListener('click', generateClinical);
-
-// Enter key support
-clinicalInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    generateClinical();
-  }
+  answerDisplay.innerHTML = '<div class="placeholder">Generate an answer to see results here</div>';
 });
 
 async function generateClinical() {
   const input = clinicalInput.value.trim();
-  if (!input) {
-    alert('Please enter a clinical question');
-    return;
-  }
+  if (!input) return;
 
-  generateClinicalBtn.disabled = true;
-  answerPlaceholder.style.display = 'block';
-  answerContent.innerHTML = '';
+  generateBtn.disabled = true;
+  answerDisplay.innerHTML = '<div class="loading">Generating...</div>';
 
   try {
     const token = localStorage.getItem('auth_token');
@@ -303,35 +270,47 @@ async function generateClinical() {
     const data = await res.json();
 
     if (data.answer) {
-      displayAnswer(data.answer);
+      const isStructured = detectStructuredResponse(data.answer);
+      if (isStructured) {
+        const sections = parseStructuredResponse(data.answer);
+        answerDisplay.innerHTML = renderStructuredResponse(sections);
+      } else {
+        answerDisplay.innerHTML = renderSimpleResponse(data.answer);
+      }
+      copyAnswerBtn.disabled = false;
       saveAnswerBtn.disabled = false;
     } else {
-      answerContent.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
-      answerPlaceholder.style.display = 'none';
+      answerDisplay.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
     }
   } catch (e) {
-    answerContent.innerHTML = `<div class="error">Error: ${e.message}</div>`;
-    answerPlaceholder.style.display = 'none';
+    answerDisplay.innerHTML = `<div class="error">Error: ${e.message}</div>`;
   } finally {
-    generateClinicalBtn.disabled = false;
+    generateBtn.disabled = false;
   }
 }
 
-copyAllAnswerBtn.addEventListener('click', () => {
-  const allText = document.querySelectorAll('.content-text');
-  const combined = Array.from(allText).map(el => el.textContent).join('\n\n');
-  navigator.clipboard.writeText(combined);
+generateBtn.addEventListener('click', generateClinical);
+clinicalInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    generateClinical();
+  }
+});
+
+copyAnswerBtn.addEventListener('click', () => {
+  const text = answerDisplay.innerText;
+  navigator.clipboard.writeText(text);
   alert('Copied!');
 });
 
-// ===== Consultation Data =====
+// ===== Consultation Generation =====
 const consultInput = document.getElementById('consultInput');
 const generateConsultBtn = document.getElementById('generateConsultBtn');
-const clearConsultBtn = document.getElementById('clearConsultBtn');
-const consultSections = document.getElementById('consultSections');
+const consultDisplay = document.getElementById('consultDisplay');
 const outputTypeSelect = document.getElementById('outputTypeSelect');
-const saveConsultBtn = document.getElementById('saveConsultBtn');
 const copyConsultBtn = document.getElementById('copyConsultBtn');
+const saveConsultBtn = document.getElementById('saveConsultBtn');
+const clearConsultBtn = document.getElementById('clearConsultBtn');
 const clearConsultOutputBtn = document.getElementById('clearConsultOutputBtn');
 
 clearConsultBtn.addEventListener('click', () => {
@@ -339,27 +318,15 @@ clearConsultBtn.addEventListener('click', () => {
 });
 
 clearConsultOutputBtn.addEventListener('click', () => {
-  consultSections.innerHTML = '<div class="output-placeholder">Output will appear here</div>';
-});
-
-generateConsultBtn.addEventListener('click', generateConsult);
-
-consultInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    generateConsult();
-  }
+  consultDisplay.innerHTML = '<div class="placeholder">Output will appear here</div>';
 });
 
 async function generateConsult() {
   const input = consultInput.value.trim();
-  if (!input) {
-    alert('Please enter consultation data');
-    return;
-  }
+  if (!input) return;
 
   generateConsultBtn.disabled = true;
-  consultSections.innerHTML = '<div class="loading">Generating...</div>';
+  consultDisplay.innerHTML = '<div class="loading">Generating...</div>';
 
   try {
     const token = localStorage.getItem('auth_token');
@@ -375,90 +342,85 @@ async function generateConsult() {
     const data = await res.json();
 
     if (data.answer) {
-      const isStructured = isStructuredResponse(data.answer);
+      const isStructured = detectStructuredResponse(data.answer);
       if (isStructured) {
-        const sections = parseAnswerSections(data.answer);
-        if (sections.length > 0) {
-          consultSections.innerHTML = sections.map((section, idx) => `
-            <div class="answer-section" data-index="${idx}">
-              <div class="section-header">
-                <span class="section-title">${section.title}</span>
-                <span class="section-controls">
-                  <button class="btn-section-copy" onclick="copyConsultSection(${idx})">📋</button>
-                  <span class="expand-icon">▼</span>
-                </span>
-              </div>
-              <div class="section-content">
-                <div class="content-text">${section.content.replace(/\n/g, '<br>')}</div>
-              </div>
-            </div>
-          `).join('');
-          
-          document.querySelectorAll('.section-header').forEach(header => {
-            header.addEventListener('click', () => {
-              header.closest('.answer-section').classList.toggle('open');
-            });
-          });
-          return;
-        }
+        const sections = parseStructuredResponse(data.answer);
+        consultDisplay.innerHTML = renderStructuredResponse(sections);
+      } else {
+        consultDisplay.innerHTML = renderSimpleResponse(data.answer);
       }
-      
-      consultSections.innerHTML = `
-        <div class="answer-simple">
-          <div class="simple-content">${data.answer.replace(/\n/g, '<br>')}</div>
-        </div>
-      `;
+      copyConsultBtn.disabled = false;
       saveConsultBtn.disabled = false;
     } else {
-      consultSections.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
+      consultDisplay.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
     }
   } catch (e) {
-    consultSections.innerHTML = `<div class="error">Error: ${e.message}</div>`;
+    consultDisplay.innerHTML = `<div class="error">Error: ${e.message}</div>`;
   } finally {
     generateConsultBtn.disabled = false;
   }
 }
 
-function copyConsultSection(idx) {
-  const section = document.querySelector(`[data-index="${idx}"] .content-text`);
-  if (section) {
-    const text = section.textContent;
-    navigator.clipboard.writeText(text);
-    alert('Copied!');
+generateConsultBtn.addEventListener('click', generateConsult);
+consultInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    generateConsult();
   }
-}
+});
 
 copyConsultBtn.addEventListener('click', () => {
-  const allText = document.querySelectorAll('#consultSections .content-text');
-  const combined = Array.from(allText).map(el => el.textContent).join('\n\n');
-  navigator.clipboard.writeText(combined);
+  const text = consultDisplay.innerText;
+  navigator.clipboard.writeText(text);
   alert('Copied!');
 });
 
-// ===== Save functionality =====
+// ===== Save/Load from localStorage =====
+function saveSavedItem(type, label, content) {
+  const key = `saved_${type}`;
+  const list = JSON.parse(localStorage.getItem(key) || '[]');
+  list.unshift({ id: Date.now(), label, content });
+  localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
+  renderSidebarItems();
+}
+
 saveAnswerBtn.addEventListener('click', () => {
-  const text = clinicalInput.value;
-  if (!text) return;
-  addSavedItem('questions', text.substring(0, 40) + '...');
+  saveSavedItem('questions', clinicalInput.value.substring(0, 50), answerDisplay.innerText);
 });
 
 saveConsultBtn.addEventListener('click', () => {
-  const text = Array.from(document.querySelectorAll('#consultSections .content-text')).map(el => el.textContent).join(' ');
-  if (!text) return;
-  addSavedItem('consults', text.substring(0, 40) + '...');
+  saveSavedItem('consults', consultInput.value.substring(0, 50), consultDisplay.innerText);
 });
 
-function addSavedItem(type, label) {
-  const container = document.getElementById(type === 'questions' ? 'savedQuestions' : 'savedConsults');
-  const item = document.createElement('div');
-  item.className = 'saved-item';
-  item.innerHTML = `
-    <span>${label}</span>
-    <button class="btn-delete">×</button>
-  `;
-  item.querySelector('.btn-delete').addEventListener('click', () => item.remove());
-  container.appendChild(item);
+function renderSidebarItems() {
+  const questions = JSON.parse(localStorage.getItem('saved_questions') || '[]');
+  const consults = JSON.parse(localStorage.getItem('saved_consults') || '[]');
+
+  const qContainer = document.getElementById('savedQuestions');
+  qContainer.innerHTML = questions.length ? questions.map(q => `
+    <div class="saved-item" onclick="document.getElementById('clinicalInput').value='${q.label}'; document.getElementById('clinicalInput').focus();">
+      <span>${q.label}</span>
+      <button onclick="event.stopPropagation(); deleteSaved('saved_questions', ${q.id});" class="btn-delete">×</button>
+    </div>
+  `).join('') : '<div class="empty">No saved questions</div>';
+
+  const cContainer = document.getElementById('savedConsults');
+  cContainer.innerHTML = consults.length ? consults.map(c => `
+    <div class="saved-item" onclick="document.getElementById('consultInput').value='${c.label}'; document.getElementById('consultInput').focus();">
+      <span>${c.label}</span>
+      <button onclick="event.stopPropagation(); deleteSaved('saved_consults', ${c.id});" class="btn-delete">×</button>
+    </div>
+  `).join('') : '<div class="empty">No saved consults</div>';
 }
+
+window.deleteSaved = function(key, id) {
+  const list = JSON.parse(localStorage.getItem(key) || '[]');
+  const filtered = list.filter(x => x.id !== id);
+  localStorage.setItem(key, JSON.stringify(filtered));
+  renderSidebarItems();
+};
+
+renderSidebarItems();
 </script>
 
 </body>
