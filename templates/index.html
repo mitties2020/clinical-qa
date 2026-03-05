@@ -323,13 +323,23 @@ document.getElementById('upgradePro').addEventListener('click', async () => {
   }
 });
 
-// ===== Response Rendering =====
+// ===== IMPROVED Response Rendering =====
 function detectStructuredResponse(text) {
-  const keywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigations', 'Treatment', 'Monitoring', 'Follow-up', 'Red Flag'];
-  return keywords.some(kw => text.includes(kw + ':') || text.includes(`**${kw}**`));
+  // Look for section headers (lines ending with colons)
+  const headerPattern = /^[A-Z][^:\n]*:$/m;
+  const hasHeaders = headerPattern.test(text);
+  
+  // Look for common clinical keywords
+  const keywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigations', 'Treatment', 'Monitoring', 
+                   'Follow-up', 'Recommendation', 'Plan', 'Management', 'Note', 'Clinical', 
+                   'History', 'Findings', 'Impression', 'Consultation', 'Examination', 'Impression'];
+  const hasKeywords = keywords.some(kw => text.includes(kw + ':'));
+  
+  return hasHeaders || hasKeywords;
 }
 
 function parseStructuredResponse(text) {
+  // Remove bold markers
   text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
   
   const sections = [];
@@ -341,9 +351,14 @@ function parseStructuredResponse(text) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    if (/^(Summary|Assessment|Diagnosis|Investigations|Treatment|Monitoring|Follow-up|Red Flags?|References?):?$/.test(trimmed)) {
-      if (currentSection) {
-        sections.push({ title: currentSection, content: currentContent.join('\n').trim() });
+    // Check if this line is a section header (ends with colon)
+    if (/^[A-Z][^:\n]*:$/.test(trimmed)) {
+      // Save previous section if exists
+      if (currentSection && currentContent.length > 0) {
+        sections.push({ 
+          title: currentSection, 
+          content: currentContent.join('\n').trim() 
+        });
       }
       currentSection = trimmed.replace(/:$/, '');
       currentContent = [];
@@ -352,19 +367,26 @@ function parseStructuredResponse(text) {
     }
   }
 
-  if (currentSection && currentContent.length) {
-    sections.push({ title: currentSection, content: currentContent.join('\n').trim() });
+  // Add final section
+  if (currentSection && currentContent.length > 0) {
+    sections.push({ 
+      title: currentSection, 
+      content: currentContent.join('\n').trim() 
+    });
   }
 
   return sections;
 }
 
 function renderStructuredResponse(sections) {
-  if (!sections || sections.length === 0) return '<div class="placeholder">No structured sections found</div>';
+  if (!sections || sections.length === 0) {
+    // Fallback - shouldn't happen with improved logic
+    return '<div class="answer-simple">Response received but no sections found. Please review the output above.</div>';
+  }
 
   let html = '';
   sections.forEach((sec, idx) => {
-    const isOpen = idx === 0;
+    const isOpen = idx === 0; // First section open by default
     html += `
       <div class="answer-section ${isOpen ? 'open' : ''}">
         <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
@@ -379,7 +401,18 @@ function renderStructuredResponse(sections) {
 }
 
 function renderSimpleResponse(text) {
-  return `<div class="answer-simple">${text.replace(/\n/g, '<br>')}</div>`;
+  // Format the text nicely even without structure
+  const formatted = text
+    .replace(/\n\n+/g, '\n\n') // Remove excessive line breaks
+    .split('\n')
+    .map(line => {
+      if (line.trim().length === 0) return '<br>';
+      if (line.startsWith('  ')) return '&nbsp;&nbsp;' + line.trim(); // Preserve indentation
+      return line;
+    })
+    .join('<br>');
+  
+  return `<div class="answer-simple">${formatted}</div>`;
 }
 
 // ===== Clinical Generation =====
@@ -499,10 +532,15 @@ async function generateConsult() {
     if (res.status === 402) {
       consultDisplay.innerHTML = `<div class="error"><strong>Quota Exceeded</strong><br>${data.headline}</div>`;
     } else if (data.answer) {
+      // ALWAYS render - either structured or simple
       const isStructured = detectStructuredResponse(data.answer);
       if (isStructured) {
         const sections = parseStructuredResponse(data.answer);
-        consultDisplay.innerHTML = renderStructuredResponse(sections);
+        if (sections.length > 0) {
+          consultDisplay.innerHTML = renderStructuredResponse(sections);
+        } else {
+          consultDisplay.innerHTML = renderSimpleResponse(data.answer);
+        }
       } else {
         consultDisplay.innerHTML = renderSimpleResponse(data.answer);
       }
