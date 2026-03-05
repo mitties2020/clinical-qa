@@ -5,8 +5,8 @@
   <title>VividMedi - Clinical AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    /* Spinner animation */
     .spinner {
       display: inline-block;
       width: 20px;
@@ -28,6 +28,30 @@
       padding: 40px 20px;
       color: var(--accent);
       font-weight: 600;
+    }
+
+    .btn-signin {
+      padding: 10px;
+      text-align: center;
+    }
+
+    .btn-upgrade {
+      width: 100%;
+      padding: 10px 12px;
+      background: linear-gradient(135deg, #ffd700, #ffed4e);
+      border: none;
+      border-radius: 6px;
+      color: #000;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .btn-upgrade:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
     }
   </style>
 </head>
@@ -65,7 +89,13 @@
             <div class="user-email">Not logged in</div>
             <div class="user-plan">Guest • Limited</div>
           </div>
-          <button id="logoutBtn" class="btn-logout">Logout</button>
+          
+          <div id="authSection">
+            <div id="googleSignIn"></div>
+            <button id="logoutBtn" class="btn-logout" style="display:none;">Logout</button>
+          </div>
+
+          <button id="upgradePro" class="btn-upgrade" style="display:none;">💎 Upgrade to Pro</button>
         </div>
       </aside>
 
@@ -157,6 +187,55 @@
 </div>
 
 <script>
+// ===== Google Sign-In =====
+const GOOGLE_CLIENT_ID = "{{ google_client_id }}";
+
+function handleCredentialResponse(response) {
+  const token = response.credential;
+  
+  fetch('/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential: token })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.ok) {
+      localStorage.setItem('auth_token', data.token);
+      updateUIAfterLogin();
+      updateUserInfo();
+    } else {
+      alert('Login failed: ' + data.error);
+    }
+  })
+  .catch(e => alert('Login error: ' + e.message));
+}
+
+window.onload = function () {
+  if (GOOGLE_CLIENT_ID) {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleCredentialResponse
+    });
+    google.accounts.id.renderButton(
+      document.getElementById('googleSignIn'),
+      { theme: 'dark', size: 'medium', width: '100%' }
+    );
+  }
+};
+
+function updateUIAfterLogin() {
+  document.getElementById('logoutBtn').style.display = 'block';
+  document.getElementById('upgradePro').style.display = 'block';
+  document.getElementById('googleSignIn').style.display = 'none';
+}
+
+function updateUIAfterLogout() {
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('upgradePro').style.display = 'none';
+  document.getElementById('googleSignIn').style.display = 'block';
+}
+
 // ===== Theme =====
 const themeToggle = document.getElementById('themeToggle');
 const html = document.documentElement;
@@ -178,12 +257,15 @@ async function updateUserInfo() {
     const res = await fetch('/api/me');
     const data = await res.json();
     const userInfo = document.getElementById('userInfo');
+    
     if (data.logged_in) {
+      updateUIAfterLogin();
       userInfo.innerHTML = `
         <div class="user-email">${data.email}</div>
         <div class="user-plan">${data.plan.toUpperCase()} • ${data.remaining} remaining</div>
       `;
     } else {
+      updateUIAfterLogout();
       userInfo.innerHTML = `
         <div class="user-email">Not logged in</div>
         <div class="user-plan">Guest • ${data.limit} queries</div>
@@ -202,13 +284,42 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     const res = await fetch('/auth/logout', { method: 'POST' });
     if (res.ok) {
       localStorage.removeItem('auth_token');
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
+      updateUIAfterLogout();
+      updateUserInfo();
+      alert('Logged out successfully');
     }
   } catch (e) {
     console.error('Logout failed:', e);
     alert('Logout failed. Try clearing browser data.');
+  }
+});
+
+// ===== Upgrade to Pro =====
+document.getElementById('upgradePro').addEventListener('click', async () => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    alert('Please login first');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/stripe/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert('Error: ' + (data.error || 'Could not create checkout session'));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
   }
 });
 
@@ -271,14 +382,6 @@ function renderSimpleResponse(text) {
   return `<div class="answer-simple">${text.replace(/\n/g, '<br>')}</div>`;
 }
 
-window.copySectionText = function(e, title) {
-  e.stopPropagation();
-  const section = e.target.closest('.answer-section');
-  const text = section.querySelector('.section-body').textContent;
-  navigator.clipboard.writeText(text);
-  alert('Copied!');
-};
-
 // ===== Clinical Generation =====
 const clinicalInput = document.getElementById('clinicalInput');
 const generateBtn = document.getElementById('generateBtn');
@@ -330,6 +433,7 @@ async function generateClinical() {
       saveAnswerBtn.disabled = false;
       clinicalInput.value = '';
       clinicalInput.focus();
+      updateUserInfo();
     } else {
       answerDisplay.innerHTML = `<div class="error">Error: ${data.error || 'Unknown error'}</div>`;
     }
@@ -406,6 +510,7 @@ async function generateConsult() {
       saveConsultBtn.disabled = false;
       consultInput.value = '';
       consultInput.focus();
+      updateUserInfo();
     } else {
       consultDisplay.innerHTML = `<div class="error">Error: ${data.error || 'Unknown error'}</div>`;
     }
