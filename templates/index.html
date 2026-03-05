@@ -5,6 +5,31 @@
   <title>VividMedi - Clinical AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    /* Spinner animation */
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 217, 255, 0.2);
+      border-top-color: #00d9ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 10px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+  </style>
 </head>
 
 <body>
@@ -36,9 +61,9 @@
         </div>
 
         <div class="sidebar-footer">
-          <div class="user-info">
-            <div class="user-email">michael.addis101@gmail.com</div>
-            <div class="user-plan">PRO • Unlimited</div>
+          <div class="user-info" id="userInfo">
+            <div class="user-email">Not logged in</div>
+            <div class="user-plan">Guest • Limited</div>
           </div>
           <button id="logoutBtn" class="btn-logout">Logout</button>
         </div>
@@ -65,7 +90,7 @@
               <textarea id="clinicalInput" class="input-area" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
               <div class="card-footer">
                 <button id="generateBtn" class="btn-primary">Generate</button>
-                <span class="hint">Press Enter ⏎</span>
+                <span class="hint">Press Shift+Enter or click Generate</span>
               </div>
             </section>
 
@@ -74,8 +99,8 @@
               <div class="card-header">
                 <h2>Answer</h2>
                 <div class="header-buttons">
-                  <button id="copyAnswerBtn" class="btn-icon" title="Copy">📋</button>
-                  <button id="saveAnswerBtn" class="btn-icon" title="Save">💾</button>
+                  <button id="copyAnswerBtn" class="btn-icon" title="Copy" disabled>📋</button>
+                  <button id="saveAnswerBtn" class="btn-icon" title="Save" disabled>💾</button>
                 </div>
               </div>
               <div class="answer-content">
@@ -93,22 +118,11 @@
               <button class="btn-clear" id="clearConsultBtn" title="Clear">✕</button>
             </div>
 
-            <div class="control-group">
-              <label>Smart Device</label>
-              <select id="deviceSelect" class="control-select">
-                <option value="">Connect Smart Device</option>
-                <option value="glasses">AI Glasses</option>
-                <option value="ring">AI Ring</option>
-                <option value="watch">Smart Watch</option>
-                <option value="headset">Headset</option>
-              </select>
-            </div>
-
             <textarea id="consultInput" class="input-area" placeholder="Paste raw dictation or consultation notes..." rows="8"></textarea>
 
             <div class="card-footer">
-              <button id="generateConsultBtn" class="btn-primary">Generate</button>
-              <span class="hint">Press Enter ⏎</span>
+              <button id="generateConsultBtn" class="btn-primary">Generate Note</button>
+              <span class="hint">Shift+Enter or click Generate</span>
             </div>
 
             <div class="divider"></div>
@@ -121,7 +135,6 @@
                 <option value="discharge">Discharge Summary</option>
                 <option value="referral">Referral Letter</option>
                 <option value="dva">DVA Assessment</option>
-                <option value="handover">Handover Note</option>
               </select>
             </div>
 
@@ -133,9 +146,8 @@
             </div>
 
             <div class="card-footer">
-              <button id="copyConsultBtn" class="btn-icon" title="Copy">📋</button>
-              <button id="saveConsultBtn" class="btn-icon" title="Save">💾</button>
-              <button id="clearConsultOutputBtn" class="btn-icon" title="Clear">✕</button>
+              <button id="copyConsultBtn" class="btn-icon" title="Copy" disabled>📋</button>
+              <button id="saveConsultBtn" class="btn-icon" title="Save" disabled>💾</button>
             </div>
           </section>
         </main>
@@ -150,6 +162,7 @@ const themeToggle = document.getElementById('themeToggle');
 const html = document.documentElement;
 const theme = localStorage.getItem('theme') || 'dark';
 html.setAttribute('data-theme', theme);
+themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
 
 themeToggle.addEventListener('click', () => {
   const current = html.getAttribute('data-theme');
@@ -159,21 +172,53 @@ themeToggle.addEventListener('click', () => {
   themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
 });
 
+// ===== Update User Info =====
+async function updateUserInfo() {
+  try {
+    const res = await fetch('/api/me');
+    const data = await res.json();
+    const userInfo = document.getElementById('userInfo');
+    if (data.logged_in) {
+      userInfo.innerHTML = `
+        <div class="user-email">${data.email}</div>
+        <div class="user-plan">${data.plan.toUpperCase()} • ${data.remaining} remaining</div>
+      `;
+    } else {
+      userInfo.innerHTML = `
+        <div class="user-email">Not logged in</div>
+        <div class="user-plan">Guest • ${data.limit} queries</div>
+      `;
+    }
+  } catch (e) {
+    console.error('Failed to load user info:', e);
+  }
+}
+
+updateUserInfo();
+
 // ===== Logout =====
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/auth/logout', { method: 'POST' });
-  localStorage.removeItem('auth_token');
-  window.location.reload();
+  try {
+    const res = await fetch('/auth/logout', { method: 'POST' });
+    if (res.ok) {
+      localStorage.removeItem('auth_token');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 500);
+    }
+  } catch (e) {
+    console.error('Logout failed:', e);
+    alert('Logout failed. Try clearing browser data.');
+  }
 });
 
-// ===== Smart Response Parser =====
+// ===== Response Rendering =====
 function detectStructuredResponse(text) {
   const keywords = ['Summary', 'Assessment', 'Diagnosis', 'Investigations', 'Treatment', 'Monitoring', 'Follow-up', 'Red Flag'];
   return keywords.some(kw => text.includes(kw + ':') || text.includes(`**${kw}**`));
 }
 
 function parseStructuredResponse(text) {
-  // Remove asterisks
   text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
   
   const sections = [];
@@ -185,7 +230,6 @@ function parseStructuredResponse(text) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Check if line is a section header
     if (/^(Summary|Assessment|Diagnosis|Investigations|Treatment|Monitoring|Follow-up|Red Flags?|References?):?$/.test(trimmed)) {
       if (currentSection) {
         sections.push({ title: currentSection, content: currentContent.join('\n').trim() });
@@ -209,13 +253,12 @@ function renderStructuredResponse(sections) {
 
   let html = '';
   sections.forEach((sec, idx) => {
-    const isOpen = idx === 0; // First section always open
+    const isOpen = idx === 0;
     html += `
       <div class="answer-section ${isOpen ? 'open' : ''}">
         <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
           <span class="section-title">${sec.title}</span>
           <span class="expand-icon">▼</span>
-          <button class="btn-copy-section" onclick="copySectionText(event, '${sec.title}')">📋</button>
         </div>
         <div class="section-body">${sec.content.replace(/\n/g, '<br>')}</div>
       </div>
@@ -246,15 +289,19 @@ const clearClinicalBtn = document.getElementById('clearClinicalBtn');
 
 clearClinicalBtn.addEventListener('click', () => {
   clinicalInput.value = '';
+  clinicalInput.focus();
   answerDisplay.innerHTML = '<div class="placeholder">Generate an answer to see results here</div>';
 });
 
 async function generateClinical() {
   const input = clinicalInput.value.trim();
-  if (!input) return;
+  if (!input) {
+    alert('Please enter a clinical question');
+    return;
+  }
 
   generateBtn.disabled = true;
-  answerDisplay.innerHTML = '<div class="loading">Generating...</div>';
+  answerDisplay.innerHTML = '<div class="loading"><div class="spinner"></div>Generating response...</div>';
 
   try {
     const token = localStorage.getItem('auth_token');
@@ -269,7 +316,9 @@ async function generateClinical() {
 
     const data = await res.json();
 
-    if (data.answer) {
+    if (res.status === 402) {
+      answerDisplay.innerHTML = `<div class="error"><strong>Quota Exceeded</strong><br>${data.headline}<br>${data.copy.join('<br>')}</div>`;
+    } else if (data.answer) {
       const isStructured = detectStructuredResponse(data.answer);
       if (isStructured) {
         const sections = parseStructuredResponse(data.answer);
@@ -279,8 +328,10 @@ async function generateClinical() {
       }
       copyAnswerBtn.disabled = false;
       saveAnswerBtn.disabled = false;
+      clinicalInput.value = '';
+      clinicalInput.focus();
     } else {
-      answerDisplay.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
+      answerDisplay.innerHTML = `<div class="error">Error: ${data.error || 'Unknown error'}</div>`;
     }
   } catch (e) {
     answerDisplay.innerHTML = `<div class="error">Error: ${e.message}</div>`;
@@ -291,7 +342,7 @@ async function generateClinical() {
 
 generateBtn.addEventListener('click', generateClinical);
 clinicalInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && e.shiftKey) {
     e.preventDefault();
     generateClinical();
   }
@@ -300,7 +351,7 @@ clinicalInput.addEventListener('keydown', (e) => {
 copyAnswerBtn.addEventListener('click', () => {
   const text = answerDisplay.innerText;
   navigator.clipboard.writeText(text);
-  alert('Copied!');
+  alert('Copied to clipboard!');
 });
 
 // ===== Consultation Generation =====
@@ -311,22 +362,22 @@ const outputTypeSelect = document.getElementById('outputTypeSelect');
 const copyConsultBtn = document.getElementById('copyConsultBtn');
 const saveConsultBtn = document.getElementById('saveConsultBtn');
 const clearConsultBtn = document.getElementById('clearConsultBtn');
-const clearConsultOutputBtn = document.getElementById('clearConsultOutputBtn');
 
 clearConsultBtn.addEventListener('click', () => {
   consultInput.value = '';
-});
-
-clearConsultOutputBtn.addEventListener('click', () => {
+  consultInput.focus();
   consultDisplay.innerHTML = '<div class="placeholder">Output will appear here</div>';
 });
 
 async function generateConsult() {
   const input = consultInput.value.trim();
-  if (!input) return;
+  if (!input) {
+    alert('Please enter consultation data');
+    return;
+  }
 
   generateConsultBtn.disabled = true;
-  consultDisplay.innerHTML = '<div class="loading">Generating...</div>';
+  consultDisplay.innerHTML = '<div class="loading"><div class="spinner"></div>Generating consultation note...</div>';
 
   try {
     const token = localStorage.getItem('auth_token');
@@ -341,7 +392,9 @@ async function generateConsult() {
 
     const data = await res.json();
 
-    if (data.answer) {
+    if (res.status === 402) {
+      consultDisplay.innerHTML = `<div class="error"><strong>Quota Exceeded</strong><br>${data.headline}</div>`;
+    } else if (data.answer) {
       const isStructured = detectStructuredResponse(data.answer);
       if (isStructured) {
         const sections = parseStructuredResponse(data.answer);
@@ -351,8 +404,10 @@ async function generateConsult() {
       }
       copyConsultBtn.disabled = false;
       saveConsultBtn.disabled = false;
+      consultInput.value = '';
+      consultInput.focus();
     } else {
-      consultDisplay.innerHTML = `<div class="error">${data.error || 'Generation failed'}</div>`;
+      consultDisplay.innerHTML = `<div class="error">Error: ${data.error || 'Unknown error'}</div>`;
     }
   } catch (e) {
     consultDisplay.innerHTML = `<div class="error">Error: ${e.message}</div>`;
@@ -363,7 +418,7 @@ async function generateConsult() {
 
 generateConsultBtn.addEventListener('click', generateConsult);
 consultInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && e.shiftKey) {
     e.preventDefault();
     generateConsult();
   }
@@ -372,10 +427,10 @@ consultInput.addEventListener('keydown', (e) => {
 copyConsultBtn.addEventListener('click', () => {
   const text = consultDisplay.innerText;
   navigator.clipboard.writeText(text);
-  alert('Copied!');
+  alert('Copied to clipboard!');
 });
 
-// ===== Save/Load from localStorage =====
+// ===== Save/Load =====
 function saveSavedItem(type, label, content) {
   const key = `saved_${type}`;
   const list = JSON.parse(localStorage.getItem(key) || '[]');
@@ -385,11 +440,15 @@ function saveSavedItem(type, label, content) {
 }
 
 saveAnswerBtn.addEventListener('click', () => {
-  saveSavedItem('questions', clinicalInput.value.substring(0, 50), answerDisplay.innerText);
+  const label = clinicalInput.value.substring(0, 50) || 'Answer';
+  saveSavedItem('questions', label, answerDisplay.innerText);
+  alert('Saved!');
 });
 
 saveConsultBtn.addEventListener('click', () => {
-  saveSavedItem('consults', consultInput.value.substring(0, 50), consultDisplay.innerText);
+  const label = consultInput.value.substring(0, 50) || 'Consultation';
+  saveSavedItem('consults', label, consultDisplay.innerText);
+  alert('Saved!');
 });
 
 function renderSidebarItems() {
