@@ -151,8 +151,10 @@
             <textarea id="consultInput" class="input-area" placeholder="Paste raw dictation or consultation notes..." rows="8"></textarea>
 
             <div class="card-footer">
+              <label for="uploadAudio" class="btn-primary" style="margin: 0; cursor: pointer;">📁 Upload Call Recording</label>
+              <input id="uploadAudio" type="file" accept="audio/*" style="display: none;" />
               <button id="generateConsultBtn" class="btn-primary">Generate Note</button>
-              <span class="hint">Press Enter to generate</span>
+              <span class="hint" id="uploadStatus"></span>
             </div>
 
             <div class="divider"></div>
@@ -614,6 +616,69 @@ window.deleteSaved = function(key, id) {
 };
 
 renderSidebarItems();
+
+// ===== Voice Recording =====
+let mediaRecorder;
+let audioChunks = [];
+const recordBtn = document.getElementById('recordBtn');
+
+recordBtn.addEventListener('click', async () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    // Stop recording
+    mediaRecorder.stop();
+    recordBtn.textContent = '🎤 Transcribing...';
+    recordBtn.disabled = true;
+  } else {
+    // Start recording
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      
+      mediaRecorder.addEventListener('dataavailable', (event) => {
+        audioChunks.push(event.data);
+      });
+      
+      mediaRecorder.addEventListener('stop', async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+      });
+      
+      mediaRecorder.start();
+      recordBtn.textContent = '⏹️ Stop Recording';
+      recordBtn.style.background = 'linear-gradient(135deg, #ff4444, #cc0000)';
+    } catch (err) {
+      alert('Microphone access denied. Please allow microphone access in browser settings.');
+    }
+  }
+});
+
+async function transcribeAudio(audioBlob) {
+  const formData = new FormData();
+  formData.append('audio', audioBlob);
+  
+  try {
+    const res = await fetch('/api/transcribe', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await res.json();
+    
+    if (data.text) {
+      consultInput.value += (consultInput.value ? '\n\n' : '') + data.text;
+      consultInput.focus();
+    } else {
+      alert('Transcription failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    recordBtn.textContent = '🎤 Record';
+    recordBtn.style.background = '';
+    recordBtn.disabled = false;
+  }
+}
 </script>
 
 </body>
