@@ -19,6 +19,7 @@ from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from australian_guidelines import get_guidelines_for_condition, format_guidelines_for_response, list_templates, get_template
 
 
 if os.getenv("RENDER") is None:
@@ -883,6 +884,93 @@ def transcribe():
                         os.remove(p)
                     except Exception:
                         pass
+
+
+# -----------------------------------
+# Documentation & Guidelines Endpoints
+# -----------------------------------
+@app.get("/api/templates")
+def get_templates():
+    """List available document templates"""
+    return jsonify({"templates": list_templates()})
+
+
+@app.get("/api/templates/<template_name>")
+def get_template_endpoint(template_name):
+    """Get specific template"""
+    template = get_template(template_name)
+    if not template:
+        return jsonify({"error": "Template not found"}), 404
+    return jsonify(template)
+
+
+@app.post("/api/generate-from-notes")
+def generate_from_notes():
+    """Generate structured summary from raw clinical notes"""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    raw_notes = (data.get("notes") or "").strip()
+    output_type = (data.get("output_type") or "summary").strip().lower()
+
+    if not raw_notes:
+        return jsonify({"error": "Empty notes"}), 400
+    
+    if len(raw_notes) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Notes too long (max {MAX_QUERY_LENGTH} chars)"}), 400
+
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
+
+    try:
+        u = get_authed_user()
+        user_id = u["id"] if u else None
+
+        # Generate structured summary from raw notes
+        system_prompt = """You are an expert clinical scribe for Australian doctors.
+
+TASK: Convert raw clinical notes into a clean, structured SOAP format (Subjective, Objective, Assessment, Plan).
+
+Output MUST be professionally formatted for medical records.
+- Use proper medical terminology
+- Organize chronologically
+- Include all relevant findings
+- Format clearly with headings
+- Use Australian medical conventions
+
+Do NOT include doctor opinions or speculation. Stick to documented facts."""
+
+        user_content = f"Please convert these raw notes to structured SOAP format:\n\n{raw_notes}"
+
+        answer = call_deepseek(system_prompt, user_content)
+
+        if user_id:
+            save_conversation(user_id, raw_notes[:100], answer, "notes_to_summary")
+
+        return jsonify({"summary": answer})
+
+    except Exception as e:
+        print("GENERATE FROM NOTES ERROR:", repr(e))
+        return jsonify({"error": "Generation failed"}), 502
+
+
+@app.post("/api/guidelines")
+def get_guidelines():
+    """Get relevant guidelines for a condition"""
+    data = request.get_json(silent=True) or {}
+    condition = (data.get("condition") or "").strip()
+
+    if not condition:
+        return jsonify({"error": "Missing condition"}), 400
+
+    guidelines = get_guidelines_for_condition(condition)
+    
+    if not guidelines:
+        return jsonify({"guidelines": [], "message": "No guidelines found for this condition"})
+    
+    return jsonify({"guidelines": guidelines, "formatted": format_guidelines_for_response(guidelines)})
 
 
 if __name__ == "__main__":
