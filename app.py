@@ -20,6 +20,7 @@ from google.auth.transport import requests as google_requests
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from australian_guidelines import get_guidelines_for_condition, format_guidelines_for_response, list_templates, get_template
+from consultation_template import get_template_prompt
 
 
 if os.getenv("RENDER") is None:
