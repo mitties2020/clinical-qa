@@ -7,15 +7,8 @@ WORKDIR /app
 
 RUN apk add --no-cache \
     ffmpeg \
-    pkgconfig \
-    build-base \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavfilter-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libswresample-dev \
-    libswscale-dev
+    gcc \
+    musl-dev
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
