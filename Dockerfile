@@ -1,22 +1,14 @@
-FROM python:3.11-alpine
+FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTESPACE=1
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     pkg-config \
-    gcc \
-    musl-dev \
-    libavformat \
-    libavcodec \
-    libavdevice \
-    libavfilter \
-    libavutil \
-    libswresample \
-    libswscale
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
