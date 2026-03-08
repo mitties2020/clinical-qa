@@ -53,175 +53,6 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
     }
-
-    /* Tab Navigation */
-    .tabs-nav {
-      display: flex;
-      gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface-secondary);
-      overflow-x: auto;
-    }
-
-    .tab-btn {
-      padding: 8px 16px;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      cursor: pointer;
-      font-weight: 500;
-      border-bottom: 2px solid transparent;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-
-    .tab-btn:hover {
-      color: var(--accent);
-    }
-
-    .tab-btn.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* Templates Grid */
-    .templates-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
-      padding: 20px;
-    }
-
-    .template-card {
-      padding: 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .template-card:hover {
-      border-color: var(--accent);
-      box-shadow: 0 4px 12px rgba(0, 217, 255, 0.1);
-    }
-
-    .template-card h3 {
-      margin: 0 0 8px 0;
-      color: var(--text);
-      font-size: 14px;
-    }
-
-    .template-card button {
-      width: 100%;
-      padding: 8px;
-      background: var(--accent);
-      border: none;
-      color: white;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 500;
-      margin-top: 8px;
-    }
-
-    .template-card button:hover {
-      opacity: 0.9;
-    }
-
-    /* Guidelines Result */
-    .guidelines-result {
-      padding: 20px;
-    }
-
-    .guidelines-item {
-      margin-bottom: 24px;
-      padding: 16px;
-      background: var(--surface);
-      border-left: 4px solid var(--accent);
-      border-radius: 4px;
-    }
-
-    .guidelines-item h3 {
-      margin: 0 0 8px 0;
-      color: var(--accent);
-    }
-
-    .guidelines-source {
-      margin: 12px 0 8px 0;
-      font-weight: 600;
-      color: var(--text-secondary);
-      font-size: 12px;
-    }
-
-    .guidelines-points {
-      list-style: none;
-      padding: 0;
-      margin: 8px 0;
-    }
-
-    .guidelines-points li {
-      padding: 4px 0 4px 20px;
-      position: relative;
-      color: var(--text);
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .guidelines-points li:before {
-      content: "•";
-      position: absolute;
-      left: 0;
-      color: var(--accent);
-    }
-
-    .guidelines-source a {
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 500;
-    }
-
-    .guidelines-source a:hover {
-      text-decoration: underline;
-    }
-
-    .control-input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 14px;
-      margin-bottom: 12px;
-    }
-
-    .control-input:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.1);
-    }
-
-    .control-group {
-      margin-bottom: 16px;
-    }
-
-    .control-group label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      font-size: 13px;
-    }
   </style>
 </head>
 
@@ -278,150 +109,77 @@
         </header>
 
         <main class="workspace">
-          <!-- TAB NAVIGATION -->
-          <div class="tabs-nav">
-            <button class="tab-btn active" data-tab="clinical">Clinical Q&A</button>
-            <button class="tab-btn" data-tab="templates">Templates</button>
-            <button class="tab-btn" data-tab="guidelines">Guidelines</button>
-            <button class="tab-btn" data-tab="notes">Notes Converter</button>
-          </div>
-
-          <!-- TAB 1: Clinical Q&A (Original) -->
-          <div class="tab-content active" id="tab-clinical">
-            <!-- ROW 1: Clinical Question + Answer -->
-            <div class="grid-row">
-              <!-- CLINICAL QUESTION -->
-              <section class="card input-card">
-                <div class="card-header">
-                  <h2>Clinical Question</h2>
-                  <button class="btn-clear" id="clearClinicalBtn" title="Clear">✕</button>
-                </div>
-                <textarea id="clinicalInput" class="input-area" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
-                <div class="card-footer">
-                  <button id="generateBtn" class="btn-primary">Generate</button>
-                  <span class="hint">Press Enter to generate</span>
-                </div>
-              </section>
-
-              <!-- ANSWER -->
-              <section class="card answer-card">
-                <div class="card-header">
-                  <h2>Answer</h2>
-                  <div class="header-buttons">
-                    <button id="copyAnswerBtn" class="btn-icon" title="Copy" disabled>📋</button>
-                    <button id="saveAnswerBtn" class="btn-icon" title="Save" disabled>💾</button>
-                  </div>
-                </div>
-                <div class="answer-content">
-                  <div id="answerDisplay" class="answer-display">
-                    <div class="placeholder">Generate an answer to see results here</div>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <!-- ROW 2: Consultation -->
-            <section class="card consult-card">
+          <!-- ROW 1: Clinical Question + Answer -->
+          <div class="grid-row">
+            <!-- CLINICAL QUESTION -->
+            <section class="card input-card">
               <div class="card-header">
-                <h2>Consultation Data Input</h2>
-                <button class="btn-clear" id="clearConsultBtn" title="Clear">✕</button>
+                <h2>Clinical Question</h2>
+                <button class="btn-clear" id="clearClinicalBtn" title="Clear">✕</button>
               </div>
-
-              <textarea id="consultInput" class="input-area" placeholder="Paste raw dictation or consultation notes..." rows="8"></textarea>
-
+              <textarea id="clinicalInput" class="input-area" placeholder="Paste clinical notes, exam findings, or ask a question..." rows="9"></textarea>
               <div class="card-footer">
-                <button id="generateConsultBtn" class="btn-primary">Generate Note</button>
+                <button id="generateBtn" class="btn-primary">Generate</button>
                 <span class="hint">Press Enter to generate</span>
               </div>
+            </section>
 
-              <div class="divider"></div>
-
-              <div class="control-group">
-                <label>Output Type</label>
-                <select id="outputTypeSelect" class="control-select">
-                  <option value="consult_note">Initial Consultation</option>
-                  <option value="medical_review">Medical Review</option>
-                  <option value="discharge">Discharge Summary</option>
-                  <option value="referral">Referral Letter</option>
-                  <option value="dva">DVA Assessment</option>
-                </select>
+            <!-- ANSWER -->
+            <section class="card answer-card">
+              <div class="card-header">
+                <h2>Answer</h2>
+                <div class="header-buttons">
+                  <button id="copyAnswerBtn" class="btn-icon" title="Copy" disabled>📋</button>
+                  <button id="saveAnswerBtn" class="btn-icon" title="Save" disabled>💾</button>
+                </div>
               </div>
-
-              <div class="output-label">Output</div>
               <div class="answer-content">
-                <div id="consultDisplay" class="answer-display">
-                  <div class="placeholder">Output will appear here</div>
-                </div>
-              </div>
-
-              <div class="card-footer">
-                <button id="copyConsultBtn" class="btn-icon" title="Copy" disabled>📋</button>
-                <button id="saveConsultBtn" class="btn-icon" title="Save" disabled>💾</button>
-              </div>
-            </section>
-          </div>
-          <!-- END TAB 1 -->
-
-          <!-- TAB 2: Templates -->
-          <div class="tab-content" id="tab-templates">
-            <section class="card">
-              <div class="card-header">
-                <h2>Document Templates</h2>
-              </div>
-              <div id="templatesList" class="templates-grid">
-                <div class="loading"><div class="spinner"></div>Loading templates...</div>
-              </div>
-            </section>
-          </div>
-          <!-- END TAB 2 -->
-
-          <!-- TAB 3: Guidelines -->
-          <div class="tab-content" id="tab-guidelines">
-            <section class="card">
-              <div class="card-header">
-                <h2>Australian Clinical Guidelines</h2>
-              </div>
-              <div style="padding: 20px;">
-                <div class="control-group">
-                  <label>Search by Condition</label>
-                  <input id="guidelinesSearch" class="control-input" type="text" placeholder="e.g., UTI, Pneumonia, Asthma..." />
-                  <button id="guidelinesSearchBtn" class="btn-primary">Search Guidelines</button>
-                </div>
-              </div>
-              <div id="guidelinesResult" class="guidelines-result">
-                <div class="placeholder">Search for a condition to see relevant Australian guidelines (TGA, NHMRC, Therapeutic Guidelines)</div>
-              </div>
-            </section>
-          </div>
-          <!-- END TAB 3 -->
-
-          <!-- TAB 4: Notes Converter -->
-          <div class="tab-content" id="tab-notes">
-            <section class="card">
-              <div class="card-header">
-                <h2>Patient Notes to Structured Summary</h2>
-              </div>
-              <div style="padding: 20px;">
-                <textarea id="rawNotesInput" class="input-area" placeholder="Paste raw clinical notes, dictation, or observations..." rows="10"></textarea>
-                <div class="card-footer">
-                  <button id="convertNotesBtn" class="btn-primary">Convert to SOAP Format</button>
-                  <span class="hint">Converts raw notes to structured Subjective-Objective-Assessment-Plan</span>
-                </div>
-              </div>
-              <div style="padding: 0 20px;">
-                <div class="output-label">Structured Output</div>
-                <div class="answer-content">
-                  <div id="notesOutput" class="answer-display">
-                    <div class="placeholder">Converted summary will appear here</div>
-                  </div>
-                </div>
-                <div class="card-footer">
-                  <button id="copyNotesBtn" class="btn-icon" title="Copy" disabled>📋</button>
+                <div id="answerDisplay" class="answer-display">
+                  <div class="placeholder">Generate an answer to see results here</div>
                 </div>
               </div>
             </section>
           </div>
-          <!-- END TAB 4 -->
+
+          <!-- ROW 2: Consultation -->
+          <section class="card consult-card">
+            <div class="card-header">
+              <h2>Consultation Data Input</h2>
+              <button class="btn-clear" id="clearConsultBtn" title="Clear">✕</button>
+            </div>
+
+            <textarea id="consultInput" class="input-area" placeholder="Paste raw dictation or consultation notes..." rows="8"></textarea>
+
+            <div class="card-footer">
+              <button id="generateConsultBtn" class="btn-primary">Generate Note</button>
+              <span class="hint">Press Enter to generate</span>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="control-group">
+              <label>Output Type</label>
+              <select id="outputTypeSelect" class="control-select">
+                <option value="consult_note">Initial Consultation</option>
+                <option value="medical_review">Medical Review</option>
+                <option value="discharge">Discharge Summary</option>
+                <option value="referral">Referral Letter</option>
+                <option value="dva">DVA Assessment</option>
+              </select>
+            </div>
+
+            <div class="output-label">Output</div>
+            <div class="answer-content">
+              <div id="consultDisplay" class="answer-display">
+                <div class="placeholder">Output will appear here</div>
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <button id="copyConsultBtn" class="btn-icon" title="Copy" disabled>📋</button>
+              <button id="saveConsultBtn" class="btn-icon" title="Save" disabled>💾</button>
+            </div>
+          </section>
         </main>
       </div>
     </div>
@@ -464,8 +222,6 @@ window.onload = function () {
       { theme: 'dark', size: 'medium', width: '100%' }
     );
   }
-  
-  loadTemplates();
 };
 
 function updateUIAfterLogin() {
@@ -493,148 +249,6 @@ themeToggle.addEventListener('click', () => {
   html.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
   themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
-});
-
-// ===== Tabs =====
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-  });
-});
-
-// ===== Templates =====
-async function loadTemplates() {
-  try {
-    const res = await fetch('/api/templates');
-    const data = await res.json();
-    const grid = document.getElementById('templatesList');
-    
-    if (data.templates && data.templates.length > 0) {
-      grid.innerHTML = data.templates.map(t => `
-        <div class="template-card">
-          <h3>${t.name}</h3>
-          <button onclick="loadTemplate('${t.key}')">Use Template</button>
-        </div>
-      `).join('');
-    } else {
-      grid.innerHTML = '<div class="placeholder">No templates available</div>';
-    }
-  } catch (e) {
-    document.getElementById('templatesList').innerHTML = `<div class="error">Error loading templates: ${e.message}</div>`;
-  }
-}
-
-window.loadTemplate = function(templateKey) {
-  fetch(`/api/templates/${templateKey}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.template) {
-        alert('Template loaded to clipboard. Paste it into a text editor to use.');
-        navigator.clipboard.writeText(data.template);
-      }
-    })
-    .catch(e => alert('Error: ' + e.message));
-};
-
-// ===== Guidelines =====
-document.getElementById('guidelinesSearchBtn').addEventListener('click', async () => {
-  const condition = document.getElementById('guidelinesSearch').value.trim();
-  if (!condition) {
-    alert('Please enter a condition');
-    return;
-  }
-
-  const result = document.getElementById('guidelinesResult');
-  result.innerHTML = '<div class="loading"><div class="spinner"></div>Searching guidelines...</div>';
-
-  try {
-    const res = await fetch('/api/guidelines', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ condition })
-    });
-    const data = await res.json();
-
-    if (data.guidelines && data.guidelines.length > 0) {
-      let html = '';
-      data.guidelines.forEach(g => {
-        html += `<div class="guidelines-item">
-          <h3>${g.data.title}</h3>`;
-        g.data.sources.forEach(src => {
-          html += `<div class="guidelines-source">
-            ${src.name}
-            ${src.url ? `<a href="${src.url}" target="_blank">View</a>` : ''}
-          </div>
-          <ul class="guidelines-points">
-            ${src.key_points.map(p => `<li>${p}</li>`).join('')}
-          </ul>`;
-        });
-        html += '</div>';
-      });
-      result.innerHTML = html;
-    } else {
-      result.innerHTML = '<div class="placeholder">No guidelines found for this condition. Try another search term.</div>';
-    }
-  } catch (e) {
-    result.innerHTML = `<div class="error">Error: ${e.message}</div>`;
-  }
-});
-
-document.getElementById('guidelinesSearch').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    document.getElementById('guidelinesSearchBtn').click();
-  }
-});
-
-// ===== Notes Converter =====
-document.getElementById('convertNotesBtn').addEventListener('click', async () => {
-  const notes = document.getElementById('rawNotesInput').value.trim();
-  if (!notes) {
-    alert('Please enter notes');
-    return;
-  }
-
-  const output = document.getElementById('notesOutput');
-  output.innerHTML = '<div class="loading"><div class="spinner"></div>Converting notes to SOAP format...</div>';
-
-  try {
-    const token = localStorage.getItem('auth_token');
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const res = await fetch('/api/generate-from-notes', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ notes })
-    });
-
-    const data = await res.json();
-
-    if (data.summary) {
-      const isStructured = detectStructuredResponse(data.summary);
-      if (isStructured) {
-        const sections = parseStructuredResponse(data.summary);
-        output.innerHTML = renderStructuredResponse(sections);
-      } else {
-        output.innerHTML = renderSimpleResponse(data.summary);
-      }
-      document.getElementById('copyNotesBtn').disabled = false;
-      updateUserInfo();
-    } else {
-      output.innerHTML = `<div class="error">Error: ${data.error || 'Unknown error'}</div>`;
-    }
-  } catch (e) {
-    output.innerHTML = `<div class="error">Error: ${e.message}</div>`;
-  }
-});
-
-document.getElementById('copyNotesBtn').addEventListener('click', () => {
-  const text = document.getElementById('notesOutput').innerText;
-  navigator.clipboard.writeText(text);
-  alert('Copied to clipboard!');
 });
 
 // ===== Update User Info =====
