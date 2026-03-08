@@ -1,22 +1,21 @@
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
     ffmpeg \
-    pkg-config \
-    build-essential \
+    pkgconfig \
+    build-base \
     libavcodec-dev \
     libavdevice-dev \
     libavfilter-dev \
     libavformat-dev \
     libavutil-dev \
     libswresample-dev \
-    libswscale-dev \
-  && rm -rf /var/lib/apt/lists/*
+    libswscale-dev
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -1,5 +1,6 @@
 # app.py — VividMedi with TRULY INTELLIGENT AI (Query Classification + Adaptive Prompts)
 # Now actually smart: detects simple vs complex questions, responds conversationally
+# SECURITY PATCHED: Input validation, file size limits, webhook error handling
 
 import os
 import re
@@ -63,9 +64,18 @@ app.secret_key = (os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or AP
 
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=APP_BASE_URL.startswith("https://"),
+    SESSION_COOKIE_SAMESITE="Strict",
+    SESSION_COOKIE_SECURE=True,
+    PERMANENT_SESSION_LIFETIME=60 * 60 * 24,
 )
+
+
+# -----------------------------------
+# Validation constants
+# -----------------------------------
+MAX_QUERY_LENGTH = 10000
+MIN_QUERY_LENGTH = 3
+MAX_AUDIO_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 # -----------------------------------
@@ -186,8 +196,8 @@ def ensure_guest_cookie(resp):
         resp.set_cookie(
             "vivid_guest", gid,
             httponly=True,
-            secure=APP_BASE_URL.startswith("https://"),
-            samesite="Lax",
+            secure=True,
+            samesite="Strict",
             max_age=60 * 60 * 24 * 365,
             path="/",
         )
@@ -377,7 +387,18 @@ def call_deepseek(system_prompt: str, user_content: str, context: str = "") -> s
 
 
 # -----------------------------------
-# Health / Pages / Auth (same as before)
+# Security headers middleware
+# -----------------------------------
+@app.after_request
+def set_security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-XSS-Protection"] = "1; mode=block"
+    return resp
+
+
+# -----------------------------------
+# Health / Pages / Auth
 # -----------------------------------
 @app.get("/health")
 def health():
@@ -440,7 +461,7 @@ def api_me():
     )
 
 
-# User/quota functions (same as before)
+# User/quota functions
 def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
     email = (email or "").strip().lower()
     if not email:
@@ -556,6 +577,10 @@ def auth_google():
     try:
         info = google_id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
 
+        # Validate required fields
+        if not info.get("email"):
+            return jsonify({"error": "Email not in token"}), 400
+
         email = (info.get("email") or "").strip().lower()
         name = (info.get("name") or "") or (info.get("given_name") or "")
         picture = (info.get("picture") or "")
@@ -582,7 +607,7 @@ def auth_logout():
     return jsonify({"ok": True})
 
 
-# Stripe (same as before, abbreviated for space)
+# Stripe webhook
 @app.post("/api/stripe/create-checkout-session")
 def stripe_create_checkout_session():
     if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID_PRO:
@@ -640,20 +665,26 @@ def stripe_webhook():
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
         if customer_id and subscription_id:
-            with db_conn() as conn:
-                row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
-                if row:
-                    conn.execute("UPDATE users SET stripe_subscription_id=? WHERE id=?", (subscription_id, row["id"]))
-                    conn.commit()
+            try:
+                with db_conn() as conn:
+                    row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
+                    if row:
+                        conn.execute("UPDATE users SET stripe_subscription_id=? WHERE id=?", (subscription_id, row["id"]))
+                        conn.commit()
+            except Exception as e:
+                print("STRIPE WEBHOOK ERROR (checkout.session.completed):", repr(e))
 
     if etype == "invoice.paid":
         customer_id = obj.get("customer")
         subscription_id = obj.get("subscription")
         if customer_id:
-            with db_conn() as conn:
-                row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
-            if row:
-                upgrade_user_to_pro(row["id"], stripe_customer_id=customer_id, stripe_subscription_id=subscription_id)
+            try:
+                with db_conn() as conn:
+                    row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
+                if row:
+                    upgrade_user_to_pro(row["id"], stripe_customer_id=customer_id, stripe_subscription_id=subscription_id)
+            except Exception as e:
+                print("STRIPE WEBHOOK ERROR (invoice.paid):", repr(e))
 
     if etype in ("customer.subscription.created", "customer.subscription.updated"):
         sub = obj
@@ -661,18 +692,27 @@ def stripe_webhook():
         status = (sub.get("status") or "").lower()
         sub_id = sub.get("id")
         if customer_id and status in ("active", "trialing"):
-            with db_conn() as conn:
-                row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
-            if row:
-                upgrade_user_to_pro(row["id"], stripe_customer_id=customer_id, stripe_subscription_id=sub_id)
+            try:
+                with db_conn() as conn:
+                    row = conn.execute("SELECT id FROM users WHERE stripe_customer_id=?", (customer_id,)).fetchone()
+                if row:
+                    upgrade_user_to_pro(row["id"], stripe_customer_id=customer_id, stripe_subscription_id=sub_id)
+            except Exception as e:
+                print("STRIPE WEBHOOK ERROR (subscription created/updated):", repr(e))
 
         if customer_id and status in ("canceled", "unpaid", "incomplete_expired"):
-            downgrade_user_to_free_by_customer(customer_id)
+            try:
+                downgrade_user_to_free_by_customer(customer_id)
+            except Exception as e:
+                print("STRIPE WEBHOOK ERROR (subscription downgrade):", repr(e))
 
     if etype == "customer.subscription.deleted":
         customer_id = obj.get("customer")
         if customer_id:
-            downgrade_user_to_free_by_customer(customer_id)
+            try:
+                downgrade_user_to_free_by_customer(customer_id)
+            except Exception as e:
+                print("STRIPE WEBHOOK ERROR (subscription deleted):", repr(e))
 
     return "OK", 200
 
@@ -691,6 +731,12 @@ def generate():
 
     if not query:
         return jsonify({"error": "Empty query"}), 400
+    
+    # Input validation
+    if len(query) < MIN_QUERY_LENGTH:
+        return jsonify({"error": f"Query too short (min {MIN_QUERY_LENGTH} chars)"}), 400
+    if len(query) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Query too long (max {MAX_QUERY_LENGTH} chars)"}), 400
 
     blocked = enforce_quota_or_402()
     if blocked:
@@ -742,6 +788,12 @@ def consult():
 
     if not text:
         return jsonify({"error": "Empty input"}), 400
+    
+    # Input validation
+    if len(text) < MIN_QUERY_LENGTH:
+        return jsonify({"error": f"Input too short (min {MIN_QUERY_LENGTH} chars)"}), 400
+    if len(text) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Input too long (max {MAX_QUERY_LENGTH} chars)"}), 400
 
     blocked = enforce_quota_or_402()
     if blocked:
@@ -768,7 +820,7 @@ def consult():
         return jsonify({"error": "AI request failed"}), 502
 
 
-# Transcribe (same as before)
+# Transcribe
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
@@ -793,6 +845,16 @@ def transcribe():
     f = request.files.get("audio")
     if not f:
         return jsonify({"error": "Missing audio"}), 400
+    
+    # Check file size before saving
+    f.seek(0, os.SEEK_END)
+    file_size = f.tell()
+    f.seek(0)
+    
+    if file_size > MAX_AUDIO_SIZE:
+        return jsonify({"error": f"File too large (max {MAX_AUDIO_SIZE / 1024 / 1024:.0f}MB)"}), 413
+    if file_size == 0:
+        return jsonify({"error": "Empty audio file"}), 400
 
     with _transcribe_lock:
         tmp_path = None
