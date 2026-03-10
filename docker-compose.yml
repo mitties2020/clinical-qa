@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  # Build Node/Tailwind assets
+  build:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: |
+      sh -c '
+        npm install
+        npm run build:css
+      '
+
+  # Main app
   vividmedi:
     build: .
     container_name: vividmedi_app
@@ -16,11 +29,14 @@ services:
       - PRO_EMAILS=${PRO_EMAILS}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-change-me}
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./app.py:/app/app.py
       - ./templates:/app/templates
       - ./static:/app/static
+    depends_on:
+      - build
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
