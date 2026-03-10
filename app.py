@@ -21,6 +21,7 @@ from google.auth.transport import requests as google_requests
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from australian_guidelines import get_guidelines_for_condition, format_guidelines_for_response, list_templates, get_template
 from consultation_template import get_template_prompt
+from performance_monitor import monitor, track_performance
 
 
 if os.getenv("RENDER") is None:
@@ -417,11 +418,72 @@ def ping():
     return "pong", 200
 
 
+# -----------------------------------
+# Performance Monitoring
+# -----------------------------------
+@app.get("/api/perf/stats")
+def perf_stats():
+    """Get performance statistics"""
+    stats = monitor.get_all_stats()
+    return jsonify({
+        "stats": stats,
+        "generated_at": datetime.utcnow().isoformat()
+    })
+
+
+@app.get("/api/perf/summary")
+def perf_summary():
+    """Get overall performance summary"""
+    stats = monitor.get_all_stats()
+    all_durations = []
+    total_requests = 0
+    total_cache_hits = 0
+    
+    for endpoint_stats in stats.values():
+        if endpoint_stats:
+            total_requests += endpoint_stats.get("requests", 0)
+            total_cache_hits += int(endpoint_stats.get("requests", 0) * endpoint_stats.get("cache_hit_rate", 0) / 100)
+    
+    return jsonify({
+        "total_requests": total_requests,
+        "total_cache_hit_rate": (total_cache_hits / total_requests * 100) if total_requests > 0 else 0,
+        "uptime_seconds": monitor.get_stats().get("uptime_seconds", 0) if monitor.get_stats() else 0,
+        "endpoints_monitored": len(stats),
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+
+@app.get("/api/perf/health")
+def perf_health():
+    """Health check with performance metrics"""
+    stats = monitor.get_stats()
+    overall_avg = stats.get("avg_duration_ms", 0) if stats else 0
+    
+    health_status = "healthy"
+    if overall_avg > 1000:
+        health_status = "degraded"
+    elif overall_avg > 2000:
+        health_status = "poor"
+    
+    return jsonify({
+        "status": health_status,
+        "avg_response_ms": overall_avg,
+        "uptime_seconds": monitor.get_stats().get("uptime_seconds", 0) if stats else 0,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+
 @app.get("/")
 def index():
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
     return resp
+
+
+@app.get("/dashboard")
+def dashboard():
+    """Performance monitoring dashboard"""
+    return render_template("dashboard.html")
 
 
 @app.get("/pro/success")
