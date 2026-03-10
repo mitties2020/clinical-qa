@@ -22,3 +22,6 @@ PyJWT==2.11.0
 cryptography==45.0.7
 
 faster-whisper==1.0.3
+
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
