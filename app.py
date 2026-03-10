@@ -487,6 +487,13 @@ def consultation_notes():
     return resp
 
 
+@app.get("/login")
+def login():
+    resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
+    ensure_guest_cookie(resp)
+    return resp
+
+
 @app.get("/dashboard")
 def dashboard():
     """Performance monitoring dashboard"""
