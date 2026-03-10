@@ -4,131 +4,611 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VividMedi - Clinical AI Assistant</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #00d9ff;
+      --primary-dark: #00a8cc;
+      --bg-dark: #0a0e27;
+      --bg-secondary: #141829;
+      --bg-tertiary: #1a1f3a;
+      --text-primary: #ffffff;
+      --text-secondary: #b0bec5;
+      --border: rgba(0, 217, 255, 0.15);
+      --border-light: rgba(0, 217, 255, 0.08);
+    }
+
+    html[data-theme="light"] {
+      --primary: #0066cc;
+      --primary-dark: #004a99;
+      --bg-dark: #f5f7fb;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f0f4f9;
+      --text-primary: #0f1419;
+      --text-secondary: #5a6b7d;
+      --border: rgba(0, 102, 204, 0.15);
+      --border-light: rgba(0, 102, 204, 0.08);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      background: linear-gradient(135deg, var(--bg-dark) 0%, #0f1a35 100%);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Background effects */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 20% 50%, rgba(0, 217, 255, 0.08) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* Header */
+    header {
+      background: rgba(20, 24, 41, 0.7);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+    }
+
+    .header-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(120deg, var(--primary) 0%, #00f0ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary) 0%, #00f0ff 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      color: var(--bg-dark);
+      font-size: 20px;
+      box-shadow: 0 8px 24px rgba(0, 217, 255, 0.3);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .theme-toggle {
+      background: rgba(0, 217, 255, 0.1);
+      border: 1px solid var(--border);
+      color: var(--primary);
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    .theme-toggle:hover {
+      background: rgba(0, 217, 255, 0.2);
+      border-color: var(--primary);
+      box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
+    }
+
+    #authSection {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    /* Main container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+
+    /* Hero section */
+    .hero {
+      text-align: center;
+      margin-bottom: 4rem;
+      animation: fadeInDown 0.8s ease;
+    }
+
+    .hero-title {
+      font-size: clamp(2.5rem, 8vw, 4.5rem);
+      font-weight: 900;
+      margin-bottom: 1rem;
+      background: linear-gradient(120deg, var(--primary) 0%, #00f0ff 50%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -1px;
+    }
+
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* User info bar */
+    .user-bar {
+      background: rgba(26, 31, 58, 0.6);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .user-email {
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .user-remaining {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    /* Grid layout */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .grid-1 {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: rgba(26, 31, 58, 0.4);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .card:hover {
+      border-color: var(--primary);
+      background: rgba(26, 31, 58, 0.6);
+      box-shadow: 0 8px 32px rgba(0, 217, 255, 0.1);
+      transform: translateY(-4px);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: linear-gradient(120deg, var(--primary), #00f0ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card-icons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      background: rgba(0, 217, 255, 0.1);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: all 0.3s ease;
+    }
+
+    .icon-btn:hover {
+      background: rgba(0, 217, 255, 0.2);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Inputs */
+    textarea, select, input[type="file"] {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(15, 22, 35, 0.8);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: vertical;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+    }
+
+    textarea:focus, select:focus, input[type="file"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: rgba(15, 22, 35, 0.95);
+      box-shadow: 0 0 16px rgba(0, 217, 255, 0.15);
+    }
+
+    textarea::placeholder {
+      color: var(--text-secondary);
+    }
+
+    /* Output display */
+    .output-box {
+      background: rgba(15, 22, 35, 0.6);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 1.5rem;
+      min-height: 250px;
+      overflow-y: auto;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.7;
+      font-family: 'Monaco', 'Courier New', monospace;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .output-box.empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-secondary);
+      font-family: inherit;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(120deg, var(--primary) 0%, #00f0ff 100%);
+      color: var(--bg-dark);
+      box-shadow: 0 8px 24px rgba(0, 217, 255, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(0, 217, 255, 0.4);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: rgba(0, 217, 255, 0.1);
+      color: var(--primary);
+      border: 1.5px solid var(--primary);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(0, 217, 255, 0.2);
+      box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
+    }
+
+    .btn-file {
+      background: rgba(0, 217, 255, 0.1);
+      color: var(--primary);
+      border: 1.5px solid var(--primary);
+      cursor: pointer;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-block;
+      margin-bottom: 1rem;
+    }
+
+    .btn-file:hover {
+      background: rgba(0, 217, 255, 0.2);
+      box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Utility classes */
+    .flex-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .flex-row > * {
+      flex: 1;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 1.5rem 0;
+    }
+
+    .status-text {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+    }
+
+    /* Animations */
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.5s ease;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 217, 255, 0.05);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 217, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 217, 255, 0.3);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-top: 4rem;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
-<body class="bg-dark text-white">
-  <div class="min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="border-b border-primary/10 bg-secondary/50 backdrop-blur-xl sticky top-0 z-50">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-to-br from-primary to-cyan-500 rounded-lg flex items-center justify-center font-bold text-lg">V</div>
-          <div>
-            <h1 class="gradient-text text-2xl font-black">VividMedi</h1>
-            <p class="text-xs text-gray-400">Clinical Intelligence</p>
-          </div>
-        </div>
-        
-        <div class="flex items-center gap-4">
-          <button id="themeToggle" class="p-2 hover:bg-primary/10 rounded-lg transition">🌙</button>
-          <div id="authSection" class="flex gap-2"></div>
-        </div>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="logo">
+        <div class="logo-icon">V</div>
+        <span>VividMedi</span>
       </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12">
-      <!-- User Info -->
-      <div id="userInfo" class="mb-8 p-4 bg-secondary rounded-lg border border-primary/10">
-        <p class="text-sm text-gray-400">Logged in as: <span id="userEmail" class="text-primary font-semibold">Guest</span></p>
-        <p class="text-xs text-gray-500 mt-1">Remaining: <span id="userRemaining" class="text-primary">10</span> queries</p>
+      <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+        <div id="authSection"></div>
       </div>
+    </div>
+  </header>
 
-      <!-- Grid Layout -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <!-- Clinical Question Card -->
-        <div class="card">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold">💡 Clinical Question</h2>
-            <button id="clearClinicalBtn" class="text-gray-400 hover:text-primary transition">✕</button>
-          </div>
-          <textarea id="clinicalInput" class="input-base mb-4 h-48" placeholder="Ask a clinical question, describe symptoms, or paste exam findings..."></textarea>
-          <button id="generateBtn" class="w-full btn-primary">Generate Answer</button>
-        </div>
+  <!-- Main Content -->
+  <div class="container">
+    <!-- Hero -->
+    <div class="hero">
+      <h1 class="hero-title">Clinical Intelligence</h1>
+      <p class="hero-subtitle">AI-powered decision support for healthcare professionals</p>
+    </div>
 
-        <!-- Answer Card -->
-        <div class="card">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold">📋 Answer</h2>
-            <div class="flex gap-2">
-              <button id="copyAnswerBtn" class="text-gray-400 hover:text-primary transition" title="Copy" disabled>📋</button>
-              <button id="saveAnswerBtn" class="text-gray-400 hover:text-primary transition" title="Save" disabled>💾</button>
-            </div>
-          </div>
-          <div id="answerDisplay" class="h-48 overflow-y-auto bg-dark/50 rounded-lg p-4 border border-primary/10 text-sm leading-relaxed">
-            <p class="text-gray-500 text-center mt-20">Generate an answer to see results here</p>
-          </div>
-        </div>
+    <!-- User Info -->
+    <div class="user-bar">
+      <div class="user-info">
+        <span class="user-email" id="userEmail">Guest</span>
+        <span class="user-remaining">Remaining: <span id="userRemaining">10</span> queries</span>
       </div>
+      <div id="userActions"></div>
+    </div>
 
-      <!-- Consultation Card -->
+    <!-- Clinical Q&A Section -->
+    <div class="grid-2">
+      <!-- Input Card -->
       <div class="card">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold">🎙️ Consultation Notes</h2>
-          <button id="clearConsultBtn" class="text-gray-400 hover:text-primary transition">✕</button>
+        <div class="card-header">
+          <h2 class="card-title">💡 Clinical Question</h2>
+          <button class="icon-btn" id="clearClinicalBtn" title="Clear">✕</button>
         </div>
+        <textarea id="clinicalInput" placeholder="Ask a clinical question, describe symptoms, or paste exam findings..." style="flex: 1; min-height: 200px;"></textarea>
+        <button class="btn btn-primary" id="generateBtn">Generate Answer</button>
+      </div>
 
-        <!-- Upload & Input -->
-        <div class="mb-4">
-          <label for="uploadAudio" class="btn-primary inline-block mb-4 cursor-pointer">📁 Upload Call Recording</label>
-          <input id="uploadAudio" type="file" accept="audio/*" class="hidden">
-          <div id="uploadStatus" class="text-sm text-gray-400 mb-4"></div>
-        </div>
-
-        <textarea id="consultInput" class="input-base mb-4 h-32" placeholder="Or paste raw consultation notes here..."></textarea>
-
-        <!-- Output Type Selector -->
-        <div class="mb-4">
-          <label class="block text-sm font-semibold mb-2">📝 Note Type</label>
-          <select id="outputTypeSelect" class="input-base">
-            <option value="weight_management_followup">Weight Management Follow-up (DVA)</option>
-            <option value="initial_weight_management">Initial Weight Management (DVA)</option>
-            <option value="general_telehealth">General Telehealth</option>
-          </select>
-        </div>
-
-        <!-- Generate Button -->
-        <button id="generateConsultBtn" class="w-full btn-primary mb-6">Generate Clinical Note</button>
-
-        <!-- Output -->
-        <div>
-          <h3 class="font-bold mb-2">Generated Note</h3>
-          <div id="consultDisplay" class="h-64 overflow-y-auto bg-dark/50 rounded-lg p-4 border border-primary/10 text-sm leading-relaxed font-mono">
-            <p class="text-gray-500 text-center mt-28">Note will appear here</p>
-          </div>
-          <div class="flex gap-2 mt-4">
-            <button id="copyConsultBtn" class="flex-1 btn-secondary" disabled>📋 Copy Note</button>
-            <button id="saveConsultBtn" class="flex-1 btn-secondary" disabled>💾 Save</button>
+      <!-- Output Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📋 Answer</h2>
+          <div class="card-icons">
+            <button class="icon-btn" id="copyAnswerBtn" title="Copy" disabled>📋</button>
+            <button class="icon-btn" id="saveAnswerBtn" title="Save" disabled>💾</button>
           </div>
         </div>
+        <div class="output-box empty" id="answerDisplay">Generate an answer to see results here</div>
+      </div>
+    </div>
+
+    <!-- Consultation Section -->
+    <div class="card grid-1">
+      <div class="card-header">
+        <h2 class="card-title">🎙️ Consultation Notes</h2>
+        <button class="icon-btn" id="clearConsultBtn" title="Clear">✕</button>
       </div>
 
-      <!-- Performance Dashboard Link -->
-      <div class="mt-12 text-center">
-        <a href="/dashboard" class="text-primary hover:underline text-sm">📊 View Performance Metrics</a>
+      <!-- Upload -->
+      <div>
+        <label class="btn-file" for="uploadAudio">📁 Upload Call Recording</label>
+        <input id="uploadAudio" type="file" accept="audio/*" style="display: none;">
+        <div class="status-text" id="uploadStatus"></div>
       </div>
-    </main>
 
-    <!-- Footer -->
-    <footer class="border-t border-primary/10 bg-secondary/30 py-6 mt-12">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-400">
-        <p>VividMedi © 2024 • Clinical AI for Australian Healthcare</p>
+      <!-- Input -->
+      <textarea id="consultInput" placeholder="Or paste raw consultation notes here..." style="min-height: 120px;"></textarea>
+
+      <!-- Output Type -->
+      <div>
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📝 Note Type</label>
+        <select id="outputTypeSelect">
+          <option value="weight_management_followup">Weight Management Follow-up (DVA)</option>
+          <option value="initial_weight_management">Initial Weight Management (DVA)</option>
+          <option value="general_telehealth">General Telehealth</option>
+        </select>
       </div>
-    </footer>
+
+      <!-- Generate -->
+      <button class="btn btn-primary" id="generateConsultBtn">Generate Clinical Note</button>
+
+      <div class="divider"></div>
+
+      <!-- Output -->
+      <h3 style="margin-bottom: 1rem;">Generated Note</h3>
+      <div class="output-box empty" id="consultDisplay">Note will appear here</div>
+
+      <div class="flex-row">
+        <button class="btn btn-secondary" id="copyConsultBtn" disabled>📋 Copy</button>
+        <button class="btn btn-secondary" id="saveConsultBtn" disabled>💾 Save</button>
+      </div>
+    </div>
+
+    <!-- Dashboard Link -->
+    <div style="text-align: center; margin-top: 3rem; margin-bottom: 2rem;">
+      <a href="/dashboard">📊 View Performance Metrics</a>
+    </div>
   </div>
+
+  <!-- Footer -->
+  <footer>
+    VividMedi © 2024 • Clinical AI for Australian Healthcare
+  </footer>
 
   <!-- Scripts -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
     const GOOGLE_CLIENT_ID = "{{ google_client_id }}";
 
-    // Theme toggle
+    // Theme
     const themeToggle = document.getElementById('themeToggle');
     const html = document.documentElement;
-    const theme = localStorage.getItem('theme') || 'dark';
-    html.setAttribute('data-theme', theme);
-    themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    html.setAttribute('data-theme', savedTheme);
+    themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
     themeToggle.addEventListener('click', () => {
       const current = html.getAttribute('data-theme');
       const next = current === 'dark' ? 'light' : 'dark';
@@ -144,14 +624,12 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential: response.credential })
       })
-      .then(res => res.json())
+      .then(r => r.json())
       .then(data => {
         if (data.ok) {
           localStorage.setItem('auth_token', data.token);
           updateUserInfo();
-        } else {
-          alert('Login failed: ' + data.error);
-        }
+        } else alert('Login failed: ' + data.error);
       });
     }
 
@@ -163,7 +641,6 @@
       updateUserInfo();
     };
 
-    // Update user info
     async function updateUserInfo() {
       const res = await fetch('/api/me');
       const data = await res.json();
@@ -171,48 +648,64 @@
       document.getElementById('userRemaining').textContent = data.remaining || data.limit;
     }
 
-    // Clinical Generation
+    // Clinical Q&A
     document.getElementById('generateBtn').addEventListener('click', async () => {
       const input = document.getElementById('clinicalInput').value.trim();
-      if (!input) { alert('Enter a question'); return; }
-      
-      document.getElementById('answerDisplay').innerHTML = '<p class="text-center text-primary">⏳ Generating...</p>';
-      
+      if (!input) return alert('Enter a question');
+      document.getElementById('answerDisplay').innerHTML = '<span style="color: var(--primary);">⏳ Generating...</span>';
       try {
         const res = await fetch('/api/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}` },
           body: JSON.stringify({ query: input })
         });
         const data = await res.json();
-        document.getElementById('answerDisplay').innerHTML = data.answer || 'No response';
-        document.getElementById('clinicalInput').value = '';
-        updateUserInfo();
+        if (res.status === 402) {
+          document.getElementById('answerDisplay').textContent = data.headline;
+        } else {
+          document.getElementById('answerDisplay').textContent = data.answer || 'No response';
+          document.getElementById('answerDisplay').classList.remove('empty');
+          document.getElementById('copyAnswerBtn').disabled = false;
+          document.getElementById('saveAnswerBtn').disabled = false;
+          document.getElementById('clinicalInput').value = '';
+          updateUserInfo();
+        }
       } catch (e) {
-        document.getElementById('answerDisplay').innerHTML = '<p class="text-red-400">Error: ' + e.message + '</p>';
+        document.getElementById('answerDisplay').textContent = '❌ Error: ' + e.message;
       }
     });
 
-    // Consultation Generation
+    document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('generateBtn').click();
+      }
+    });
+
+    // Consultation
     document.getElementById('generateConsultBtn').addEventListener('click', async () => {
       const input = document.getElementById('consultInput').value.trim();
-      if (!input) { alert('Enter consultation data'); return; }
-      
-      document.getElementById('consultDisplay').innerHTML = '<p class="text-center text-primary">⏳ Generating note...</p>';
-      
+      if (!input) return alert('Enter consultation data');
+      document.getElementById('consultDisplay').innerHTML = '<span style="color: var(--primary);">⏳ Generating note...</span>';
       try {
         const res = await fetch('/api/consult', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}` },
           body: JSON.stringify({ text: input, mode: document.getElementById('outputTypeSelect').value })
         });
         const data = await res.json();
-        document.getElementById('consultDisplay').innerHTML = data.answer || 'No response';
-        document.getElementById('consultInput').value = '';
-        document.getElementById('copyConsultBtn').disabled = false;
-        updateUserInfo();
+        if (res.status === 402) {
+          document.getElementById('consultDisplay').textContent = data.headline;
+        } else {
+          document.getElementById('consultDisplay').textContent = data.answer || 'No response';
+          document.getElementById('consultDisplay').classList.remove('empty');
+          document.getElementById('copyConsultBtn').disabled = false;
+          document.getElementById('saveConsultBtn').disabled = false;
+          document.getElementById('consultInput').value = '';
+          updateUserInfo();
+        }
       } catch (e) {
-        document.getElementById('consultDisplay').innerHTML = '<p class="text-red-400">Error: ' + e.message + '</p>';
+        document.getElementById('consultDisplay').textContent = '❌ Error: ' + e.message;
       }
     });
 
@@ -231,11 +724,9 @@
     document.getElementById('uploadAudio').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      
       document.getElementById('uploadStatus').textContent = '🔄 Transcribing...';
       const formData = new FormData();
       formData.append('audio', file);
-      
       try {
         const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
         const data = await res.json();
@@ -251,12 +742,14 @@
     // Clear buttons
     document.getElementById('clearClinicalBtn').addEventListener('click', () => {
       document.getElementById('clinicalInput').value = '';
-      document.getElementById('answerDisplay').innerHTML = '<p class="text-gray-500 text-center mt-20">Generate an answer to see results here</p>';
+      document.getElementById('answerDisplay').innerHTML = 'Generate an answer to see results here';
+      document.getElementById('answerDisplay').classList.add('empty');
     });
 
     document.getElementById('clearConsultBtn').addEventListener('click', () => {
       document.getElementById('consultInput').value = '';
-      document.getElementById('consultDisplay').innerHTML = '<p class="text-gray-500 text-center mt-28">Note will appear here</p>';
+      document.getElementById('consultDisplay').innerHTML = 'Note will appear here';
+      document.getElementById('consultDisplay').classList.add('empty');
     });
   </script>
 </body>
