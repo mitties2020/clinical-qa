@@ -1,756 +1,695 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VividMedi - Clinical AI Assistant</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VividMedi - Clinical Decision Support</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    :root {
-      --primary: #00d9ff;
-      --primary-dark: #00a8cc;
-      --bg-dark: #0a0e27;
-      --bg-secondary: #141829;
-      --bg-tertiary: #1a1f3a;
-      --text-primary: #ffffff;
-      --text-secondary: #b0bec5;
-      --border: rgba(0, 217, 255, 0.15);
-      --border-light: rgba(0, 217, 255, 0.08);
-    }
+        :root {
+            --primary-dark: #0f1419;
+            --secondary-dark: #1a1f2e;
+            --tertiary-dark: #252d3d;
+            --metallic-gold: #c9a561;
+            --metallic-silver: #b8bcc4;
+            --accent-teal: #00d9ff;
+            --text-primary: #f0f0f0;
+            --text-secondary: #a0a0a0;
+            --border-color: #3a4052;
+            --success-green: #00d97f;
+        }
 
-    html[data-theme="light"] {
-      --primary: #0066cc;
-      --primary-dark: #004a99;
-      --bg-dark: #f5f7fb;
-      --bg-secondary: #ffffff;
-      --bg-tertiary: #f0f4f9;
-      --text-primary: #0f1419;
-      --text-secondary: #5a6b7d;
-      --border: rgba(0, 102, 204, 0.15);
-      --border-light: rgba(0, 102, 204, 0.08);
-    }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #1a232f 50%, var(--secondary-dark) 100%);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            overflow: hidden;
+        }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-      background: linear-gradient(135deg, var(--bg-dark) 0%, #0f1a35 100%);
-      color: var(--text-primary);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
+        body {
+            display: flex;
+            flex-direction: column;
+        }
 
-    /* Background effects */
-    body::before {
-      content: "";
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(circle at 20% 50%, rgba(0, 217, 255, 0.08) 0%, transparent 50%),
-                  radial-gradient(circle at 80% 80%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
-      pointer-events: none;
-      z-index: -1;
-    }
+        .container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
 
-    /* Header */
-    header {
-      background: rgba(20, 24, 41, 0.7);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      padding: 1rem 2rem;
-    }
+        /* Sidebar */
+        .sidebar {
+            width: 60px;
+            background: var(--secondary-dark);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            gap: 20px;
+            transition: all 0.3s ease;
+        }
 
-    .header-container {
-      max-width: 1400px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+        .sidebar-item {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+        }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 24px;
-      font-weight: 800;
-      background: linear-gradient(120deg, var(--primary) 0%, #00f0ff 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
+        .sidebar-item:hover {
+            background: rgba(201, 165, 97, 0.1);
+            color: var(--metallic-gold);
+            border-color: var(--metallic-gold);
+        }
 
-    .logo-icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, var(--primary) 0%, #00f0ff 100%);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      color: var(--bg-dark);
-      font-size: 20px;
-      box-shadow: 0 8px 24px rgba(0, 217, 255, 0.3);
-    }
+        .sidebar-item.active {
+            background: rgba(201, 165, 97, 0.15);
+            color: var(--metallic-gold);
+            border-color: var(--metallic-gold);
+        }
 
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
 
-    .theme-toggle {
-      background: rgba(0, 217, 255, 0.1);
-      border: 1px solid var(--border);
-      color: var(--primary);
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s ease;
-    }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 40px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(26, 31, 46, 0.4);
+            backdrop-filter: blur(10px);
+        }
 
-    .theme-toggle:hover {
-      background: rgba(0, 217, 255, 0.2);
-      border-color: var(--primary);
-      box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
-    }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
 
-    #authSection {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--metallic-gold), var(--accent-teal));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
 
-    /* Main container */
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 3rem 2rem;
-    }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
 
-    /* Hero section */
-    .hero {
-      text-align: center;
-      margin-bottom: 4rem;
-      animation: fadeInDown 0.8s ease;
-    }
+        /* Theme Toggle */
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            background: var(--tertiary-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 4px;
+            cursor: pointer;
+            gap: 0;
+            transition: all 0.3s ease;
+        }
 
-    .hero-title {
-      font-size: clamp(2.5rem, 8vw, 4.5rem);
-      font-weight: 900;
-      margin-bottom: 1rem;
-      background: linear-gradient(120deg, var(--primary) 0%, #00f0ff 50%, var(--primary) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: -1px;
-    }
+        .theme-toggle-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+        }
 
-    .hero-subtitle {
-      font-size: 1.25rem;
-      color: var(--text-secondary);
-      margin-bottom: 2rem;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
-    }
+        .theme-toggle-btn.active {
+            background: rgba(201, 165, 97, 0.2);
+            color: var(--metallic-gold);
+        }
 
-    /* User info bar */
-    .user-bar {
-      background: rgba(26, 31, 58, 0.6);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1rem 1.5rem;
-      margin-bottom: 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+        .auth-btn {
+            padding: 10px 24px;
+            background: rgba(201, 165, 97, 0.15);
+            border: 1px solid var(--metallic-gold);
+            color: var(--metallic-gold);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            font-size: 14px;
+        }
 
-    .user-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
+        .auth-btn:hover {
+            background: rgba(201, 165, 97, 0.25);
+            box-shadow: 0 0 20px rgba(201, 165, 97, 0.3);
+        }
 
-    .user-email {
-      font-weight: 600;
-      color: var(--primary);
-    }
+        /* Main Area */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            overflow-y: auto;
+        }
 
-    .user-remaining {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-    }
+        .content-wrapper {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            animation: slideUp 0.6s ease;
+        }
 
-    /* Grid layout */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-      gap: 2rem;
-      margin-bottom: 2rem;
-    }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
-    .grid-1 {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2rem;
-    }
+        .hero-section {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
 
-    @media (max-width: 768px) {
-      .grid-2 {
-        grid-template-columns: 1fr;
-      }
-    }
+        .hero-title {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1.2;
+            background: linear-gradient(135deg, var(--text-primary), var(--metallic-silver));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
 
-    /* Cards */
-    .card {
-      background: rgba(26, 31, 58, 0.4);
-      backdrop-filter: blur(20px);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      transition: all 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
 
-    .card:hover {
-      border-color: var(--primary);
-      background: rgba(26, 31, 58, 0.6);
-      box-shadow: 0 8px 32px rgba(0, 217, 255, 0.1);
-      transform: translateY(-4px);
-    }
+        /* Input Box */
+        .input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-    }
+        .input-box {
+            background: rgba(37, 45, 61, 0.6);
+            border: 1px solid rgba(201, 165, 97, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
 
-    .card-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      background: linear-gradient(120deg, var(--primary), #00f0ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
+        .input-box:focus-within {
+            border-color: var(--metallic-gold);
+            box-shadow: 0 0 30px rgba(201, 165, 97, 0.15);
+            background: rgba(37, 45, 61, 0.8);
+        }
 
-    .card-icons {
-      display: flex;
-      gap: 8px;
-    }
+        textarea {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+            resize: none;
+            max-height: 120px;
+            outline: none;
+            min-height: 60px;
+        }
 
-    .icon-btn {
-      width: 40px;
-      height: 40px;
-      background: rgba(0, 217, 255, 0.1);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      transition: all 0.3s ease;
-    }
+        textarea::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
 
-    .icon-btn:hover {
-      background: rgba(0, 217, 255, 0.2);
-      color: var(--primary);
-      border-color: var(--primary);
-    }
+        .input-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
 
-    .icon-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+        .action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(201, 165, 97, 0.15);
+            color: var(--metallic-gold);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 16px;
+        }
 
-    /* Inputs */
-    textarea, select, input[type="file"] {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(15, 22, 35, 0.8);
-      border: 1px solid var(--border-light);
-      border-radius: 10px;
-      color: var(--text-primary);
-      font-family: inherit;
-      font-size: 0.95rem;
-      resize: vertical;
-      transition: all 0.3s ease;
-      margin-bottom: 1rem;
-    }
+        .action-btn:hover {
+            background: rgba(201, 165, 97, 0.25);
+            transform: scale(1.05);
+        }
 
-    textarea:focus, select:focus, input[type="file"]:focus {
-      outline: none;
-      border-color: var(--primary);
-      background: rgba(15, 22, 35, 0.95);
-      box-shadow: 0 0 16px rgba(0, 217, 255, 0.15);
-    }
+        .send-btn {
+            padding: 0 20px;
+            background: linear-gradient(135deg, var(--metallic-gold), #d4af7a);
+            color: var(--primary-dark);
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: 8px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
 
-    textarea::placeholder {
-      color: var(--text-secondary);
-    }
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(201, 165, 97, 0.3);
+        }
 
-    /* Output display */
-    .output-box {
-      background: rgba(15, 22, 35, 0.6);
-      border: 1px solid var(--border-light);
-      border-radius: 10px;
-      padding: 1.5rem;
-      min-height: 250px;
-      overflow-y: auto;
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-      line-height: 1.7;
-      font-family: 'Monaco', 'Courier New', monospace;
-      word-break: break-word;
-      white-space: pre-wrap;
-    }
+        .send-btn:active {
+            transform: translateY(0);
+        }
 
-    .output-box.empty {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: var(--text-secondary);
-      font-family: inherit;
-    }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 40px;
+        }
 
-    /* Buttons */
-    .btn {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      width: 100%;
-    }
+        .feature-card {
+            background: rgba(37, 45, 61, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
 
-    .btn-primary {
-      background: linear-gradient(120deg, var(--primary) 0%, #00f0ff 100%);
-      color: var(--bg-dark);
-      box-shadow: 0 8px 24px rgba(0, 217, 255, 0.3);
-    }
+        .feature-card:hover {
+            border-color: rgba(201, 165, 97, 0.5);
+            background: rgba(37, 45, 61, 0.8);
+            transform: translateY(-4px);
+        }
 
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(0, 217, 255, 0.4);
-    }
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            color: var(--metallic-gold);
+        }
 
-    .btn-primary:active {
-      transform: translateY(0);
-    }
+        .feature-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
 
-    .btn-secondary {
-      background: rgba(0, 217, 255, 0.1);
-      color: var(--primary);
-      border: 1.5px solid var(--primary);
-    }
+        .feature-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
 
-    .btn-secondary:hover {
-      background: rgba(0, 217, 255, 0.2);
-      box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
-    }
+        /* Responsive */
+        @media (max-width: 768px) {
+            .content-area {
+                padding: 24px;
+            }
 
-    .btn-file {
-      background: rgba(0, 217, 255, 0.1);
-      color: var(--primary);
-      border: 1.5px solid var(--primary);
-      cursor: pointer;
-      padding: 12px 24px;
-      border-radius: 10px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-      display: inline-block;
-      margin-bottom: 1rem;
-    }
+            .hero-title {
+                font-size: 32px;
+            }
 
-    .btn-file:hover {
-      background: rgba(0, 217, 255, 0.2);
-      box-shadow: 0 0 20px rgba(0, 217, 255, 0.2);
-    }
+            .header {
+                padding: 16px 20px;
+            }
 
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
 
-    /* Utility classes */
-    .flex-row {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1rem;
-    }
+        /* Light theme */
+        html[data-theme="light"] {
+            --primary-dark: #f8f9fa;
+            --secondary-dark: #ffffff;
+            --tertiary-dark: #f0f2f5;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --border-color: #e0e0e0;
+        }
 
-    .flex-row > * {
-      flex: 1;
-    }
+        html[data-theme="light"] .sidebar {
+            background: #ffffff;
+            border-right-color: var(--border-color);
+        }
 
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 1.5rem 0;
-    }
+        html[data-theme="light"] .header {
+            background: rgba(255, 255, 255, 0.8);
+            border-bottom-color: var(--border-color);
+        }
 
-    .status-text {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      margin-bottom: 1rem;
-    }
+        html[data-theme="light"] .input-box {
+            background: rgba(240, 242, 245, 0.8);
+            border-color: rgba(201, 165, 97, 0.3);
+        }
 
-    /* Animations */
-    @keyframes fadeInDown {
-      from {
-        opacity: 0;
-        transform: translateY(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
+        html[data-theme="light"] .input-box:focus-within {
+            background: rgba(240, 242, 245, 1);
+        }
 
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-      }
-      to {
-        opacity: 1;
-      }
-    }
+        html[data-theme="light"] .feature-card {
+            background: rgba(240, 242, 245, 0.8);
+        }
 
-    .fade-in {
-      animation: fadeIn 0.5s ease;
-    }
+        html[data-theme="light"] .feature-card:hover {
+            background: rgba(240, 242, 245, 1);
+        }
 
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
+        html[data-theme="light"] .theme-toggle {
+            background: var(--tertiary-dark);
+            border-color: var(--border-color);
+        }
 
-    ::-webkit-scrollbar-track {
-      background: rgba(0, 217, 255, 0.05);
-    }
+        /* Loading animation */
+        .dot-pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--metallic-gold);
+            animation: pulse 1.5s infinite;
+            margin: 0 4px;
+        }
 
-    ::-webkit-scrollbar-thumb {
-      background: rgba(0, 217, 255, 0.2);
-      border-radius: 4px;
-    }
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.3;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
 
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(0, 217, 255, 0.3);
-    }
+        /* Chat interface for results */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            gap: 20px;
+        }
 
-    /* Footer */
-    footer {
-      text-align: center;
-      padding: 2rem;
-      border-top: 1px solid var(--border);
-      color: var(--text-secondary);
-      font-size: 0.875rem;
-      margin-top: 4rem;
-    }
+        .message {
+            display: flex;
+            gap: 12px;
+            animation: slideUp 0.3s ease;
+        }
 
-    a {
-      color: var(--primary);
-      text-decoration: none;
-      transition: all 0.3s ease;
-    }
+        .message.user {
+            justify-content: flex-end;
+        }
 
-    a:hover {
-      text-decoration: underline;
-    }
-  </style>
+        .message-bubble {
+            max-width: 60%;
+            padding: 16px 20px;
+            border-radius: 12px;
+            background: rgba(201, 165, 97, 0.15);
+            border: 1px solid rgba(201, 165, 97, 0.3);
+            color: var(--text-primary);
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: rgba(201, 165, 97, 0.25);
+            border-color: var(--metallic-gold);
+        }
+
+        .copy-btn {
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--metallic-gold);
+            color: var(--metallic-gold);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            margin-top: 8px;
+        }
+
+        .copy-btn:hover {
+            background: rgba(201, 165, 97, 0.1);
+        }
+    </style>
 </head>
 <body>
-  <!-- Header -->
-  <header>
-    <div class="header-container">
-      <div class="logo">
-        <div class="logo-icon">V</div>
-        <span>VividMedi</span>
-      </div>
-      <div class="header-actions">
-        <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
-        <div id="authSection"></div>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main Content -->
-  <div class="container">
-    <!-- Hero -->
-    <div class="hero">
-      <h1 class="hero-title">Clinical Intelligence</h1>
-      <p class="hero-subtitle">AI-powered decision support for healthcare professionals</p>
-    </div>
-
-    <!-- User Info -->
-    <div class="user-bar">
-      <div class="user-info">
-        <span class="user-email" id="userEmail">Guest</span>
-        <span class="user-remaining">Remaining: <span id="userRemaining">10</span> queries</span>
-      </div>
-      <div id="userActions"></div>
-    </div>
-
-    <!-- Clinical Q&A Section -->
-    <div class="grid-2">
-      <!-- Input Card -->
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">💡 Clinical Question</h2>
-          <button class="icon-btn" id="clearClinicalBtn" title="Clear">✕</button>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-item active" title="Chat">💬</div>
+            <div class="sidebar-item" title="Notes">📋</div>
+            <div class="sidebar-item" title="Dashboard">📊</div>
+            <div class="sidebar-item" title="History">⏱️</div>
         </div>
-        <textarea id="clinicalInput" placeholder="Ask a clinical question, describe symptoms, or paste exam findings..." style="flex: 1; min-height: 200px;"></textarea>
-        <button class="btn btn-primary" id="generateBtn">Generate Answer</button>
-      </div>
 
-      <!-- Output Card -->
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">📋 Answer</h2>
-          <div class="card-icons">
-            <button class="icon-btn" id="copyAnswerBtn" title="Copy" disabled>📋</button>
-            <button class="icon-btn" id="saveAnswerBtn" title="Save" disabled>💾</button>
-          </div>
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <div class="header-left">
+                    <div class="logo">VividMedi</div>
+                </div>
+                <div class="header-right">
+                    <!-- Theme Toggle -->
+                    <div class="theme-toggle">
+                        <button class="theme-toggle-btn active" id="darkBtn" data-theme="dark">Dark</button>
+                        <button class="theme-toggle-btn" id="lightBtn" data-theme="light">Light</button>
+                    </div>
+                    <button class="auth-btn" id="authBtn">Sign in</button>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" id="contentArea">
+                <div class="content-wrapper" id="contentWrapper">
+                    <div class="hero-section">
+                        <h1 class="hero-title">Clinical Decision Support</h1>
+                        <p class="hero-subtitle">Ask clinical questions, analyze cases, and get AI-powered insights tailored for Australian healthcare</p>
+                    </div>
+
+                    <div class="input-section">
+                        <div class="input-box" id="inputBox">
+                            <textarea id="mainInput" placeholder="Ask a clinical question or describe a case..." rows="3"></textarea>
+                            <div class="input-actions">
+                                <button class="action-btn" id="uploadBtn" title="Upload file">📎</button>
+                                <button class="send-btn" id="sendBtn">Send</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="features">
+                        <div class="feature-card">
+                            <div class="feature-icon">🩺</div>
+                            <div class="feature-title">Clinical Q&A</div>
+                            <div class="feature-desc">Ask medical questions and get evidence-based answers</div>
+                        </div>
+                        <div class="feature-card" id="notesCard">
+                            <div class="feature-icon">📝</div>
+                            <div class="feature-title">Consultation Notes</div>
+                            <div class="feature-desc">Convert clinical data into clinical notes</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🎙️</div>
+                            <div class="feature-title">Voice Transcription</div>
+                            <div class="feature-desc">Upload recordings and auto-transcribe with AI</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="output-box empty" id="answerDisplay">Generate an answer to see results here</div>
-      </div>
     </div>
 
-    <!-- Consultation Section -->
-    <div class="card grid-1">
-      <div class="card-header">
-        <h2 class="card-title">🎙️ Consultation Notes</h2>
-        <button class="icon-btn" id="clearConsultBtn" title="Clear">✕</button>
-      </div>
+    <script>
+        // Theme Toggle (no toast notifications)
+        const darkBtn = document.getElementById('darkBtn');
+        const lightBtn = document.getElementById('lightBtn');
+        const htmlEl = document.documentElement;
 
-      <!-- Upload -->
-      <div>
-        <label class="btn-file" for="uploadAudio">📁 Upload Call Recording</label>
-        <input id="uploadAudio" type="file" accept="audio/*" style="display: none;">
-        <div class="status-text" id="uploadStatus"></div>
-      </div>
-
-      <!-- Input -->
-      <textarea id="consultInput" placeholder="Or paste raw consultation notes here..." style="min-height: 120px;"></textarea>
-
-      <!-- Output Type -->
-      <div>
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">📝 Note Type</label>
-        <select id="outputTypeSelect">
-          <option value="weight_management_followup">Weight Management Follow-up (DVA)</option>
-          <option value="initial_weight_management">Initial Weight Management (DVA)</option>
-          <option value="general_telehealth">General Telehealth</option>
-        </select>
-      </div>
-
-      <!-- Generate -->
-      <button class="btn btn-primary" id="generateConsultBtn">Generate Clinical Note</button>
-
-      <div class="divider"></div>
-
-      <!-- Output -->
-      <h3 style="margin-bottom: 1rem;">Generated Note</h3>
-      <div class="output-box empty" id="consultDisplay">Note will appear here</div>
-
-      <div class="flex-row">
-        <button class="btn btn-secondary" id="copyConsultBtn" disabled>📋 Copy</button>
-        <button class="btn btn-secondary" id="saveConsultBtn" disabled>💾 Save</button>
-      </div>
-    </div>
-
-    <!-- Dashboard Link -->
-    <div style="text-align: center; margin-top: 3rem; margin-bottom: 2rem;">
-      <a href="/dashboard">📊 View Performance Metrics</a>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <footer>
-    VividMedi © 2024 • Clinical AI for Australian Healthcare
-  </footer>
-
-  <!-- Scripts -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script>
-    const GOOGLE_CLIENT_ID = "{{ google_client_id }}";
-
-    // Theme
-    const themeToggle = document.getElementById('themeToggle');
-    const html = document.documentElement;
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    html.setAttribute('data-theme', savedTheme);
-    themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-    themeToggle.addEventListener('click', () => {
-      const current = html.getAttribute('data-theme');
-      const next = current === 'dark' ? 'light' : 'dark';
-      html.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-      themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
-    });
-
-    // Google Sign-In
-    function handleCredentialResponse(response) {
-      fetch('/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) {
-          localStorage.setItem('auth_token', data.token);
-          updateUserInfo();
-        } else alert('Login failed: ' + data.error);
-      });
-    }
-
-    window.onload = () => {
-      if (GOOGLE_CLIENT_ID) {
-        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredentialResponse });
-        google.accounts.id.renderButton(document.getElementById('authSection'), { theme: 'dark', size: 'medium' });
-      }
-      updateUserInfo();
-    };
-
-    async function updateUserInfo() {
-      const res = await fetch('/api/me');
-      const data = await res.json();
-      document.getElementById('userEmail').textContent = data.email || 'Guest';
-      document.getElementById('userRemaining').textContent = data.remaining || data.limit;
-    }
-
-    // Clinical Q&A
-    document.getElementById('generateBtn').addEventListener('click', async () => {
-      const input = document.getElementById('clinicalInput').value.trim();
-      if (!input) return alert('Enter a question');
-      document.getElementById('answerDisplay').innerHTML = '<span style="color: var(--primary);">⏳ Generating...</span>';
-      try {
-        const res = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}` },
-          body: JSON.stringify({ query: input })
+        darkBtn.addEventListener('click', () => {
+            htmlEl.setAttribute('data-theme', 'dark');
+            darkBtn.classList.add('active');
+            lightBtn.classList.remove('active');
+            localStorage.setItem('theme', 'dark');
         });
-        const data = await res.json();
-        if (res.status === 402) {
-          document.getElementById('answerDisplay').textContent = data.headline;
-        } else {
-          document.getElementById('answerDisplay').textContent = data.answer || 'No response';
-          document.getElementById('answerDisplay').classList.remove('empty');
-          document.getElementById('copyAnswerBtn').disabled = false;
-          document.getElementById('saveAnswerBtn').disabled = false;
-          document.getElementById('clinicalInput').value = '';
-          updateUserInfo();
-        }
-      } catch (e) {
-        document.getElementById('answerDisplay').textContent = '❌ Error: ' + e.message;
-      }
-    });
 
-    document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
-        e.preventDefault();
-        document.getElementById('generateBtn').click();
-      }
-    });
-
-    // Consultation
-    document.getElementById('generateConsultBtn').addEventListener('click', async () => {
-      const input = document.getElementById('consultInput').value.trim();
-      if (!input) return alert('Enter consultation data');
-      document.getElementById('consultDisplay').innerHTML = '<span style="color: var(--primary);">⏳ Generating note...</span>';
-      try {
-        const res = await fetch('/api/consult', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}` },
-          body: JSON.stringify({ text: input, mode: document.getElementById('outputTypeSelect').value })
+        lightBtn.addEventListener('click', () => {
+            htmlEl.setAttribute('data-theme', 'light');
+            lightBtn.classList.add('active');
+            darkBtn.classList.remove('active');
+            localStorage.setItem('theme', 'light');
         });
-        const data = await res.json();
-        if (res.status === 402) {
-          document.getElementById('consultDisplay').textContent = data.headline;
-        } else {
-          document.getElementById('consultDisplay').textContent = data.answer || 'No response';
-          document.getElementById('consultDisplay').classList.remove('empty');
-          document.getElementById('copyConsultBtn').disabled = false;
-          document.getElementById('saveConsultBtn').disabled = false;
-          document.getElementById('consultInput').value = '';
-          updateUserInfo();
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        htmlEl.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'light') {
+            lightBtn.classList.add('active');
+            darkBtn.classList.remove('active');
         }
-      } catch (e) {
-        document.getElementById('consultDisplay').textContent = '❌ Error: ' + e.message;
-      }
-    });
 
-    // Copy buttons
-    document.getElementById('copyAnswerBtn').addEventListener('click', () => {
-      navigator.clipboard.writeText(document.getElementById('answerDisplay').innerText);
-      alert('Copied!');
-    });
+        // Send functionality
+        const mainInput = document.getElementById('mainInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const contentArea = document.getElementById('contentArea');
 
-    document.getElementById('copyConsultBtn').addEventListener('click', () => {
-      navigator.clipboard.writeText(document.getElementById('consultDisplay').innerText);
-      alert('Copied!');
-    });
+        sendBtn.addEventListener('click', async () => {
+            const message = mainInput.value.trim();
+            if (!message) return;
 
-    // File upload
-    document.getElementById('uploadAudio').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      document.getElementById('uploadStatus').textContent = '🔄 Transcribing...';
-      const formData = new FormData();
-      formData.append('audio', file);
-      try {
-        const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
-        const data = await res.json();
-        if (data.text) {
-          document.getElementById('consultInput').value = data.text;
-          document.getElementById('uploadStatus').textContent = '✅ Ready to generate';
-        }
-      } catch (e) {
-        document.getElementById('uploadStatus').textContent = '❌ Error: ' + e.message;
-      }
-    });
+            // Show chat interface
+            contentArea.innerHTML = `<div class="chat-container" id="chatContainer"></div>`;
+            const chatContainer = document.getElementById('chatContainer');
 
-    // Clear buttons
-    document.getElementById('clearClinicalBtn').addEventListener('click', () => {
-      document.getElementById('clinicalInput').value = '';
-      document.getElementById('answerDisplay').innerHTML = 'Generate an answer to see results here';
-      document.getElementById('answerDisplay').classList.add('empty');
-    });
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.innerHTML = `<div class="message-bubble">${message}</div>`;
+            chatContainer.appendChild(userMsg);
 
-    document.getElementById('clearConsultBtn').addEventListener('click', () => {
-      document.getElementById('consultInput').value = '';
-      document.getElementById('consultDisplay').innerHTML = 'Note will appear here';
-      document.getElementById('consultDisplay').classList.add('empty');
-    });
-  </script>
+            // Simulate loading
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'message';
+            loadingMsg.innerHTML = `<div class="message-bubble"><span class="dot-pulse"></span><span class="dot-pulse"></span><span class="dot-pulse"></span></div>`;
+            chatContainer.appendChild(loadingMsg);
+
+            // Scroll to bottom
+            contentArea.scrollTop = contentArea.scrollHeight;
+
+            // Send to server
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: message })
+                });
+                const data = await response.json();
+                
+                // Remove loading message
+                loadingMsg.remove();
+
+                // Add AI response
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'message';
+                aiMsg.innerHTML = `
+                    <div>
+                        <div class="message-bubble">${data.answer}</div>
+                        <button class="copy-btn" data-text="${data.answer}">Copy</button>
+                    </div>
+                `;
+                chatContainer.appendChild(aiMsg);
+
+                // Copy button handler
+                aiMsg.querySelector('.copy-btn').addEventListener('click', (e) => {
+                    navigator.clipboard.writeText(data.answer);
+                    e.target.textContent = 'Copied!';
+                    setTimeout(() => e.target.textContent = 'Copy', 2000);
+                });
+
+                contentArea.scrollTop = contentArea.scrollHeight;
+            } catch (err) {
+                loadingMsg.innerHTML = `<div class="message-bubble">Error: ${err.message}</div>`;
+            }
+        });
+
+        // Enter to send
+        mainInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendBtn.click();
+            }
+        });
+
+        // Upload button
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            // Placeholder for file upload
+            alert('File upload feature coming soon');
+        });
+
+        // Auth button
+        document.getElementById('authBtn').addEventListener('click', () => {
+            window.location.href = '/login';
+        });
+
+        // Consultation Notes navigation
+        document.getElementById('notesCard').addEventListener('click', () => {
+            window.location.href = '/consultation-notes';
+        });
+
+        // Sidebar navigation
+        document.querySelectorAll('.sidebar-item').forEach((item, idx) => {
+            item.addEventListener('click', () => {
+                const routes = ['/', '/consultation-notes', '/dashboard', '/history'];
+                if (routes[idx]) window.location.href = routes[idx];
+            });
+        });
+
+        // Auto-resize textarea
+        mainInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+    </script>
 </body>
 </html>

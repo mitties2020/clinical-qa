@@ -480,6 +480,13 @@ def index():
     return resp
 
 
+@app.get("/consultation-notes")
+def consultation_notes():
+    resp = make_response(render_template("consultation-notes.html", google_client_id=GOOGLE_CLIENT_ID))
+    ensure_guest_cookie(resp)
+    return resp
+
+
 @app.get("/dashboard")
 def dashboard():
     """Performance monitoring dashboard"""
@@ -784,6 +791,110 @@ def stripe_webhook():
 # -----------------------------------
 # AI endpoints with INTELLIGENT classification
 # -----------------------------------
+@app.post("/ask")
+def ask():
+    """Main Q&A endpoint (from index.html)"""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+
+    if not question:
+        return jsonify({"error": "Empty question"}), 400
+    
+    if len(question) < MIN_QUERY_LENGTH:
+        return jsonify({"error": f"Question too short (min {MIN_QUERY_LENGTH} chars)"}), 400
+    if len(question) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Question too long (max {MAX_QUERY_LENGTH} chars)"}), 400
+
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
+
+    try:
+        u = get_authed_user()
+        user_id = u["id"] if u else None
+        context = get_conversation_context(user_id) if user_id else ""
+
+        query_type = classify_query(question)
+        
+        if query_type == 'factual':
+            system_prompt = PROMPT_FACTUAL
+        elif query_type == 'followup':
+            system_prompt = PROMPT_FOLLOWUP
+        elif query_type == 'complex':
+            system_prompt = PROMPT_COMPLEX
+        else:
+            system_prompt = PROMPT_CLINICAL
+        
+        user_content = question
+
+        answer = call_deepseek(system_prompt, user_content, context)
+
+        if user_id:
+            save_conversation(user_id, question, answer, "clinical")
+
+        return jsonify({"answer": answer})
+
+    except Exception as e:
+        print("DEEPSEEK ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
+
+@app.post("/convert-notes")
+def convert_notes():
+    """Convert clinical data into clinical notes"""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    clinical_data = (data.get("clinical_data") or "").strip()
+
+    if not clinical_data:
+        return jsonify({"error": "Empty clinical data"}), 400
+    
+    if len(clinical_data) < MIN_QUERY_LENGTH:
+        return jsonify({"error": f"Input too short (min {MIN_QUERY_LENGTH} chars)"}), 400
+    if len(clinical_data) > MAX_QUERY_LENGTH:
+        return jsonify({"error": f"Input too long (max {MAX_QUERY_LENGTH} chars)"}), 400
+
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
+
+    try:
+        u = get_authed_user()
+        user_id = u["id"] if u else None
+        context = get_conversation_context(user_id) if user_id else ""
+
+        system_prompt = """You are an expert Australian clinical scribe.
+
+TASK: Convert raw clinical data into a well-structured clinical note.
+
+Output MUST be professionally formatted:
+- Use proper medical terminology
+- Organize logically with clear sections
+- Include all relevant findings
+- Format for medical records
+- Use Australian medical conventions
+
+Provide clinical notes suitable for medical records."""
+
+        user_content = f"Convert this clinical data into a clinical note:\n\n{clinical_data}"
+
+        answer = call_deepseek(system_prompt, user_content, context)
+
+        if user_id:
+            save_conversation(user_id, clinical_data[:100], answer, "consultation_notes")
+
+        return jsonify({"clinical_notes": answer})
+
+    except Exception as e:
+        print("CONVERT NOTES ERROR:", repr(e))
+        return jsonify({"error": "Conversion failed"}), 502
+
+
 @app.post("/api/generate")
 def generate():
     if not DEEPSEEK_API_KEY:
