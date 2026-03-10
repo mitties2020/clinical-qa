@@ -1,16 +1,12 @@
 version: '3.8'
 
 services:
-  # Penpot Design Tool
-  penpot:
-    image: penpotapp/penpot:latest
-    container_name: penpot_design
+  # Excalidraw Design Tool (lightweight, instant)
+  design:
+    image: excalidraw/excalidraw:latest
+    container_name: vividmedi_design
     ports:
-      - "9001:9001"
-    environment:
-      - PENPOT_FLAGS=enable-registration enable-login
-    volumes:
-      - penpot_data:/opt/penpot/data
+      - "3000:3000"
     restart: unless-stopped
 
   # Main VividMedi App
@@ -42,6 +38,3 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
-
-volumes:
-  penpot_data:
