@@ -1,19 +1,19 @@
 version: '3.8'
 
 services:
-  # Build Node/Tailwind assets
-  build:
-    image: node:20-alpine
-    working_dir: /app
+  # Penpot Design Tool
+  penpot:
+    image: penpotapp/penpot:latest
+    container_name: penpot_design
+    ports:
+      - "9001:9001"
+    environment:
+      - PENPOT_FLAGS=enable-registration enable-login
     volumes:
-      - .:/app
-    command: |
-      sh -c '
-        npm install
-        npm run build:css
-      '
+      - penpot_data:/opt/penpot/data
+    restart: unless-stopped
 
-  # Main app
+  # Main VividMedi App
   vividmedi:
     build: .
     container_name: vividmedi_app
@@ -35,8 +35,6 @@ services:
       - ./app.py:/app/app.py
       - ./templates:/app/templates
       - ./static:/app/static
-    depends_on:
-      - build
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
@@ -44,3 +42,6 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+volumes:
+  penpot_data:
