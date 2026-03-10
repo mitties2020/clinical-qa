@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  vividmedi:
+    build: .
+    container_name: vividmedi_app
+    ports:
+      - "80:80"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_ID_PRO=${STRIPE_PRICE_ID_PRO}
+      - CREATOR_EMAIL=${CREATOR_EMAIL}
+      - PRO_EMAILS=${PRO_EMAILS}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-dev-secret-change-me}
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./app.py:/app/app.py
+      - ./templates:/app/templates
+      - ./static:/app/static
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
