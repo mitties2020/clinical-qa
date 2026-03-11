@@ -851,12 +851,13 @@ def ask():
 
 @app.post("/convert-notes")
 def convert_notes():
-    """Convert clinical data into clinical notes"""
+    """Convert clinical data into clinical notes with type-specific formatting"""
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
 
     data = request.get_json(silent=True) or {}
     clinical_data = (data.get("clinical_data") or "").strip()
+    note_type = (data.get("note_type") or "consultation_note").strip().lower()
 
     if not clinical_data:
         return jsonify({"error": "Empty clinical data"}), 400
@@ -875,25 +876,24 @@ def convert_notes():
         user_id = u["id"] if u else None
         context = get_conversation_context(user_id) if user_id else ""
 
-        system_prompt = """You are an expert Australian clinical scribe.
+        note_prompts = {
+            "consultation_note": "Generate a CONSULTATION NOTE with: DATE, PRESENTING COMPLAINT, HPI, PMHx, MEDICATIONS, ALLERGIES, SOCIAL HISTORY, EXAMINATION, ASSESSMENT, PLAN, FOLLOW-UP. Be concise and professional.",
+            "referral_letter": "Generate a formal REFERRAL LETTER with: DATE, RECIPIENT, RE, PATIENT DETAILS, REASON FOR REFERRAL, CLINICAL HISTORY, MANAGEMENT, INVESTIGATIONS. Make it professional.",
+            "discharge_summary": "Generate a DISCHARGE SUMMARY with: DATES, DIAGNOSES, PROCEDURES, HOSPITAL COURSE, FINAL DIAGNOSIS, MEDICATIONS, FOLLOW-UP. Be clear and complete.",
+            "progress_note": "Generate a PROGRESS NOTE in SOAP format: SUBJECTIVE, OBJECTIVE, ASSESSMENT, PLAN.",
+            "clinical_report": "Generate a CLINICAL REPORT with: TITLE, DATE, PATIENT INFO, FINDINGS, INTERPRETATION, CONCLUSION.",
+            "soap_note": "Generate a SOAP NOTE: S (history), O (vitals/exam), A (diagnosis), P (management).",
+            "procedure_note": "Generate a PROCEDURE NOTE: NAME, DATE, INDICATION, TECHNIQUE, FINDINGS, COMPLICATIONS, ORDERS."
+        }
 
-TASK: Convert raw clinical data into a well-structured clinical note.
-
-Output MUST be professionally formatted:
-- Use proper medical terminology
-- Organize logically with clear sections
-- Include all relevant findings
-- Format for medical records
-- Use Australian medical conventions
-
-Provide clinical notes suitable for medical records."""
-
-        user_content = f"Convert this clinical data into a clinical note:\n\n{clinical_data}"
+        system_prompt = note_prompts.get(note_type, note_prompts["consultation_note"])
+        system_prompt = "You are an expert Australian clinical scribe. " + system_prompt + " Output ONLY the report. Format for medical records."
+        user_content = "Generate from: " + clinical_data
 
         answer = call_deepseek(system_prompt, user_content, context)
 
         if user_id:
-            save_conversation(user_id, clinical_data[:100], answer, "consultation_notes")
+            save_conversation(user_id, clinical_data[:100], answer, f"notes_{note_type}")
 
         return jsonify({"clinical_notes": answer})
 
