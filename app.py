@@ -475,7 +475,7 @@ def perf_health():
 
 @app.get("/")
 def index():
-    resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
+    resp = make_response(render_template("consultation-notes.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
     return resp
 
@@ -489,7 +489,7 @@ def consultation_notes():
 
 @app.get("/login")
 def login():
-    resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
+    resp = make_response(render_template("consultation-notes.html", google_client_id=GOOGLE_CLIENT_ID))
     ensure_guest_cookie(resp)
     return resp
 

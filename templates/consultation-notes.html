@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consultation Notes - VividMedi</title>
+    <title>VividMedi - Consultation Notes & Q&A</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         * {
             margin: 0;
@@ -44,42 +45,132 @@
             width: 100%;
         }
 
-        /* Sidebar */
-        .sidebar {
-            width: 60px;
-            background: var(--secondary-dark);
+        /* Left Sidebar - Saved Outputs */
+        .saved-outputs-sidebar {
+            width: 280px;
+            background: rgba(26, 31, 46, 0.6);
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            padding: 20px 0;
-            gap: 20px;
-            transition: all 0.3s ease;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
         }
 
-        .sidebar-item {
-            width: 40px;
-            height: 40px;
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .saved-notes-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .saved-note-card {
+            background: rgba(37, 45, 61, 0.6);
+            border: 1px solid rgba(201, 165, 97, 0.2);
             border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .saved-note-card:hover {
+            border-color: rgba(201, 165, 97, 0.5);
+            background: rgba(37, 45, 61, 0.8);
+        }
+
+        .saved-note-header {
+            padding: 12px;
+            background: rgba(201, 165, 97, 0.1);
+            border-bottom: 1px solid rgba(201, 165, 97, 0.2);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .saved-note-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--metallic-gold);
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .saved-note-toggle {
+            width: 16px;
+            height: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            color: var(--metallic-gold);
+            font-size: 12px;
+            transition: transform 0.2s ease;
+        }
+
+        .saved-note-toggle.open {
+            transform: rotate(90deg);
+        }
+
+        .saved-note-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .saved-note-content.open {
+            max-height: 500px;
+        }
+
+        .saved-note-text {
+            padding: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
-            border: 1px solid transparent;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 300px;
+            overflow-y: auto;
         }
 
-        .sidebar-item:hover {
+        .saved-note-actions {
+            padding: 8px 12px;
+            border-top: 1px solid rgba(201, 165, 97, 0.1);
+            display: flex;
+            gap: 6px;
+        }
+
+        .saved-note-btn {
+            flex: 1;
+            padding: 5px 6px;
             background: rgba(201, 165, 97, 0.1);
+            border: 1px solid rgba(201, 165, 97, 0.3);
             color: var(--metallic-gold);
-            border-color: var(--metallic-gold);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s ease;
         }
 
-        .sidebar-item.active {
-            background: rgba(201, 165, 97, 0.15);
-            color: var(--metallic-gold);
-            border-color: var(--metallic-gold);
+        .saved-note-btn:hover {
+            background: rgba(201, 165, 97, 0.2);
+        }
+
+        .empty-state {
+            padding: 20px 12px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 12px;
         }
 
         /* Main Content */
@@ -179,14 +270,7 @@
             box-shadow: 0 0 20px rgba(201, 165, 97, 0.3);
         }
 
-        /* Content Wrapper */
-        .content-wrapper {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-        }
-
-        /* Main Work Area */
+        /* Work Area */
         .work-area {
             flex: 1;
             display: flex;
@@ -398,134 +482,6 @@
             50% { opacity: 1; }
         }
 
-        /* Right Sidebar - Saved Notes */
-        .saved-notes-sidebar {
-            width: 300px;
-            background: rgba(26, 31, 46, 0.6);
-            border-left: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            backdrop-filter: blur(10px);
-        }
-
-        .sidebar-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .saved-notes-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .saved-note-card {
-            background: rgba(37, 45, 61, 0.6);
-            border: 1px solid rgba(201, 165, 97, 0.2);
-            border-radius: 8px;
-            overflow: hidden;
-            transition: all 0.2s ease;
-        }
-
-        .saved-note-card:hover {
-            border-color: rgba(201, 165, 97, 0.5);
-            background: rgba(37, 45, 61, 0.8);
-        }
-
-        .saved-note-header {
-            padding: 12px;
-            background: rgba(201, 165, 97, 0.1);
-            border-bottom: 1px solid rgba(201, 165, 97, 0.2);
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            user-select: none;
-        }
-
-        .saved-note-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--metallic-gold);
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .saved-note-toggle {
-            width: 16px;
-            height: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--metallic-gold);
-            font-size: 12px;
-            transition: transform 0.2s ease;
-        }
-
-        .saved-note-toggle.open {
-            transform: rotate(90deg);
-        }
-
-        .saved-note-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-
-        .saved-note-content.open {
-            max-height: 500px;
-        }
-
-        .saved-note-text {
-            padding: 12px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .saved-note-actions {
-            padding: 8px 12px;
-            border-top: 1px solid rgba(201, 165, 97, 0.1);
-            display: flex;
-            gap: 6px;
-        }
-
-        .saved-note-btn {
-            flex: 1;
-            padding: 6px 8px;
-            background: rgba(201, 165, 97, 0.1);
-            border: 1px solid rgba(201, 165, 97, 0.3);
-            color: var(--metallic-gold);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            transition: all 0.2s ease;
-        }
-
-        .saved-note-btn:hover {
-            background: rgba(201, 165, 97, 0.2);
-        }
-
-        .empty-state {
-            padding: 20px 12px;
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 12px;
-        }
-
         /* Light theme */
         html[data-theme="light"] {
             --primary-dark: #f8f9fa;
@@ -536,9 +492,13 @@
             --border-color: #e0e0e0;
         }
 
-        html[data-theme="light"] .sidebar {
-            background: #ffffff;
-            border-right-color: var(--border-color);
+        html[data-theme="light"] .saved-outputs-sidebar {
+            background: rgba(240, 242, 245, 0.6);
+        }
+
+        html[data-theme="light"] .saved-note-card {
+            background: rgba(240, 242, 245, 0.8);
+            border-color: rgba(201, 165, 97, 0.2);
         }
 
         html[data-theme="light"] .header {
@@ -557,15 +517,6 @@
             background: rgba(240, 242, 245, 1);
         }
 
-        html[data-theme="light"] .saved-notes-sidebar {
-            background: rgba(240, 242, 245, 0.6);
-        }
-
-        html[data-theme="light"] .saved-note-card {
-            background: rgba(240, 242, 245, 0.8);
-            border-color: rgba(201, 165, 97, 0.2);
-        }
-
         @media (max-width: 1200px) {
             .input-output-grid,
             .qa-grid {
@@ -573,13 +524,13 @@
                 gap: 20px;
             }
 
-            .saved-notes-sidebar {
-                width: 250px;
+            .saved-outputs-sidebar {
+                width: 200px;
             }
         }
 
         @media (max-width: 768px) {
-            .content-wrapper {
+            .container {
                 flex-direction: column;
             }
 
@@ -592,21 +543,25 @@
                 grid-template-columns: 1fr;
             }
 
-            .saved-notes-sidebar {
+            .saved-outputs-sidebar {
                 width: 100%;
                 max-height: 200px;
             }
+        }
+
+        #g_id_onload {
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-item" title="Chat">💬</div>
-            <div class="sidebar-item active" title="Notes">📋</div>
-            <div class="sidebar-item" title="Dashboard">📊</div>
-            <div class="sidebar-item" title="History">⏱️</div>
+        <!-- Left Sidebar - Saved Outputs -->
+        <div class="saved-outputs-sidebar">
+            <div class="sidebar-header">📌 Saved Outputs</div>
+            <div class="saved-notes-list" id="savedNotesList">
+                <div class="empty-state">No saved outputs yet</div>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -622,93 +577,83 @@
                         <button class="theme-toggle-btn active" id="darkBtn" data-theme="dark">Dark</button>
                         <button class="theme-toggle-btn" id="lightBtn" data-theme="light">Light</button>
                     </div>
-                    <button class="auth-btn" id="authBtn">Sign in</button>
+                    <div id="signInDiv"></div>
+                    <button class="auth-btn" id="authBtn" style="display:none;">Sign out</button>
                 </div>
             </div>
 
-            <!-- Content Wrapper -->
-            <div class="content-wrapper">
-                <!-- Work Area -->
-                <div class="work-area">
-                    <!-- Tab Navigation -->
-                    <div class="tab-navigation">
-                        <button class="tab-btn active" data-tab="notes-tab">📝 Consultation Notes</button>
-                        <button class="tab-btn" data-tab="qa-tab">❓ Clinical Questions</button>
-                    </div>
+            <!-- Work Area -->
+            <div class="work-area">
+                <!-- Tab Navigation -->
+                <div class="tab-navigation">
+                    <button class="tab-btn active" data-tab="notes-tab">📝 Consultation Notes</button>
+                    <button class="tab-btn" data-tab="qa-tab">❓ Clinical Questions</button>
+                </div>
 
-                    <!-- Notes Tab -->
-                    <div class="tab-content active" id="notes-tab">
-                        <div class="section">
-                            <div class="section-title">Clinical Data Input</div>
-                            <div class="input-options">
-                                <button class="option-btn active" data-type="text">Text</button>
-                                <button class="option-btn" data-type="voice">Voice Upload</button>
-                                <button class="option-btn" data-type="file">File Upload</button>
-                            </div>
-                        </div>
-
-                        <div class="input-output-grid">
-                            <!-- Input Section -->
-                            <div>
-                                <div class="input-wrapper" id="inputWrapper">
-                                    <textarea id="clinicalInput" placeholder="Paste clinical data, transcribed notes, or raw case information here..." rows="10"></textarea>
-                                    <div class="action-buttons">
-                                        <button class="btn btn-primary" id="convertBtn">Convert to Notes</button>
-                                        <button class="btn btn-secondary" id="clearBtn">Clear</button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Output Section -->
-                            <div>
-                                <div class="output-wrapper" id="outputWrapper">
-                                    <div class="output-text" id="clinicalOutput">Output will appear here...</div>
-                                    <div class="action-buttons">
-                                        <button class="btn btn-secondary" id="copyBtn">Copy</button>
-                                        <button class="btn btn-secondary" id="downloadBtn">Download</button>
-                                    </div>
-                                </div>
-                            </div>
+                <!-- Notes Tab -->
+                <div class="tab-content active" id="notes-tab">
+                    <div class="section">
+                        <div class="section-title">Clinical Data Input</div>
+                        <div class="input-options">
+                            <button class="option-btn active" data-type="text">Text</button>
+                            <button class="option-btn" data-type="voice">Voice Upload</button>
+                            <button class="option-btn" data-type="file">File Upload</button>
                         </div>
                     </div>
 
-                    <!-- QA Tab -->
-                    <div class="tab-content" id="qa-tab">
-                        <div class="section">
-                            <div class="section-title">Ask a Clinical Question</div>
-                        </div>
-
-                        <div class="qa-grid">
-                            <!-- Question Input -->
-                            <div>
-                                <div class="input-wrapper" id="qaInputWrapper">
-                                    <textarea id="clinicalQuestion" placeholder="Ask a clinical question about diagnosis, management, investigation, or treatment..." rows="10"></textarea>
-                                    <div class="action-buttons">
-                                        <button class="btn btn-primary" id="askBtn">Ask Question</button>
-                                        <button class="btn btn-secondary" id="clearQaBtn">Clear</button>
-                                    </div>
+                    <div class="input-output-grid">
+                        <!-- Input Section -->
+                        <div>
+                            <div class="input-wrapper" id="inputWrapper">
+                                <textarea id="clinicalInput" placeholder="Paste clinical data, transcribed notes, or raw case information here..." rows="10"></textarea>
+                                <div class="action-buttons">
+                                    <button class="btn btn-primary" id="convertBtn">Convert to Notes</button>
+                                    <button class="btn btn-secondary" id="clearBtn">Clear</button>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Answer Output -->
-                            <div>
-                                <div class="output-wrapper" id="qaOutputWrapper">
-                                    <div class="output-text" id="clinicalAnswer">Answer will appear here...</div>
-                                    <div class="action-buttons">
-                                        <button class="btn btn-secondary" id="copyAnswerBtn">Copy</button>
-                                        <button class="btn btn-secondary" id="downloadAnswerBtn">Download</button>
-                                    </div>
+                        <!-- Output Section -->
+                        <div>
+                            <div class="output-wrapper" id="outputWrapper">
+                                <div class="output-text" id="clinicalOutput">Output will appear here...</div>
+                                <div class="action-buttons">
+                                    <button class="btn btn-secondary" id="copyBtn">Copy</button>
+                                    <button class="btn btn-secondary" id="downloadBtn">Download</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right Sidebar - Saved Notes -->
-                <div class="saved-notes-sidebar">
-                    <div class="sidebar-header">Saved Outputs</div>
-                    <div class="saved-notes-list" id="savedNotesList">
-                        <div class="empty-state">No saved outputs yet</div>
+                <!-- QA Tab -->
+                <div class="tab-content" id="qa-tab">
+                    <div class="section">
+                        <div class="section-title">Ask a Clinical Question</div>
+                    </div>
+
+                    <div class="qa-grid">
+                        <!-- Question Input -->
+                        <div>
+                            <div class="input-wrapper" id="qaInputWrapper">
+                                <textarea id="clinicalQuestion" placeholder="Ask a clinical question about diagnosis, management, investigation, or treatment..." rows="10"></textarea>
+                                <div class="action-buttons">
+                                    <button class="btn btn-primary" id="askBtn">Ask Question</button>
+                                    <button class="btn btn-secondary" id="clearQaBtn">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Answer Output -->
+                        <div>
+                            <div class="output-wrapper" id="qaOutputWrapper">
+                                <div class="output-text" id="clinicalAnswer">Answer will appear here...</div>
+                                <div class="action-buttons">
+                                    <button class="btn btn-secondary" id="copyAnswerBtn">Copy</button>
+                                    <button class="btn btn-secondary" id="downloadAnswerBtn">Download</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -716,6 +661,64 @@
     </div>
 
     <script>
+        // Initialize Google Sign-In
+        window.onload = function() {
+            google.accounts.id.initialize({
+                client_id: '{{ google_client_id }}',
+                callback: handleCredentialResponse
+            });
+            google.accounts.id.renderButton(
+                document.getElementById('signInDiv'),
+                { 
+                    theme: 'dark',
+                    size: 'large',
+                    text: 'signin_with'
+                }
+            );
+        };
+
+        function handleCredentialResponse(response) {
+            const token = response.credential;
+            fetch('/auth/google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential: token })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    localStorage.setItem('auth_token', data.token);
+                    localStorage.setItem('user_email', data.user.email);
+                    document.getElementById('signInDiv').style.display = 'none';
+                    document.getElementById('authBtn').style.display = 'block';
+                    alert('Signed in as ' + data.user.email);
+                }
+            })
+            .catch(err => console.error('Auth error:', err));
+        }
+
+        // Auth button (sign out)
+        document.getElementById('authBtn').addEventListener('click', () => {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_email');
+            document.getElementById('signInDiv').style.display = 'block';
+            document.getElementById('authBtn').style.display = 'none';
+            google.accounts.id.renderButton(
+                document.getElementById('signInDiv'),
+                { 
+                    theme: 'dark',
+                    size: 'large',
+                    text: 'signin_with'
+                }
+            );
+        });
+
+        // Check if already signed in
+        if (localStorage.getItem('auth_token')) {
+            document.getElementById('signInDiv').style.display = 'none';
+            document.getElementById('authBtn').style.display = 'block';
+        }
+
         // Theme Toggle
         const darkBtn = document.getElementById('darkBtn');
         const lightBtn = document.getElementById('lightBtn');
@@ -745,19 +748,6 @@
         // Logo click
         document.getElementById('logoClick').addEventListener('click', () => {
             window.location.href = '/';
-        });
-
-        // Sidebar navigation
-        document.querySelectorAll('.sidebar-item').forEach((item, idx) => {
-            item.addEventListener('click', () => {
-                const routes = ['/', '/consultation-notes', '/dashboard', '/history'];
-                if (routes[idx]) window.location.href = routes[idx];
-            });
-        });
-
-        // Auth button
-        document.getElementById('authBtn').addEventListener('click', () => {
-            window.location.href = '/login';
         });
 
         // Tab Navigation
