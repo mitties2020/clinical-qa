@@ -1025,16 +1025,16 @@
         });
 
 
-        // ENTER KEY HANDLERS - Ctrl+Enter to submit
+        // ENTER KEY HANDLERS - Enter to submit, Shift+Enter for new line
         document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 document.getElementById('convertBtn').click();
             }
         });
 
         document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 document.getElementById('askBtn').click();
             }
