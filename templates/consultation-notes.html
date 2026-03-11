@@ -919,7 +919,9 @@
             document.body.removeChild(element);
         });
 
-        // QA TAB
+        // QA TAB - WITH CONVERSATION MEMORY
+        let qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history')) || [];
+
         document.getElementById('askBtn').addEventListener('click', async () => {
             const question = document.getElementById('clinicalQuestion').value.trim();
             if (!question) {
@@ -931,13 +933,21 @@
             answer.innerHTML = '<span class="loading"></span><span class="loading"></span><span class="loading"></span>';
 
             try {
+                // Build context from last 3 questions for follow-ups
+                const context = qaHistory.slice(-3).map((q, i) => `Q${i+1}: ${q.question}\nA${i+1}: ${q.answer.substring(0, 200)}...`).join('\n\n');
+                
                 const response = await fetch('/ask', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question })
+                    body: JSON.stringify({ question: question, context: context })
                 });
                 const data = await response.json();
                 answer.textContent = data.answer || 'No answer generated';
+                
+                // Save to history for future follow-ups
+                qaHistory.push({ question: question, answer: data.answer });
+                if (qaHistory.length > 10) qaHistory = qaHistory.slice(-10);
+                localStorage.setItem('vividmedi_qa_history', JSON.stringify(qaHistory));
                 
                 // Clear input after successful answer
                 document.getElementById('clinicalQuestion').value = '';
@@ -955,6 +965,14 @@
             document.getElementById('clinicalQuestion').value = '';
             document.getElementById('clinicalAnswer').textContent = 'Answer will appear here...';
             document.getElementById('clinicalQuestion').style.height = 'auto';
+            
+            // Optional: Ask if user wants to clear history
+            if (qaHistory.length > 0) {
+                if (confirm('Clear conversation history for fresh start?')) {
+                    qaHistory = [];
+                    localStorage.removeItem('vividmedi_qa_history');
+                }
+            }
             document.getElementById('clinicalQuestion').focus();
         });
 
@@ -986,6 +1004,40 @@
         document.getElementById('clinicalQuestion').addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 400) + 'px';
+        });
+
+
+        // ENTER KEY HANDLERS
+        // For Consultation Notes - Ctrl+Enter to convert
+        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                document.getElementById('convertBtn').click();
+            }
+        });
+
+        // For Clinical Questions - Ctrl+Enter to ask
+        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                document.getElementById('askBtn').click();
+            }
+        });
+
+
+        // ENTER KEY HANDLERS - Ctrl+Enter to submit
+        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                document.getElementById('convertBtn').click();
+            }
+        });
+
+        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                document.getElementById('askBtn').click();
+            }
         });
 
         // Initialize
