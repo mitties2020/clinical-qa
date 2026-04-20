@@ -1157,3 +1157,17 @@ def get_guidelines():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+@ a p p . r o u t e ( " / a u t h e n t i c a t e " ,   m e t h o d s = [ " P O S T " ] ) 
+ d e f   a u t h e n t i c a t e ( ) : 
+         c o d e   =   r e q u e s t . j s o n . g e t ( " c o d e " ,   " " ) 
+         i f   c o d e   = =   " 9 3 1 9 8 6 " : 
+                 s e s s i o n [ " a u t h e n t i c a t e d " ]   =   T r u e 
+                 r e t u r n   j s o n i f y ( { " s u c c e s s " :   T r u e } ) 
+         r e t u r n   j s o n i f y ( { " s u c c e s s " :   F a l s e } ) ,   4 0 1 
+ 
+ @ a p p . r o u t e ( " / s t e a l t h - m o d e " ) 
+ d e f   s t e a l t h _ m o d e ( ) : 
+         i f   n o t   s e s s i o n . g e t ( " a u t h e n t i c a t e d " ) : 
+                 r e t u r n   r e d i r e c t ( " / " ) 
+         r e t u r n   r e n d e r _ t e m p l a t e ( " s t e a l t h - m o d e . h t m l " )  
+ 
