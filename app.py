@@ -17,32 +17,7 @@ from flask import (
     render_template,
     session,
     make_response,
-)
-
-from faster_whisper import WhisperModel
-
-# Google ID token verification (server-side)
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as google_requests
-import os
-import re
-import tempfile
-import threading
-import subprocess
-import sqlite3
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from uuid import uuid4
-
-import requests
-import stripe
-from flask import (
-    Flask,
-    request,
-    jsonify,
-    render_template,
-    session,
-    make_response,
+    redirect,
 )
 
 from faster_whisper import WhisperModel
@@ -93,12 +68,6 @@ def require_auth(fn):
 if os.getenv("RENDER") is None:
     from dotenv import load_dotenv
     load_dotenv()
-# -----------------------------------
-# Load .env locally only (not Render)
-# -----------------------------------
-if os.getenv("RENDER") is None:
-    from dotenv import load_dotenv
-    load_dotenv()
 
 # -----------------------------------
 # DeepSeek config
@@ -138,9 +107,6 @@ CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 # -----------------------------------
 # Flask app
 # -----------------------------------
-from flask import Flask, request, jsonify, render_template
-import os, requests
-
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 app.secret_key = (
@@ -163,7 +129,7 @@ def health():
 # --------------------
 @app.get("/")
 def home():
-    return render_template("index.html")  # change if your homepage file is named differently
+    return render_template("index.html")
 
 # -----------------------------------
 # DB (SQLite) - minimal, self-contained
@@ -405,7 +371,7 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
         "limit": limit,
         "headline": "Free limit reached",
         "copy": [
-            f"You’ve used {min(used, limit)}/{limit} free generations.",
+            f"You've used {min(used, limit)}/{limit} free generations.",
             "Upgrade to Pro for unlimited access.",
             "Pro includes higher limits, priority processing, and ongoing updates.",
         ],
@@ -559,9 +525,8 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 # -----------------------------------
 @app.get("/")
 def index():
-    # ✅ pass google_client_id to template so Google button/One Tap can initialise
     resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
-    ensure_guest_cookie(resp)  # set guest cookie early for quota tracking
+    ensure_guest_cookie(resp)
     return resp
 
 
@@ -710,9 +675,9 @@ def stripe_webhook():
     return "OK", 200
 
 
-# -----------------------------
-# Your existing AI endpoints
-# -----------------------------
+# -----------------------------------
+# Clinical AI endpoints
+# -----------------------------------
 @app.post("/api/generate")
 def generate():
     if not DEEPSEEK_API_KEY:
@@ -725,7 +690,6 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
-    # ✅ enforce quota AFTER validation
     blocked = enforce_quota_or_402()
     if blocked:
         return blocked
@@ -765,7 +729,6 @@ def consult():
     if not text:
         return jsonify({"error": "Empty input"}), 400
 
-    # ✅ enforce quota AFTER validation
     blocked = enforce_quota_or_402()
     if blocked:
         return blocked
@@ -826,6 +789,75 @@ def transcribe():
                         os.remove(p)
                     except Exception:
                         pass
+
+
+# -----------------------------------
+# Consultation Notes & Q&A Routes
+# -----------------------------------
+@app.get("/consultation-notes")
+def consultation_notes_page():
+    resp = make_response(render_template("consultation-notes.html", google_client_id=GOOGLE_CLIENT_ID))
+    ensure_guest_cookie(resp)
+    return resp
+
+
+@app.post("/convert-notes")
+def convert_notes():
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    clinical_data = (data.get("clinical_data") or "").strip()
+    note_type = (data.get("note_type") or "consultation_note").strip()
+
+    if not clinical_data:
+        return jsonify({"error": "Empty input"}), 400
+
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
+
+    try:
+        user_content = f"Generate a {note_type} from the following clinical data:\n\n{clinical_data}"
+        answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+        return jsonify({"clinical_notes": answer})
+    except Exception as e:
+        print("CONVERT NOTES ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
+
+@app.post("/ask")
+def ask_question():
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    context = (data.get("context") or "").strip()
+
+    if not question:
+        return jsonify({"error": "Empty question"}), 400
+
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
+
+    try:
+        user_content = f"{context}\n\nCurrent question:\n{question}" if context else f"Clinical question:\n{question}"
+        answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+        return jsonify({"answer": answer})
+    except Exception as e:
+        print("ASK QUESTION ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
+
+@app.get("/stealth-mode")
+def stealth_mode():
+    if not session.get("user_id"):
+        return redirect("/")
+    resp = make_response(render_template("stealth-mode.html"))
+    ensure_guest_cookie(resp)
+    return resp
 
 
 # -----------------------------------
