@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 import requests
-import stripe
 from flask import (
     Flask,
     request,
@@ -21,10 +20,6 @@ from flask import (
 )
 
 from faster_whisper import WhisperModel
-
-# Google ID token verification (server-side)
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as google_requests
 
 # ✅ ADD THIS BLOCK HERE (RIGHT AFTER IMPORTS)
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -53,12 +48,7 @@ def require_auth(fn):
         uid = verify_token(token)
         if not uid:
             return jsonify({"error": "invalid_token"}), 401
-        # ✅ uses your existing DB helper (defined later) so we import nothing here
-        with db_conn() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
-        if not row:
-            return jsonify({"error": "user_not_found"}), 401
-        request.user = dict(row)
+        request.user = uid
         return fn(*args, **kwargs)
     return wrapper
 
@@ -68,6 +58,11 @@ def require_auth(fn):
 if os.getenv("RENDER") is None:
     from dotenv import load_dotenv
     load_dotenv()
+
+# -----------------------------------
+# Simple auth config
+# -----------------------------------
+AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
 
 # -----------------------------------
 # DeepSeek config
@@ -82,27 +77,9 @@ DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/c
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
 # -----------------------------------
-# Stripe config
+# App Base URL
 # -----------------------------------
-STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
-STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
-
-# Your live price id (from your Stripe screenshot)
-STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "price_1T3yFlHvfV7kt9wle2LpbpU0").strip()
-
-# Recommended base URL (set explicitly if you have multiple domains)
 APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
-
-if STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
-
-# -----------------------------------
-# Google Sign-In config
-# -----------------------------------
-GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-
-# ✅ Auto-Pro creator account (set this in Render env)
-CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
 
 # -----------------------------------
 # Flask app
@@ -129,7 +106,9 @@ def health():
 # --------------------
 @app.get("/")
 def home():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    ensure_guest_cookie(resp)
+    return resp
 
 # -----------------------------------
 # DB (SQLite) - minimal, self-contained
@@ -145,19 +124,6 @@ def db_conn():
 
 def db_init():
     with db_conn() as conn:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            email TEXT UNIQUE NOT NULL,
-            name TEXT,
-            picture TEXT,
-            plan TEXT NOT NULL DEFAULT 'free',         -- free | pro
-            email_verified INTEGER NOT NULL DEFAULT 1, -- Google tokens are verified
-            stripe_customer_id TEXT,
-            stripe_subscription_id TEXT,
-            created_at TEXT NOT NULL
-        )
-        """)
         conn.execute("""
         CREATE TABLE IF NOT EXISTS usage (
             actor_type TEXT NOT NULL,   -- guest | user
@@ -252,56 +218,8 @@ def ensure_guest_cookie(resp):
 
 
 def current_user():
-    uid = session.get("user_id")
-    if not uid:
-        return None
-    with db_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
-        return dict(row) if row else None
+    return session.get("user_id")
 
-
-def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
-    email = (email or "").strip().lower()
-    if not email:
-        raise ValueError("Missing email")
-
-    with db_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-        if row:
-            conn.execute(
-                "UPDATE users SET name=?, picture=? WHERE email=?",
-                (name or row["name"], picture or row["picture"], email),
-            )
-            conn.commit()
-            row2 = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
-            return dict(row2)
-
-        uid = "usr_" + uuid4().hex
-        conn.execute(
-            """
-            INSERT INTO users (id, email, name, picture, plan, email_verified, created_at)
-            VALUES (?, ?, ?, ?, 'free', 1, ?)
-            """,
-            (uid, email, name, picture, datetime.utcnow().isoformat()),
-        )
-        conn.commit()
-        row2 = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
-        return dict(row2)
-
-
-def upgrade_user_to_pro(user_id: str, stripe_customer_id: str = None, stripe_subscription_id: str = None):
-    with db_conn() as conn:
-        conn.execute(
-            """
-            UPDATE users
-            SET plan='pro',
-                stripe_customer_id=COALESCE(?, stripe_customer_id),
-                stripe_subscription_id=COALESCE(?, stripe_subscription_id)
-            WHERE id=?
-            """,
-            (stripe_customer_id, stripe_subscription_id, user_id),
-        )
-        conn.commit()
 
 # -----------------------------------
 # Quota / usage
@@ -344,27 +262,23 @@ def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
 def actor_and_limit():
     """
     Guest: 10 total generations
-    Logged-in free: 11 total generations (includes +1 bonus on account creation)
-    Pro: effectively unlimited (still add separate rate-limits later if needed)
+    Authenticated: effectively unlimited
     """
     u = current_user()
     if u:
         actor_type = "user"
-        actor_id = u["id"]
-        if (u.get("plan") or "free") == "pro":
-            limit = 1_000_000
-        else:
-            limit = 11
-        return actor_type, actor_id, limit, u
+        actor_id = u
+        limit = 1_000_000
+        return actor_type, actor_id, limit, True
 
     gid = get_guest_id()
     actor_type = "guest"
     actor_id = gid
     limit = 10
-    return actor_type, actor_id, limit, None
+    return actor_type, actor_id, limit, False
 
 
-def quota_block_payload(used: int, limit: int, is_logged_in: bool):
+def quota_block_payload(used: int, limit: int, is_authenticated: bool):
     payload = {
         "error": "quota_exceeded",
         "used": min(used, limit),
@@ -372,27 +286,17 @@ def quota_block_payload(used: int, limit: int, is_logged_in: bool):
         "headline": "Free limit reached",
         "copy": [
             f"You've used {min(used, limit)}/{limit} free generations.",
-            "Upgrade to Pro for unlimited access.",
-            "Pro includes higher limits, priority processing, and ongoing updates.",
+            "Sign in with your code for unlimited access.",
         ],
-        "cta": {
-            "primary": {"label": "Upgrade to Pro", "action": "upgrade"},
-            "secondary": {
-                "label": "Create account" if not is_logged_in else "Account",
-                "action": "signup" if not is_logged_in else "account"
-            },
-        },
     }
-    if not is_logged_in:
-        payload["promo"] = {"label": "Create a free account to unlock 1 extra generation today."}
     return payload
 
 
 def enforce_quota_or_402():
-    actor_type, actor_id, limit, u = actor_and_limit()
+    actor_type, actor_id, limit, is_auth = actor_and_limit()
     used_after = usage_incr(actor_type, actor_id, 1)
     if used_after > limit:
-        return jsonify(quota_block_payload(used_after, limit, is_logged_in=bool(u))), 402
+        return jsonify(quota_block_payload(used_after, limit, is_authenticated=is_auth)), 402
     return None
 
 # -----------------------------------
@@ -523,13 +427,6 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 # -----------------------------------
 # Routes
 # -----------------------------------
-@app.get("/")
-def index():
-    resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
-    ensure_guest_cookie(resp)
-    return resp
-
-
 @app.get("/api/session")
 def api_session():
     resp = make_response(jsonify({"ok": True}))
@@ -539,140 +436,30 @@ def api_session():
 
 @app.get("/api/me")
 def api_me():
-    u = current_user()
-    actor_type, actor_id, limit, _u = actor_and_limit()
-    used = usage_get(actor_type, actor_id)
+    is_authenticated = bool(current_user())
     return jsonify({
-        "logged_in": bool(u),
-        "email": u["email"] if u else None,
-        "plan": u["plan"] if u else "guest",
-        "used": used,
-        "limit": limit,
-        "remaining": max(0, limit - used),
+        "logged_in": is_authenticated,
+        "plan": "pro" if is_authenticated else "guest",
     })
 
 
-# Stripe return pages (avoid 404)
-@app.get("/pro/success")
-def pro_success():
-    return make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
-
-
-@app.get("/pro/cancelled")
-def pro_cancelled():
-    return make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
-
-
-# -----------------------------
-# Google auth (One Tap / button)
-# -----------------------------
-@app.post("/auth/google")
-def auth_google():
-    if not GOOGLE_CLIENT_ID:
-        return jsonify({"error": "Server misconfigured: missing GOOGLE_CLIENT_ID"}), 500
-
+# ----------------------------
+# Simple Auth (931986)
+# ----------------------------
+@app.post("/authenticate")
+def authenticate():
     data = request.get_json(silent=True) or {}
-    token = (data.get("credential") or "").strip()
-    if not token:
-        return jsonify({"error": "Missing credential"}), 400
-
-    try:
-        info = google_id_token.verify_oauth2_token(
-            token,
-            google_requests.Request(),
-            GOOGLE_CLIENT_ID
-        )
-
-        email = (info.get("email") or "").strip().lower()
-        name = (info.get("name") or "") or (info.get("given_name") or "")
-        picture = (info.get("picture") or "")
-
-        user = create_or_get_user_by_email(email=email, name=name, picture=picture)
-
-        # ✅ Auto-Pro creator account
-        if CREATOR_EMAIL and email == CREATOR_EMAIL and user.get("plan") != "pro":
-            upgrade_user_to_pro(user["id"])
-            user["plan"] = "pro"
-
-        session["user_id"] = user["id"]
-
-        return jsonify({"ok": True, "user": {"email": user["email"], "plan": user["plan"]}})
-
-    except Exception as e:
-        print("GOOGLE AUTH ERROR:", repr(e))
-        return jsonify({"error": "Google sign-in failed"}), 401
+    code = (data.get("code") or "").strip()
+    if code == AUTH_CODE:
+        session["user_id"] = "authenticated_user"
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "Invalid code"}), 401
 
 
 @app.post("/auth/logout")
 def auth_logout():
     session.clear()
     return jsonify({"ok": True})
-
-
-# -----------------------------
-# Stripe checkout (automatic)
-# -----------------------------
-@app.post("/api/stripe/create-checkout-session")
-def stripe_create_checkout_session():
-    if not STRIPE_SECRET_KEY:
-        return jsonify({"error": "Server misconfigured: missing STRIPE_SECRET_KEY"}), 500
-    if not STRIPE_PRICE_ID_PRO:
-        return jsonify({"error": "Server misconfigured: missing STRIPE_PRICE_ID_PRO"}), 500
-
-    u = current_user()
-    if not u:
-        return jsonify({"error": "not_authenticated"}), 401
-
-    try:
-        sess = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
-            success_url=f"{APP_BASE_URL}/pro/success",
-            cancel_url=f"{APP_BASE_URL}/pro/cancelled",
-            client_reference_id=u["id"],
-            customer_email=u["email"],
-            metadata={"user_id": u["id"], "product": "vividmedi_pro"},
-        )
-        return jsonify({"url": sess.url})
-    except Exception as e:
-        print("STRIPE CHECKOUT ERROR:", repr(e))
-        return jsonify({"error": "Could not start checkout"}), 500
-
-
-@app.post("/api/stripe/webhook")
-def stripe_webhook():
-    if not STRIPE_WEBHOOK_SECRET:
-        return "Missing webhook secret", 500
-
-    payload = request.get_data()
-    sig_header = request.headers.get("Stripe-Signature", "")
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload=payload,
-            sig_header=sig_header,
-            secret=STRIPE_WEBHOOK_SECRET,
-        )
-    except Exception as e:
-        print("STRIPE WEBHOOK SIGNATURE ERROR:", repr(e))
-        return "Bad signature", 400
-
-    etype = event.get("type", "")
-    obj = (event.get("data") or {}).get("object") or {}
-
-    if etype == "checkout.session.completed":
-        user_id = obj.get("client_reference_id") or (obj.get("metadata") or {}).get("user_id")
-        customer_id = obj.get("customer")
-        subscription_id = obj.get("subscription")
-
-        if user_id:
-            upgrade_user_to_pro(
-                user_id=user_id,
-                stripe_customer_id=customer_id,
-                stripe_subscription_id=subscription_id,
-            )
-
-    return "OK", 200
 
 
 # -----------------------------------
@@ -796,7 +583,7 @@ def transcribe():
 # -----------------------------------
 @app.get("/consultation-notes")
 def consultation_notes_page():
-    resp = make_response(render_template("consultation-notes.html", google_client_id=GOOGLE_CLIENT_ID))
+    resp = make_response(render_template("consultation-notes.html"))
     ensure_guest_cookie(resp)
     return resp
 
@@ -853,7 +640,7 @@ def ask_question():
 
 @app.get("/stealth-mode")
 def stealth_mode():
-    if not session.get("user_id"):
+    if not current_user():
         return redirect("/")
     resp = make_response(render_template("stealth-mode.html"))
     ensure_guest_cookie(resp)
