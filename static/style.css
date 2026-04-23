@@ -1,3 +1,4 @@
+<<<<<<< mitties2020-patch-1
 :root {
   --bg: #050816;
   --bg-elevated: #0b1220;
@@ -544,3 +545,6 @@ body.invisible-mode .sidebar-brand {
   .header { flex-direction: column; align-items: flex-start; gap: 10px; }
   .topbar-actions { width: 100%; justify-content: space-between; }
 }
+=======
+﻿\
+>>>>>>> main

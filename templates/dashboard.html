@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VividMedi Performance Dashboard</title>
+    <style>
+        * { box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f1623;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            margin: 0 0 30px 0;
+            font-size: 28px;
+            color: #00d9ff;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: #1a1f3a;
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .card h2 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #a0b0c0;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .card .value {
+            font-size: 28px;
+            color: #00d9ff;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .card .unit {
+            font-size: 12px;
+            color: #5a6b7d;
+        }
+        
+        .health-healthy { color: #51cf66; }
+        .health-degraded { color: #ffd43b; }
+        .health-poor { color: #ff6b6b; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1f3a;
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 30px;
+        }
+        
+        th {
+            background: #242d4a;
+            padding: 15px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #a0b0c0;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.1);
+            font-size: 13px;
+        }
+        
+        tr:hover {
+            background: #242d4a;
+        }
+        
+        .endpoint { color: #00d9ff; font-weight: 600; }
+        .status-200 { color: #51cf66; }
+        .status-400 { color: #ffd43b; }
+        .status-500 { color: #ff6b6b; }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, #00d9ff, #00a8cc);
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .refresh-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .timestamp {
+            font-size: 12px;
+            color: #5a6b7d;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 VividMedi Performance Dashboard</h1>
+        
+        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Now</button>
+        
+        <div class="grid" id="summaryGrid">
+            <div class="card">
+                <h2>Health Status</h2>
+                <div class="value" id="healthStatus">—</div>
+            </div>
+            <div class="card">
+                <h2>Avg Response Time</h2>
+                <div class="value" id="avgResponse">—</div>
+                <div class="unit">milliseconds</div>
+            </div>
+            <div class="card">
+                <h2>Total Requests</h2>
+                <div class="value" id="totalRequests">—</div>
+            </div>
+            <div class="card">
+                <h2>Cache Hit Rate</h2>
+                <div class="value" id="cacheHitRate">—</div>
+                <div class="unit">percentage</div>
+            </div>
+            <div class="card">
+                <h2>Uptime</h2>
+                <div class="value" id="uptime">—</div>
+            </div>
+            <div class="card">
+                <h2>Endpoints Tracked</h2>
+                <div class="value" id="endpointsTracked">—</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px;">
+            <h2 style="color: #00d9ff; margin: 0 0 20px 0;">Endpoint Performance</h2>
+            <table id="endpointsTable">
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Requests</th>
+                        <th>Avg (ms)</th>
+                        <th>P95 (ms)</th>
+                        <th>P99 (ms)</th>
+                        <th>Status Codes</th>
+                        <th>Cache Hits</th>
+                    </tr>
+                </thead>
+                <tbody id="endpointsBody">
+                    <tr><td colspan="7" style="text-align: center; color: #5a6b7d;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="timestamp" style="margin-top: 20px;">
+            Last updated: <span id="lastUpdate">—</span>
+        </div>
+    </div>
+    
+    <script>
+        async function refreshData() {
+            try {
+                // Get summary
+                const summaryRes = await fetch('/api/perf/summary');
+                const summaryData = await summaryRes.json();
+                
+                // Get health
+                const healthRes = await fetch('/api/perf/health');
+                const healthData = await healthRes.json();
+                
+                // Get detailed stats
+                const statsRes = await fetch('/api/perf/stats');
+                const statsData = await statsRes.json();
+                
+                updateSummary(summaryData, healthData);
+                updateEndpointsTable(statsData.stats);
+                
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            } catch (e) {
+                console.error('Failed to fetch performance data:', e);
+                document.getElementById('endpointsBody').innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ff6b6b;">Failed to load data</td></tr>';
+            }
+        }
+        
+        function updateSummary(summaryData, healthData) {
+            const healthStatusEl = document.getElementById('healthStatus');
+            const healthClass = `health-${healthData.status}`;
+            healthStatusEl.textContent = healthData.status.toUpperCase();
+            healthStatusEl.className = `value ${healthClass}`;
+            
+            document.getElementById('avgResponse').textContent = Math.round(healthData.avg_response_ms);
+            document.getElementById('totalRequests').textContent = summaryData.total_requests || 0;
+            document.getElementById('cacheHitRate').textContent = Math.round(summaryData.total_cache_hit_rate) + '%';
+            document.getElementById('uptime').textContent = formatUptime(healthData.uptime_seconds);
+            document.getElementById('endpointsTracked').textContent = summaryData.endpoints_monitored || 0;
+        }
+        
+        function updateEndpointsTable(stats) {
+            const tbody = document.getElementById('endpointsBody');
+            const rows = [];
+            
+            for (const [endpoint, data] of Object.entries(stats)) {
+                if (!data) continue;
+                
+                const statusCodes = Object.entries(data.status_codes || {})
+                    .map(([code, count]) => `${code}(${count})`)
+                    .join(', ');
+                
+                rows.push(`
+                    <tr>
+                        <td class="endpoint">${endpoint}</td>
+                        <td>${data.requests}</td>
+                        <td>${Math.round(data.avg_duration_ms)}</td>
+                        <td>${Math.round(data.p95_duration_ms)}</td>
+                        <td>${Math.round(data.p99_duration_ms)}</td>
+                        <td class="status-${Object.keys(data.status_codes)[0] || '200'}">${statusCodes}</td>
+                        <td>${Math.round(data.cache_hit_rate)}%</td>
+                    </tr>
+                `);
+            }
+            
+            tbody.innerHTML = rows.length > 0 ? rows.join('') : '<tr><td colspan="7" style="text-align: center; color: #5a6b7d;">No data available</td></tr>';
+        }
+        
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+        
+        // Auto-refresh every 30 seconds
+        refreshData();
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>

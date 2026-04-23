@@ -1,4 +1,8 @@
+<<<<<<< mitties2020-patch-1
 __pycache__/
+=======
+﻿__pycache__/
+>>>>>>> main
 *.pyc
 *.pyo
 *.pyd

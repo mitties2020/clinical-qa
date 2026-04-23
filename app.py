@@ -20,40 +20,22 @@ from flask import (
 
 from faster_whisper import WhisperModel
 
-# -----------------------------------
-# Load .env locally only (not Render)
-# -----------------------------------
 if os.getenv("RENDER") is None:
     from dotenv import load_dotenv
     load_dotenv()
 
-# -----------------------------------
-# Config
-# -----------------------------------
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
 DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/completions").strip()
 
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
-
 AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
 
-# -----------------------------------
-# Flask app
-# -----------------------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
-
-app.secret_key = (
-    os.getenv("FLASK_SECRET_KEY")
-    or os.getenv("SECRET_KEY")
-    or "dev-insecure-change-me"
-)
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
 
 http = requests.Session()
 
-# --------------------
-# Health checks
-# --------------------
 @app.get("/health")
 def health():
     return "ok", 200
@@ -66,9 +48,6 @@ def healthz():
 def ping():
     return "pong", 200
 
-# -----------------------------------
-# Whisper model (load once)
-# -----------------------------------
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
@@ -78,16 +57,9 @@ def get_whisper_model():
     if _whisper_model is None:
         with _whisper_init_lock:
             if _whisper_model is None:
-                _whisper_model = WhisperModel(
-                    WHISPER_MODEL_SIZE,
-                    device="cpu",
-                    compute_type="int8"
-                )
+                _whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
     return _whisper_model
 
-# -----------------------------------
-# Prompts
-# -----------------------------------
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
@@ -144,9 +116,6 @@ HANDOVER_SYSTEM_PROMPT = (
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
 
-# -----------------------------------
-# Helper: call DeepSeek
-# -----------------------------------
 def call_deepseek(system_prompt: str, user_content: str) -> str:
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
@@ -170,21 +139,13 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
     resp = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=70)
     resp.raise_for_status()
     out = resp.json()
-    answer = (
-        (out.get("choices") or [{}])[0]
-        .get("message", {})
-        .get("content", "")
-        .strip()
-    )
+    answer = (((out.get("choices") or [{}])[0]).get("message", {}) or {}).get("content", "").strip()
     return answer or "No response."
-
-# -----------------------------------
-# Routes
-# -----------------------------------
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    return resp
 
 @app.get("/api/session")
 def api_session():
@@ -201,9 +162,6 @@ def api_me():
         "remaining": 1000000 if is_authenticated else 10,
     })
 
-# ----------------------------
-# Simple Auth (931986)
-# ----------------------------
 @app.post("/authenticate")
 def authenticate():
     data = request.get_json(silent=True) or {}
@@ -218,9 +176,6 @@ def auth_logout():
     session.clear()
     return jsonify({"ok": True})
 
-# -----------------------------------
-# Clinical AI endpoints
-# -----------------------------------
 @app.post("/api/generate")
 def generate():
     if not DEEPSEEK_API_KEY:
@@ -320,9 +275,6 @@ def transcribe():
                     except Exception:
                         pass
 
-# -----------------------------------
-# Local run
-# -----------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

@@ -18,6 +18,50 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("Checkout error:", err);
       alert("Could not start checkout: " + err.message);
-    }
-  });
-});
+      // ===== Enter-to-Generate patch (Shift+Enter keeps newline) =====
+(function bindEnterToGenerate() {
+  function bind(textareaId, buttonId) {
+    const ta = document.getElementById(textareaId);
+    const btn = document.getElementById(buttonId);
+    if (!ta || !btn) return;
+
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  }
+  // Enter = Generate, Shift+Enter = newline (doesn't change backend)
+(function bindEnterToGenerate() {
+  function bind(textareaId, buttonId) {
+    const ta = document.getElementById(textareaId);
+    const btn = document.getElementById(buttonId);
+    if (!ta || !btn) return;
+
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  }
+
+  bind("clinicalQuestion", "generateBtn"); // Clinical box
+  bind("wrNote", "consultGenerateBtn");    // Consult box
+})();
+  // Answers section
+  bind("wrNote", "generateBtn");       // if your input box is wrNote
+  
+  // If your answers input is different, add another bind line.
+  function setAnswerText(text) {
+  const el = document.getElementById("answer");
+  if (!el) return;
+  if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") el.value = text;
+  else el.textContent = text;
+}
+
+  // Consultation section
+  bind("wrNoteConsult", "consultGenerateBtn"); // if your consult input is wrNoteConsult
+})();
+
