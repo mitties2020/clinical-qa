@@ -16,41 +16,9 @@ from flask import (
     render_template,
     session,
     make_response,
-    redirect,
 )
 
 from faster_whisper import WhisperModel
-
-# ✅ ADD THIS BLOCK HERE (RIGHT AFTER IMPORTS)
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from functools import wraps
-
-APP_SECRET_KEY = (os.getenv("APP_SECRET_KEY") or os.getenv("FLASK_SECRET_KEY") or "dev-secret-change-me").strip()
-serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
-
-def sign_token(user_id: str) -> str:
-    return serializer.dumps({"uid": user_id})
-
-def verify_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 30):
-    try:
-        data = serializer.loads(token, max_age=max_age_seconds)
-        return data.get("uid")
-    except (BadSignature, SignatureExpired):
-        return None
-
-def require_auth(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return jsonify({"error": "not_authenticated"}), 401
-        token = auth.split(" ", 1)[1].strip()
-        uid = verify_token(token)
-        if not uid:
-            return jsonify({"error": "invalid_token"}), 401
-        request.user = uid
-        return fn(*args, **kwargs)
-    return wrapper
 
 # -----------------------------------
 # Load .env locally only (not Render)
@@ -60,26 +28,15 @@ if os.getenv("RENDER") is None:
     load_dotenv()
 
 # -----------------------------------
-# Simple auth config
-# -----------------------------------
-AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
-
-# -----------------------------------
-# DeepSeek config
+# Config
 # -----------------------------------
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
 DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/completions").strip()
 
-# -----------------------------------
-# Whisper config
-# -----------------------------------
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 
-# -----------------------------------
-# App Base URL
-# -----------------------------------
-APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
+AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
 
 # -----------------------------------
 # Flask app
@@ -95,217 +52,15 @@ app.secret_key = (
 http = requests.Session()
 
 # --------------------
-# Health check (for Render)
+# Health checks
 # --------------------
 @app.get("/health")
 def health():
     return "ok", 200
 
-# --------------------
-# Homepage
-# --------------------
-@app.get("/")
-def home():
-    resp = make_response(render_template("index.html"))
-    ensure_guest_cookie(resp)
-    return resp
-
-# -----------------------------------
-# DB (SQLite) - minimal, self-contained
-# -----------------------------------
-DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
-
-
-def db_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def db_init():
-    with db_conn() as conn:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS usage (
-            actor_type TEXT NOT NULL,   -- guest | user
-            actor_id TEXT NOT NULL,
-            used INTEGER NOT NULL DEFAULT 0,
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (actor_type, actor_id)
-        )
-        """)
-        conn.commit()
-
-
-db_init()
-
-# -----------------------------------
-# Helpers: time + formatting
-# -----------------------------------
-def now_awst() -> str:
-    dt = datetime.now(ZoneInfo("Australia/Perth"))
-    return dt.strftime("%d %b %Y, %H:%M (AWST)")
-
-
-def extract_field(text: str, labels: list[str]) -> str:
-    if not text:
-        return ""
-    for lab in labels:
-        pattern = rf"(?im)^\s*{re.escape(lab)}\s*[:=\-]\s*(.+?)\s*$"
-        m = re.search(pattern, text)
-        if m:
-            return m.group(1).strip()
-    return ""
-
-
-def normalise_card_type(s: str) -> str:
-    s = (s or "").strip().lower()
-    if not s:
-        return ""
-    if "gold" in s:
-        return "Gold"
-    if "white" in s:
-        return "White"
-    return s[:1].upper() + s[1:]
-
-
-def build_dva_header(user_text: str) -> str:
-    name = extract_field(user_text, ["DVA patient name", "Patient name", "Name", "Patient"])
-    card = extract_field(user_text, ["DVA card", "Card type", "Card", "DVA card type"])
-    dva_no = extract_field(user_text, ["DVA number", "DVA no", "File number", "File no"])
-    accepted = extract_field(
-        user_text,
-        ["Accepted conditions", "Accepted condition", "Accepted", "White card accepted conditions"]
-    )
-    referral = extract_field(user_text, ["Referral type", "Referral", "Requested referral", "Discipline"])
-    contact = extract_field(user_text, ["Contact number", "Phone", "Mobile", "Contact"])
-
-    card = normalise_card_type(card)
-
-    header = []
-    header.append(f"DVA Patient Name: {name or ''}")
-    header.append(f"DVA Card Type: {card or 'Not specified'}")
-    header.append(f"DVA Number: {dva_no or ''}")
-    header.append(f"Accepted Conditions: {accepted or 'Not specified'}")
-    header.append(f"Referral Type: {referral or ''}")
-    header.append(f"Contact Number: {contact or ''}")
-    header.append("")
-    header.append("Telehealth Consult:")
-    header.append("Dr Michael Addis")
-    header.append(f"Date & Time (AWST): {now_awst()}")
-    return "\n".join(header).strip()
-
-# -----------------------------------
-# Guest + auth helpers
-# -----------------------------------
-def get_guest_id():
-    return request.cookies.get("vivid_guest") or ""
-
-
-def ensure_guest_cookie(resp):
-    gid = get_guest_id()
-    if not gid:
-        gid = str(uuid4())
-        resp.set_cookie(
-            "vivid_guest",
-            gid,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=60 * 60 * 24 * 365,  # 1 year
-            path="/",
-        )
-    return gid
-
-
-def current_user():
-    return session.get("user_id")
-
-
-# -----------------------------------
-# Quota / usage
-# -----------------------------------
-def usage_get(actor_type: str, actor_id: str) -> int:
-    if not actor_id:
-        return 0
-    with db_conn() as conn:
-        row = conn.execute(
-            "SELECT used FROM usage WHERE actor_type=? AND actor_id=?",
-            (actor_type, actor_id),
-        ).fetchone()
-        return int(row["used"]) if row else 0
-
-
-def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
-    if not actor_id:
-        return 0
-    with db_conn() as conn:
-        row = conn.execute(
-            "SELECT used FROM usage WHERE actor_type=? AND actor_id=?",
-            (actor_type, actor_id),
-        ).fetchone()
-        if row:
-            used = int(row["used"]) + by
-            conn.execute(
-                "UPDATE usage SET used=?, updated_at=? WHERE actor_type=? AND actor_id=?",
-                (used, datetime.utcnow().isoformat(), actor_type, actor_id),
-            )
-        else:
-            used = by
-            conn.execute(
-                "INSERT INTO usage (actor_type, actor_id, used, updated_at) VALUES (?, ?, ?, ?)",
-                (actor_type, actor_id, used, datetime.utcnow().isoformat()),
-            )
-        conn.commit()
-        return used
-
-
-def actor_and_limit():
-    """
-    Guest: 10 total generations
-    Authenticated: effectively unlimited
-    """
-    u = current_user()
-    if u:
-        actor_type = "user"
-        actor_id = u
-        limit = 1_000_000
-        return actor_type, actor_id, limit, True
-
-    gid = get_guest_id()
-    actor_type = "guest"
-    actor_id = gid
-    limit = 10
-    return actor_type, actor_id, limit, False
-
-
-def quota_block_payload(used: int, limit: int, is_authenticated: bool):
-    payload = {
-        "error": "quota_exceeded",
-        "used": min(used, limit),
-        "limit": limit,
-        "headline": "Free limit reached",
-        "copy": [
-            f"You've used {min(used, limit)}/{limit} free generations.",
-            "Sign in with your code for unlimited access.",
-        ],
-    }
-    return payload
-
-
-def enforce_quota_or_402():
-    actor_type, actor_id, limit, is_auth = actor_and_limit()
-    used_after = usage_incr(actor_type, actor_id, 1)
-    if used_after > limit:
-        return jsonify(quota_block_payload(used_after, limit, is_authenticated=is_auth)), 402
-    return None
-
-# -----------------------------------
-# Health check (Render)
-# -----------------------------------
 @app.get("/healthz")
 def healthz():
     return "ok", 200
-
 
 @app.get("/_ping")
 def ping():
@@ -317,7 +72,6 @@ def ping():
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
-
 
 def get_whisper_model():
     global _whisper_model
@@ -427,21 +181,25 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 # -----------------------------------
 # Routes
 # -----------------------------------
+
+@app.get("/")
+def index():
+    return render_template("index.html")
+
 @app.get("/api/session")
 def api_session():
-    resp = make_response(jsonify({"ok": True}))
-    ensure_guest_cookie(resp)
-    return resp
-
+    return jsonify({"ok": True})
 
 @app.get("/api/me")
 def api_me():
-    is_authenticated = bool(current_user())
+    is_authenticated = session.get("authenticated") == True
     return jsonify({
         "logged_in": is_authenticated,
         "plan": "pro" if is_authenticated else "guest",
+        "used": 0,
+        "limit": 1000000 if is_authenticated else 10,
+        "remaining": 1000000 if is_authenticated else 10,
     })
-
 
 # ----------------------------
 # Simple Auth (931986)
@@ -451,16 +209,14 @@ def authenticate():
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip()
     if code == AUTH_CODE:
-        session["user_id"] = "authenticated_user"
+        session["authenticated"] = True
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "Invalid code"}), 401
-
 
 @app.post("/auth/logout")
 def auth_logout():
     session.clear()
     return jsonify({"ok": True})
-
 
 # -----------------------------------
 # Clinical AI endpoints
@@ -477,18 +233,11 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
-    blocked = enforce_quota_or_402()
-    if blocked:
-        return blocked
-
     try:
         if mode.startswith("dva"):
-            header = build_dva_header(query)
             referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
-
             user_content = (
                 f"Referral intent: {referral_intent}\n\n"
-                f"{header}\n\n"
                 f"DETAILS:\n{query}\n\n"
                 "Follow DVA_META format then clinical headings."
             )
@@ -503,7 +252,6 @@ def generate():
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
 
-
 @app.post("/api/consult")
 def consult():
     if not DEEPSEEK_API_KEY:
@@ -515,10 +263,6 @@ def consult():
 
     if not text:
         return jsonify({"error": "Empty input"}), 400
-
-    blocked = enforce_quota_or_402()
-    if blocked:
-        return blocked
 
     try:
         if mode == "handover":
@@ -541,7 +285,6 @@ def consult():
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
-
 
 @app.post("/api/transcribe")
 def transcribe():
@@ -576,76 +319,6 @@ def transcribe():
                         os.remove(p)
                     except Exception:
                         pass
-
-
-# -----------------------------------
-# Consultation Notes & Q&A Routes
-# -----------------------------------
-@app.get("/consultation-notes")
-def consultation_notes_page():
-    resp = make_response(render_template("consultation-notes.html"))
-    ensure_guest_cookie(resp)
-    return resp
-
-
-@app.post("/convert-notes")
-def convert_notes():
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
-    data = request.get_json(silent=True) or {}
-    clinical_data = (data.get("clinical_data") or "").strip()
-    note_type = (data.get("note_type") or "consultation_note").strip()
-
-    if not clinical_data:
-        return jsonify({"error": "Empty input"}), 400
-
-    blocked = enforce_quota_or_402()
-    if blocked:
-        return blocked
-
-    try:
-        user_content = f"Generate a {note_type} from the following clinical data:\n\n{clinical_data}"
-        answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
-        return jsonify({"clinical_notes": answer})
-    except Exception as e:
-        print("CONVERT NOTES ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
-
-
-@app.post("/ask")
-def ask_question():
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
-    data = request.get_json(silent=True) or {}
-    question = (data.get("question") or "").strip()
-    context = (data.get("context") or "").strip()
-
-    if not question:
-        return jsonify({"error": "Empty question"}), 400
-
-    blocked = enforce_quota_or_402()
-    if blocked:
-        return blocked
-
-    try:
-        user_content = f"{context}\n\nCurrent question:\n{question}" if context else f"Clinical question:\n{question}"
-        answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
-        return jsonify({"answer": answer})
-    except Exception as e:
-        print("ASK QUESTION ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
-
-
-@app.get("/stealth-mode")
-def stealth_mode():
-    if not current_user():
-        return redirect("/")
-    resp = make_response(render_template("stealth-mode.html"))
-    ensure_guest_cookie(resp)
-    return resp
-
 
 # -----------------------------------
 # Local run
