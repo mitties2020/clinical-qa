@@ -1,6 +1,5 @@
 import os
 import re
-import time
 import tempfile
 import threading
 import subprocess
@@ -8,268 +7,463 @@ import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from uuid import uuid4
-from functools import wraps
-from urllib.parse import urljoin
 
 import requests
+import stripe
 from flask import (
     Flask,
-    g,
     request,
     jsonify,
     render_template,
     session,
     make_response,
-    redirect,
-    url_for,
 )
 
 from faster_whisper import WhisperModel
-from performance_monitor import monitor
 
+# Google ID token verification (server-side)
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+import os
+import re
+import tempfile
+import threading
+import subprocess
+import sqlite3
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from uuid import uuid4
+
+import requests
+import stripe
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    render_template,
+    session,
+    make_response,
+)
+
+from faster_whisper import WhisperModel
+
+# Google ID token verification (server-side)
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+
+# ✅ ADD THIS BLOCK HERE (RIGHT AFTER IMPORTS)
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from functools import wraps
+
+APP_SECRET_KEY = (os.getenv("APP_SECRET_KEY") or os.getenv("FLASK_SECRET_KEY") or "dev-secret-change-me").strip()
+serializer = URLSafeTimedSerializer(APP_SECRET_KEY, salt="vm-auth")
+
+def sign_token(user_id: str) -> str:
+    return serializer.dumps({"uid": user_id})
+
+def verify_token(token: str, max_age_seconds: int = 60 * 60 * 24 * 30):
+    try:
+        data = serializer.loads(token, max_age=max_age_seconds)
+        return data.get("uid")
+    except (BadSignature, SignatureExpired):
+        return None
+
+def require_auth(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return jsonify({"error": "not_authenticated"}), 401
+        token = auth.split(" ", 1)[1].strip()
+        uid = verify_token(token)
+        if not uid:
+            return jsonify({"error": "invalid_token"}), 401
+        # ✅ uses your existing DB helper (defined later) so we import nothing here
+        with db_conn() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        if not row:
+            return jsonify({"error": "user_not_found"}), 401
+        request.user = dict(row)
+        return fn(*args, **kwargs)
+    return wrapper
+
+# -----------------------------------
+# Load .env locally only (not Render)
+# -----------------------------------
+if os.getenv("RENDER") is None:
+    from dotenv import load_dotenv
+    load_dotenv()
+# -----------------------------------
+# Load .env locally only (not Render)
+# -----------------------------------
 if os.getenv("RENDER") is None:
     from dotenv import load_dotenv
     load_dotenv()
 
+# -----------------------------------
+# DeepSeek config
+# -----------------------------------
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
 DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/completions").strip()
 
+# -----------------------------------
+# Whisper config
+# -----------------------------------
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
-AUTH_CODE = (os.getenv("AUTH_CODE") or "").strip()
-DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
+
+# -----------------------------------
+# Stripe config
+# -----------------------------------
+STRIPE_SECRET_KEY = (os.getenv("STRIPE_SECRET_KEY") or "").strip()
+STRIPE_WEBHOOK_SECRET = (os.getenv("STRIPE_WEBHOOK_SECRET") or "").strip()
+
+# Your live price id (from your Stripe screenshot)
+STRIPE_PRICE_ID_PRO = (os.getenv("STRIPE_PRICE_ID_PRO") or "price_1T3yFlHvfV7kt9wle2LpbpU0").strip()
+
+# Recommended base URL (set explicitly if you have multiple domains)
+APP_BASE_URL = (os.getenv("APP_BASE_URL") or "https://www.vividmedi.com").rstrip("/")
+
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
+# -----------------------------------
+# Google Sign-In config
+# -----------------------------------
+GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+
+# ✅ Auto-Pro creator account (set this in Render env)
+CREATOR_EMAIL = (os.getenv("CREATOR_EMAIL") or "").strip().lower()
+
+# -----------------------------------
+# Flask app
+# -----------------------------------
+from flask import Flask, request, jsonify, render_template
+import os, requests
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
+
+app.secret_key = (
+    os.getenv("FLASK_SECRET_KEY")
+    or os.getenv("SECRET_KEY")
+    or "dev-insecure-change-me"
+)
 
 http = requests.Session()
 
-
-@app.before_request
-def _track_request_start():
-    g._req_start = time.time()
-
-
-@app.after_request
-def _track_request_end(response):
-    start = getattr(g, "_req_start", None)
-    if start is not None:
-        duration_ms = (time.time() - start) * 1000
-        monitor.record_endpoint(request.path, request.method, response.status_code, duration_ms)
-    return response
-
-
-def require_auth(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        if session.get("authenticated") is not True:
-            if request.path.startswith("/api/") or request.path in {"/ask", "/convert-notes"}:
-                return jsonify({"error": "Unauthorized"}), 401
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return wrapped
-
-
-def db_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_history_db():
-    with db_conn() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS history_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_key TEXT NOT NULL,
-                item_type TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        conn.commit()
-
-
-def delete_history_entry(entry_id: int) -> bool:
-    with db_conn() as conn:
-        cur = conn.execute(
-            "DELETE FROM history_entries WHERE id = ? AND user_key = ?",
-            (entry_id, session_user_key()),
-        )
-        conn.commit()
-        return cur.rowcount > 0
-
-
-def clear_history_entries() -> int:
-    with db_conn() as conn:
-        cur = conn.execute("DELETE FROM history_entries WHERE user_key = ?", (session_user_key(),))
-        conn.commit()
-        return cur.rowcount
-def session_user_key() -> str:
-    return "code_user" if session.get("authenticated") is True else "guest"
-
-
-def save_history(item_type: str, content: str):
-    with db_conn() as conn:
-        conn.execute(
-            "INSERT INTO history_entries (user_key, item_type, content, created_at) VALUES (?, ?, ?, ?)",
-            (session_user_key(), item_type, content, datetime.utcnow().isoformat()),
-        )
-        conn.commit()
-
-
-def load_history(limit: int = 200):
-    with db_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, item_type, content, created_at FROM history_entries WHERE user_key = ? ORDER BY id DESC LIMIT ?",
-            (session_user_key(), limit),
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
-init_history_db()
-
+# --------------------
+# Health check (for Render)
+# --------------------
 @app.get("/health")
 def health():
     return "ok", 200
 
+# --------------------
+# Homepage
+# --------------------
+@app.get("/")
+def home():
+    return render_template("index.html")  # change if your homepage file is named differently
+
+# -----------------------------------
+# DB (SQLite) - minimal, self-contained
+# -----------------------------------
+DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
+
+
+def db_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def db_init():
+    with db_conn() as conn:
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT,
+            picture TEXT,
+            plan TEXT NOT NULL DEFAULT 'free',         -- free | pro
+            email_verified INTEGER NOT NULL DEFAULT 1, -- Google tokens are verified
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
+            created_at TEXT NOT NULL
+        )
+        """)
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS usage (
+            actor_type TEXT NOT NULL,   -- guest | user
+            actor_id TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (actor_type, actor_id)
+        )
+        """)
+        conn.commit()
+
+
+db_init()
+
+# -----------------------------------
+# Helpers: time + formatting
+# -----------------------------------
+def now_awst() -> str:
+    dt = datetime.now(ZoneInfo("Australia/Perth"))
+    return dt.strftime("%d %b %Y, %H:%M (AWST)")
+
+
+def extract_field(text: str, labels: list[str]) -> str:
+    if not text:
+        return ""
+    for lab in labels:
+        pattern = rf"(?im)^\s*{re.escape(lab)}\s*[:=\-]\s*(.+?)\s*$"
+        m = re.search(pattern, text)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
+def normalise_card_type(s: str) -> str:
+    s = (s or "").strip().lower()
+    if not s:
+        return ""
+    if "gold" in s:
+        return "Gold"
+    if "white" in s:
+        return "White"
+    return s[:1].upper() + s[1:]
+
+
+def build_dva_header(user_text: str) -> str:
+    name = extract_field(user_text, ["DVA patient name", "Patient name", "Name", "Patient"])
+    card = extract_field(user_text, ["DVA card", "Card type", "Card", "DVA card type"])
+    dva_no = extract_field(user_text, ["DVA number", "DVA no", "File number", "File no"])
+    accepted = extract_field(
+        user_text,
+        ["Accepted conditions", "Accepted condition", "Accepted", "White card accepted conditions"]
+    )
+    referral = extract_field(user_text, ["Referral type", "Referral", "Requested referral", "Discipline"])
+    contact = extract_field(user_text, ["Contact number", "Phone", "Mobile", "Contact"])
+
+    card = normalise_card_type(card)
+
+    header = []
+    header.append(f"DVA Patient Name: {name or ''}")
+    header.append(f"DVA Card Type: {card or 'Not specified'}")
+    header.append(f"DVA Number: {dva_no or ''}")
+    header.append(f"Accepted Conditions: {accepted or 'Not specified'}")
+    header.append(f"Referral Type: {referral or ''}")
+    header.append(f"Contact Number: {contact or ''}")
+    header.append("")
+    header.append("Telehealth Consult:")
+    header.append("Dr Michael Addis")
+    header.append(f"Date & Time (AWST): {now_awst()}")
+    return "\n".join(header).strip()
+
+# -----------------------------------
+# Guest + auth helpers
+# -----------------------------------
+def get_guest_id():
+    return request.cookies.get("vivid_guest") or ""
+
+
+def ensure_guest_cookie(resp):
+    gid = get_guest_id()
+    if not gid:
+        gid = str(uuid4())
+        resp.set_cookie(
+            "vivid_guest",
+            gid,
+            httponly=True,
+            secure=True,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 365,  # 1 year
+            path="/",
+        )
+    return gid
+
+
+def current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    with db_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        return dict(row) if row else None
+
+
+def create_or_get_user_by_email(email: str, name: str = "", picture: str = "") -> dict:
+    email = (email or "").strip().lower()
+    if not email:
+        raise ValueError("Missing email")
+
+    with db_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE users SET name=?, picture=? WHERE email=?",
+                (name or row["name"], picture or row["picture"], email),
+            )
+            conn.commit()
+            row2 = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+            return dict(row2)
+
+        uid = "usr_" + uuid4().hex
+        conn.execute(
+            """
+            INSERT INTO users (id, email, name, picture, plan, email_verified, created_at)
+            VALUES (?, ?, ?, ?, 'free', 1, ?)
+            """,
+            (uid, email, name, picture, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        row2 = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        return dict(row2)
+
+
+def upgrade_user_to_pro(user_id: str, stripe_customer_id: str = None, stripe_subscription_id: str = None):
+    with db_conn() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET plan='pro',
+                stripe_customer_id=COALESCE(?, stripe_customer_id),
+                stripe_subscription_id=COALESCE(?, stripe_subscription_id)
+            WHERE id=?
+            """,
+            (stripe_customer_id, stripe_subscription_id, user_id),
+        )
+        conn.commit()
+
+# -----------------------------------
+# Quota / usage
+# -----------------------------------
+def usage_get(actor_type: str, actor_id: str) -> int:
+    if not actor_id:
+        return 0
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT used FROM usage WHERE actor_type=? AND actor_id=?",
+            (actor_type, actor_id),
+        ).fetchone()
+        return int(row["used"]) if row else 0
+
+
+def usage_incr(actor_type: str, actor_id: str, by: int = 1) -> int:
+    if not actor_id:
+        return 0
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT used FROM usage WHERE actor_type=? AND actor_id=?",
+            (actor_type, actor_id),
+        ).fetchone()
+        if row:
+            used = int(row["used"]) + by
+            conn.execute(
+                "UPDATE usage SET used=?, updated_at=? WHERE actor_type=? AND actor_id=?",
+                (used, datetime.utcnow().isoformat(), actor_type, actor_id),
+            )
+        else:
+            used = by
+            conn.execute(
+                "INSERT INTO usage (actor_type, actor_id, used, updated_at) VALUES (?, ?, ?, ?)",
+                (actor_type, actor_id, used, datetime.utcnow().isoformat()),
+            )
+        conn.commit()
+        return used
+
+
+def actor_and_limit():
+    """
+    Guest: 10 total generations
+    Logged-in free: 11 total generations (includes +1 bonus on account creation)
+    Pro: effectively unlimited (still add separate rate-limits later if needed)
+    """
+    u = current_user()
+    if u:
+        actor_type = "user"
+        actor_id = u["id"]
+        if (u.get("plan") or "free") == "pro":
+            limit = 1_000_000
+        else:
+            limit = 11
+        return actor_type, actor_id, limit, u
+
+    gid = get_guest_id()
+    actor_type = "guest"
+    actor_id = gid
+    limit = 10
+    return actor_type, actor_id, limit, None
+
+
+def quota_block_payload(used: int, limit: int, is_logged_in: bool):
+    payload = {
+        "error": "quota_exceeded",
+        "used": min(used, limit),
+        "limit": limit,
+        "headline": "Free limit reached",
+        "copy": [
+            f"You’ve used {min(used, limit)}/{limit} free generations.",
+            "Upgrade to Pro for unlimited access.",
+            "Pro includes higher limits, priority processing, and ongoing updates.",
+        ],
+        "cta": {
+            "primary": {"label": "Upgrade to Pro", "action": "upgrade"},
+            "secondary": {
+                "label": "Create account" if not is_logged_in else "Account",
+                "action": "signup" if not is_logged_in else "account"
+            },
+        },
+    }
+    if not is_logged_in:
+        payload["promo"] = {"label": "Create a free account to unlock 1 extra generation today."}
+    return payload
+
+
+def enforce_quota_or_402():
+    actor_type, actor_id, limit, u = actor_and_limit()
+    used_after = usage_incr(actor_type, actor_id, 1)
+    if used_after > limit:
+        return jsonify(quota_block_payload(used_after, limit, is_logged_in=bool(u))), 402
+    return None
+
+# -----------------------------------
+# Health check (Render)
+# -----------------------------------
 @app.get("/healthz")
 def healthz():
     return "ok", 200
+
 
 @app.get("/_ping")
 def ping():
     return "pong", 200
 
-
-@app.post("/api/call-patient")
-@require_auth
-def call_patient():
-    account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
-    auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
-    twilio_number = (os.getenv("TWILIO_NUMBER") or "").strip()
-    base_url = (os.getenv("BASE_URL") or request.host_url).strip()
-
-    if not (account_sid and auth_token and twilio_number):
-        return jsonify({
-            "ok": False,
-            "error": "Calling is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_NUMBER."
-        }), 503
-
-    payload = request.get_json(silent=True) or {}
-    patient_phone_raw = str(payload.get("patientPhone") or "").strip()
-    patient_phone = normalize_au_phone(patient_phone_raw)
-    if not patient_phone:
-        return jsonify({"ok": False, "error": "Invalid patientPhone. Use E.164 (e.g. +614XXXXXXXX) or AU mobile format."}), 400
-
-    base_url_norm = base_url if base_url.endswith("/") else f"{base_url}/"
-    status_url = urljoin(base_url if base_url.endswith("/") else f"{base_url}/", "api/call-status")
-    conference_name = f"consult-{uuid4().hex}"
-    doctor_phone = normalize_au_phone((os.getenv("DOCTOR_PHONE") or "").strip())
-    patient_twiml_url = urljoin(base_url_norm, f"twiml/join-consult?room={conference_name}&role=patient")
-    doctor_twiml_url = urljoin(base_url_norm, f"twiml/join-consult?room={conference_name}&role=doctor")
-
-    try:
-        if doctor_phone:
-            doctor_res = http.post(
-                f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls.json",
-                auth=(account_sid, auth_token),
-                data={
-                    "To": doctor_phone,
-                    "From": twilio_number,
-                    "Url": doctor_twiml_url,
-                    "StatusCallback": status_url,
-                    "StatusCallbackMethod": "POST",
-                    "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
-                },
-                timeout=20,
-            )
-            if doctor_res.status_code >= 400:
-                detail = doctor_res.json().get("message") if "application/json" in doctor_res.headers.get("content-type", "") else doctor_res.text
-                return jsonify({"ok": False, "error": f"Twilio doctor leg failed: {detail}"}), 502
-            doctor_sid = doctor_res.json().get("sid")
-        else:
-            doctor_sid = None
-
-        patient_res = http.post(
-            f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls.json",
-            auth=(account_sid, auth_token),
-            data={
-                "To": patient_phone,
-                "From": twilio_number,
-                "Url": patient_twiml_url,
-                "StatusCallback": status_url,
-                "StatusCallbackMethod": "POST",
-                "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
-            },
-            timeout=20,
-        )
-        if patient_res.status_code >= 400:
-            detail = patient_res.json().get("message") if "application/json" in patient_res.headers.get("content-type", "") else patient_res.text
-            return jsonify({"ok": False, "error": f"Twilio patient leg failed: {detail}"}), 502
-        patient_sid = patient_res.json().get("sid")
-        return jsonify({"ok": True, "room": conference_name, "patientSid": patient_sid, "doctorSid": doctor_sid, "to": patient_phone}), 200
-    except requests.RequestException as exc:
-        return jsonify({"ok": False, "error": f"Twilio request failed: {exc}"}), 502
-
-
-@app.post("/twiml/connect-patient")
-def twiml_connect_patient():
-    stream_url = (os.getenv("STREAM_URL") or "").strip()
-    if stream_url:
-        xml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="{stream_url}" /></Connect></Response>'
-    else:
-        xml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Please hold while we connect your consultation.</Say><Pause length="60"/></Response>'
-    return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
-
-
-@app.post("/twiml/join-consult")
-def twiml_join_consult():
-    room = (request.args.get("room") or f"consult-{uuid4().hex}").strip()
-    role = (request.args.get("role") or "participant").strip().lower()
-    start_on_enter = "true" if role == "doctor" else "false"
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<Response><Dial><Conference "
-        f'startConferenceOnEnter="{start_on_enter}" '
-        'endConferenceOnExit="false" '
-        'beep="false">'
-        f"{room}</Conference></Dial></Response>"
-    )
-    return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
-
-
-@app.post("/api/call-status")
-def call_status():
-    monitor.record_system_metric("twilio.call_status.webhook", 1.0)
-    return "", 204
-
-
-def normalize_au_phone(phone: str) -> str:
-    cleaned = re.sub(r"[^\d+]", "", phone or "")
-    if cleaned.startswith("+") and re.fullmatch(r"\+\d{8,15}", cleaned):
-        return cleaned
-    digits = re.sub(r"\D", "", cleaned)
-    if digits.startswith("61") and len(digits) == 11:
-        return f"+{digits}"
-    if digits.startswith("0") and len(digits) == 10:
-        return f"+61{digits[1:]}"
-    return ""
-
+# -----------------------------------
+# Whisper model (load once)
+# -----------------------------------
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
+
 
 def get_whisper_model():
     global _whisper_model
     if _whisper_model is None:
         with _whisper_init_lock:
             if _whisper_model is None:
-                _whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
+                _whisper_model = WhisperModel(
+                    WHISPER_MODEL_SIZE,
+                    device="cpu",
+                    compute_type="int8"
+                )
     return _whisper_model
 
+# -----------------------------------
+# Prompts
+# -----------------------------------
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
@@ -310,10 +504,7 @@ CONSULT_NOTE_SYSTEM_PROMPT = (
     "You are an Australian clinician assistant.\n\n"
     "Task: Convert the provided raw dictation/pasted data into a high-quality clinical note.\n"
     "If content is messy or partial, infer structure but do not invent facts.\n"
-    "Use Australian spelling.\n"
-    "Optimise for clinical utility: concise, specific, and action-oriented.\n"
-    "Carry forward key positives/negatives and unresolved risks when present in input.\n"
-    "When details are missing, write 'Not documented' instead of guessing.\n\n"
+    "Use Australian spelling.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
@@ -329,52 +520,9 @@ HANDOVER_SYSTEM_PROMPT = (
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
 
-CONSULT_TYPE_INSTRUCTIONS = {
-    "weight loss initial consult": "Focus on baseline obesity/metabolic history, contraindications, goals, and initial management plan.",
-    "weight loss follow-up": "Focus on response to treatment, adverse effects, adherence, dose changes, and next-step plan.",
-    "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
-    "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
-    "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
-    "men’s health consult": "Focus on men's health concerns, sexual/reproductive history, cardiovascular/metabolic risk, and shared plan.",
-    "dva allied health referral": "Use DVA referral framing including accepted conditions, referral rationale, renewal checks, and audit readiness.",
-    "gp letter": "Format as a GP letter with reason for correspondence, summary, assessment, actions, and requested follow-up.",
-    "patient instructions": "Write clear patient-facing instructions: diagnosis summary, medicines, self-care, warning signs, and when to seek help.",
-    "medical certificate / work capacity note": "Focus on work capacity, restrictions, likely duration, review timing, and legal/clinical clarity.",
-    "pathology review": "Focus on abnormal/normal result interpretation, clinical significance, differential, and actionable plan.",
-    "medication follow-up": "Focus on efficacy, side effects, adherence, interactions, and medicine optimisation plan.",
-    "emergency department note": "Use standard Australian ED admission note structure with Presenting Complaint, History of Presenting Complaint, Medical History, Social History, Medications, Allergies, On Examination, Investigations, and Plan.",
-    "general consultation note": "Use a comprehensive general consultation note structure suitable for routine primary care.",
-}
-
-
-def build_consult_prompt_context(consult_type: str) -> str:
-    normalized = (consult_type or "").strip().lower()
-    chosen_type = normalized or "general consultation note"
-    guidance = CONSULT_TYPE_INSTRUCTIONS.get(chosen_type, CONSULT_TYPE_INSTRUCTIONS["general consultation note"])
-    if chosen_type == "emergency department note":
-        return (
-            f"Consult type selected: {chosen_type}.\n"
-            f"Structure emphasis: {guidance}\n"
-            "Use this exact heading order for this note type:\n"
-            "Presenting Complaint\n"
-            "History of Presenting Complaint\n"
-            "Medical History\n"
-            "Social History\n"
-            "Medications\n"
-            "Allergies\n"
-            "On Examination\n"
-            "Investigations\n"
-            "Plan\n"
-            "For any missing section details, write 'Not documented'."
-        )
-
-    return (
-        f"Consult type selected: {chosen_type}.\n"
-        f"Structure emphasis: {guidance}\n"
-        "Ensure headings and ordering are appropriate to this consult type.\n"
-        "Prioritise concise, clinically actionable output and do not invent missing facts."
-    )
-
+# -----------------------------------
+# Helper: call DeepSeek
+# -----------------------------------
 def call_deepseek(system_prompt: str, user_content: str) -> str:
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
@@ -398,100 +546,174 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
     resp = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=70)
     resp.raise_for_status()
     out = resp.json()
-    answer = (((out.get("choices") or [{}])[0]).get("message", {}) or {}).get("content", "").strip()
+    answer = (
+        (out.get("choices") or [{}])[0]
+        .get("message", {})
+        .get("content", "")
+        .strip()
+    )
     return answer or "No response."
 
-@app.get("/", endpoint="index")
+# -----------------------------------
+# Routes
+# -----------------------------------
+@app.get("/")
 def index():
-    if session.get("authenticated") is True:
-        resp = make_response(render_template("consultation-notes.html"))
-        return resp
-    return redirect(url_for("login"))
-
-
-@app.get("/consultation-notes")
-@require_auth
-def consultation_notes():
-    return render_template("consultation-notes.html")
-
-
-@app.get("/dashboard")
-@require_auth
-def dashboard():
-    return render_template("dashboard.html")
-
-
-@app.get("/history")
-@require_auth
-def history():
-    return render_template("history.html")
-
-
-@app.get("/login")
-def login():
-    if session.get("authenticated") is True:
-        return redirect(url_for("consultation_notes"))
-    return render_template("login.html")
+    # ✅ pass google_client_id to template so Google button/One Tap can initialise
+    resp = make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
+    ensure_guest_cookie(resp)  # set guest cookie early for quota tracking
+    return resp
 
 
 @app.get("/api/session")
 def api_session():
-    return jsonify({"ok": True})
+    resp = make_response(jsonify({"ok": True}))
+    ensure_guest_cookie(resp)
+    return resp
+
 
 @app.get("/api/me")
 def api_me():
-    is_authenticated = session.get("authenticated") == True
+    u = current_user()
+    actor_type, actor_id, limit, _u = actor_and_limit()
+    used = usage_get(actor_type, actor_id)
     return jsonify({
-        "logged_in": is_authenticated,
-        "plan": "pro" if is_authenticated else "guest",
-        "used": 0,
-        "limit": 1000000 if is_authenticated else 10,
-        "remaining": 1000000 if is_authenticated else 10,
+        "logged_in": bool(u),
+        "email": u["email"] if u else None,
+        "plan": u["plan"] if u else "guest",
+        "used": used,
+        "limit": limit,
+        "remaining": max(0, limit - used),
     })
 
 
-@app.get("/api/perf/summary")
-@require_auth
-def perf_summary():
-    stats = monitor.get_stats() or {}
-    return jsonify({
-        "uptime_seconds": round(stats.get("uptime_seconds", 0), 2),
-        "requests": stats.get("requests", 0),
-        "avg_duration_ms": round(stats.get("avg_duration_ms", 0), 2),
-        "p95_duration_ms": round(stats.get("p95_duration_ms", 0), 2),
-    })
+# Stripe return pages (avoid 404)
+@app.get("/pro/success")
+def pro_success():
+    return make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
 
 
-@app.get("/api/perf/health")
-@require_auth
-def perf_health():
-    return jsonify({
-        "status": "ok",
-        "tracked_endpoints": len(monitor.metrics),
-    })
+@app.get("/pro/cancelled")
+def pro_cancelled():
+    return make_response(render_template("index.html", google_client_id=GOOGLE_CLIENT_ID))
 
 
-@app.get("/api/perf/stats")
-@require_auth
-def perf_stats():
-    return jsonify({"endpoints": monitor.get_all_stats()})
+# -----------------------------
+# Google auth (One Tap / button)
+# -----------------------------
+@app.post("/auth/google")
+def auth_google():
+    if not GOOGLE_CLIENT_ID:
+        return jsonify({"error": "Server misconfigured: missing GOOGLE_CLIENT_ID"}), 500
 
-@app.post("/authenticate")
-def authenticate():
     data = request.get_json(silent=True) or {}
-    code = (data.get("code") or "").strip()
-    if code == AUTH_CODE:
-        session["authenticated"] = True
-        return jsonify({"ok": True})
-    return jsonify({"ok": False, "error": "Invalid code"}), 401
+    token = (data.get("credential") or "").strip()
+    if not token:
+        return jsonify({"error": "Missing credential"}), 400
+
+    try:
+        info = google_id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+
+        email = (info.get("email") or "").strip().lower()
+        name = (info.get("name") or "") or (info.get("given_name") or "")
+        picture = (info.get("picture") or "")
+
+        user = create_or_get_user_by_email(email=email, name=name, picture=picture)
+
+        # ✅ Auto-Pro creator account
+        if CREATOR_EMAIL and email == CREATOR_EMAIL and user.get("plan") != "pro":
+            upgrade_user_to_pro(user["id"])
+            user["plan"] = "pro"
+
+        session["user_id"] = user["id"]
+
+        return jsonify({"ok": True, "user": {"email": user["email"], "plan": user["plan"]}})
+
+    except Exception as e:
+        print("GOOGLE AUTH ERROR:", repr(e))
+        return jsonify({"error": "Google sign-in failed"}), 401
+
 
 @app.post("/auth/logout")
 def auth_logout():
     session.clear()
     return jsonify({"ok": True})
 
+
+# -----------------------------
+# Stripe checkout (automatic)
+# -----------------------------
+@app.post("/api/stripe/create-checkout-session")
+def stripe_create_checkout_session():
+    if not STRIPE_SECRET_KEY:
+        return jsonify({"error": "Server misconfigured: missing STRIPE_SECRET_KEY"}), 500
+    if not STRIPE_PRICE_ID_PRO:
+        return jsonify({"error": "Server misconfigured: missing STRIPE_PRICE_ID_PRO"}), 500
+
+    u = current_user()
+    if not u:
+        return jsonify({"error": "not_authenticated"}), 401
+
+    try:
+        sess = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": STRIPE_PRICE_ID_PRO, "quantity": 1}],
+            success_url=f"{APP_BASE_URL}/pro/success",
+            cancel_url=f"{APP_BASE_URL}/pro/cancelled",
+            client_reference_id=u["id"],
+            customer_email=u["email"],
+            metadata={"user_id": u["id"], "product": "vividmedi_pro"},
+        )
+        return jsonify({"url": sess.url})
+    except Exception as e:
+        print("STRIPE CHECKOUT ERROR:", repr(e))
+        return jsonify({"error": "Could not start checkout"}), 500
+
+
+@app.post("/api/stripe/webhook")
+def stripe_webhook():
+    if not STRIPE_WEBHOOK_SECRET:
+        return "Missing webhook secret", 500
+
+    payload = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=payload,
+            sig_header=sig_header,
+            secret=STRIPE_WEBHOOK_SECRET,
+        )
+    except Exception as e:
+        print("STRIPE WEBHOOK SIGNATURE ERROR:", repr(e))
+        return "Bad signature", 400
+
+    etype = event.get("type", "")
+    obj = (event.get("data") or {}).get("object") or {}
+
+    if etype == "checkout.session.completed":
+        user_id = obj.get("client_reference_id") or (obj.get("metadata") or {}).get("user_id")
+        customer_id = obj.get("customer")
+        subscription_id = obj.get("subscription")
+
+        if user_id:
+            upgrade_user_to_pro(
+                user_id=user_id,
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=subscription_id,
+            )
+
+    return "OK", 200
+
+
+# -----------------------------
+# Your existing AI endpoints
+# -----------------------------
 @app.post("/api/generate")
-@require_auth
 def generate():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
@@ -503,11 +725,19 @@ def generate():
     if not query:
         return jsonify({"error": "Empty query"}), 400
 
+    # ✅ enforce quota AFTER validation
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
+
     try:
         if mode.startswith("dva"):
+            header = build_dva_header(query)
             referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
+
             user_content = (
                 f"Referral intent: {referral_intent}\n\n"
+                f"{header}\n\n"
                 f"DETAILS:\n{query}\n\n"
                 "Follow DVA_META format then clinical headings."
             )
@@ -523,33 +753,7 @@ def generate():
         return jsonify({"error": "AI request failed"}), 502
 
 
-@app.post("/ask")
-@require_auth
-def ask_legacy():
-    """Backward-compatible endpoint used by consultation-notes.html."""
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
-    data = request.get_json(silent=True) or {}
-    question = (data.get("question") or "").strip()
-    context = (data.get("context") or "").strip()
-    if not question:
-        return jsonify({"error": "Empty question"}), 400
-
-    try:
-        user_content = f"Clinical question:\n{question}"
-        if context:
-            user_content += f"\n\nRecent context:\n{context}"
-        user_content += "\n\nIf pasted data is included, sort it into the correct headings."
-        answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
-        save_history("question", answer)
-        return jsonify({"answer": answer})
-    except Exception as e:
-        print("DEEPSEEK ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
-
 @app.post("/api/consult")
-@require_auth
 def consult():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
@@ -557,10 +761,14 @@ def consult():
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
     mode = (data.get("mode") or "consult_note").strip().lower()
-    consult_type = (data.get("consult_type") or "general consultation note").strip()
 
     if not text:
         return jsonify({"error": "Empty input"}), 400
+
+    # ✅ enforce quota AFTER validation
+    blocked = enforce_quota_or_402()
+    if blocked:
+        return blocked
 
     try:
         if mode == "handover":
@@ -574,7 +782,6 @@ def consult():
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
                 "Do not invent facts; organise clearly.\n\n"
-                f"{build_consult_prompt_context(consult_type)}\n\n"
                 f"{text}"
             )
             answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
@@ -586,58 +793,7 @@ def consult():
         return jsonify({"error": "AI request failed"}), 502
 
 
-@app.post("/convert-notes")
-@require_auth
-def convert_notes_legacy():
-    """Backward-compatible endpoint used by consultation-notes.html."""
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
-    data = request.get_json(silent=True) or {}
-    text = (data.get("clinical_data") or "").strip()
-    note_type = (data.get("note_type") or "consultation_note").strip().lower()
-    consult_type = (data.get("consult_type") or "general consultation note").strip()
-    if not text:
-        return jsonify({"error": "Empty input"}), 400
-
-    try:
-        mode = "handover" if note_type == "handover" else "consult_note"
-        if mode == "handover":
-            user_content = (
-                "Create a handover/presentation from the following raw dictation/pasted data. "
-                "If the context is not ED, adapt appropriately.\n\n"
-                f"{text}"
-            )
-            answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
-        else:
-            user_content = (
-                "Create a structured clinical note from the following raw dictation/pasted data. "
-                "Do not invent facts; organise clearly.\n\n"
-                f"{build_consult_prompt_context(consult_type)}\n\n"
-                f"{text}"
-            )
-            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
-        save_history("note", answer)
-        return jsonify({"clinical_notes": answer})
-    except Exception as e:
-        print("DEEPSEEK ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
-
-
-@app.post("/auth/google")
-def auth_google_not_configured():
-    # Explicit response avoids silent 404s in the legacy UI.
-    return jsonify({"ok": False, "error": "Google auth is not configured in this build"}), 501
-
-
-@app.post("/api/stripe/create-checkout-session")
-@require_auth
-def stripe_checkout_not_configured():
-    # Explicit response avoids silent 404s in the legacy UI.
-    return jsonify({"error": "Stripe checkout is not configured in this build"}), 501
-
 @app.post("/api/transcribe")
-@require_auth
 def transcribe():
     f = request.files.get("audio")
     if not f:
@@ -672,45 +828,9 @@ def transcribe():
                         pass
 
 
-@app.get("/api/history/list")
-@require_auth
-def api_history_list():
-    return jsonify({"items": load_history()})
-
-
-
-
-@app.post("/api/history/delete")
-@require_auth
-def api_history_delete():
-    data = request.get_json(silent=True) or {}
-    entry_id = data.get("id")
-    if not isinstance(entry_id, int):
-        return jsonify({"error": "Invalid id"}), 400
-    if not delete_history_entry(entry_id):
-        return jsonify({"error": "Not found"}), 404
-    return jsonify({"ok": True})
-
-
-@app.post("/api/history/clear")
-@require_auth
-def api_history_clear():
-    deleted = clear_history_entries()
-    return jsonify({"ok": True, "deleted": deleted})
-
-@app.post("/api/history/save")
-@require_auth
-def api_history_save():
-    data = request.get_json(silent=True) or {}
-    item_type = (data.get("type") or "").strip().lower()
-    content = (data.get("content") or "").strip()
-    if item_type not in {"note", "question"}:
-        return jsonify({"error": "Invalid type"}), 400
-    if not content:
-        return jsonify({"error": "Empty content"}), 400
-    save_history(item_type, content)
-    return jsonify({"ok": True})
-
+# -----------------------------------
+# Local run
+# -----------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

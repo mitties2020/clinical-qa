@@ -1,162 +1,32 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="night" data-stealth="off">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VividMedi - Consultation Notes & Q&A</title>
-  <style>
-    :root { --bg:#080d1a; --bg2:#131c2f; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; --accent2:#18a4b8; --ok:#35c9a0; }
-    html[data-theme="night"] { --bg:#080d1a; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; }
-    html[data-theme="day"] { --bg:#f5f7fb; --bg2:#e8eef8; --panel:#ffffff; --text:#111827; --muted:#4b5563; --line:#d1d5db; --accent:#2563eb; --accent2:#1490a3; }
-    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
-    .parent-container{overflow:visible}
-    .container{display:flex;height:100%}
-    .saved-outputs-sidebar{width:260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px)}
-    .sidebar-header{padding:14px 16px;font-weight:700;border-bottom:1px solid var(--line)}
-    .saved-notes-list{padding:10px;overflow:auto;height:calc(100% - 55px)}
-    .saved-note-card{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#00000010}
-    .saved-note-header{padding:10px;display:flex;justify-content:space-between;cursor:pointer}
-    .saved-note-title{font-size:12px;color:var(--muted)} .saved-note-content{max-height:0;overflow:hidden;transition:.25s} .saved-note-content.open{max-height:420px}
-    .saved-note-text{font-size:12px;white-space:pre-wrap;padding:0 10px 10px;color:var(--text)} .saved-note-actions{display:flex;gap:6px;padding:0 10px 10px}
-    .saved-note-btn{flex:1;border:1px solid var(--line);background:transparent;color:var(--muted);padding:6px;border-radius:8px}
-    .main-content{flex:1;display:flex;flex-direction:column;min-width:0}
-    .header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
-    .logo{font-size:28px;font-weight:800;letter-spacing:-.8px;background:linear-gradient(120deg,var(--accent2),var(--accent));-webkit-background-clip:text;color:transparent}
-    .page-title{font-weight:600;color:var(--muted)}
-    .vivid-logo{max-height:44px;max-width:240px;object-fit:contain}.brand-fallback{display:none;font-weight:700}.logo-missing .brand-fallback{display:block}
-    .header-right{display:flex;align-items:center;gap:12px}
-    .switch-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-    .switch-row input{display:none}
-    .slider{position:relative;width:38px;height:20px;border-radius:999px;background:#334155;cursor:pointer;display:inline-block}
-    .slider::after{content:"";position:absolute;width:16px;height:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
-    .switch-row input:checked + .slider{background:#2563eb}
-    .switch-row input:checked + .slider::after{transform:translateX(18px)}
-    .auth-btn{padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600}
-    .work-area{padding:24px;overflow:auto}
-    .tab-navigation{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-    .tab-btn{padding:12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--muted);font-weight:700;cursor:pointer}
-    .tab-btn.active{background:linear-gradient(120deg,#2e7acb2a,#18a4b82a);color:var(--text);border-color:#2f8ac9}
-    .section-title{font-size:18px;font-weight:700;margin:8px 0 10px}
-    .controls-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-    select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px}
-    select,select option{background:#111827;color:#ffffff}
-    select{z-index:1000;position:relative}
-    html[data-theme="day"] select,html[data-theme="day"] select option,html[data-stealth="on"] select,html[data-stealth="on"] select option{background:#ffffff;color:#111111}
-    textarea,.output-text{background:#0000001c;color:var(--text)}
-    .input-output-grid,.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .input-wrapper,.output-wrapper{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);min-height:350px;display:flex;flex-direction:column;gap:10px}
-    textarea{min-height:260px;resize:vertical}
-    .output-text{min-height:260px;white-space:pre-wrap;line-height:1.55;overflow:auto}
-    .action-buttons{display:grid;grid-template-columns:repeat(2,minmax(120px,180px));gap:10px}
-    .btn{height:36px;border-radius:10px;border:1px solid #8ea3bf55;font-weight:600;cursor:pointer;font-size:13px}
-    .btn-primary{background:linear-gradient(120deg,#8aa0b8,#7088a4);color:#f5f8ff;border:1px solid #b7c7d8}
-    .btn-secondary{background:transparent;color:var(--muted)}
-    .tab-content{display:none}.tab-content.active{display:block}
-    .empty-state{color:var(--muted);font-size:13px;padding:12px}
-    .loading{display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:999px;animation:p 1s infinite;margin:0 3px}@keyframes p{50%{opacity:.25}}
-    .call-patient-panel{display:grid;grid-template-columns:minmax(220px,340px) auto;gap:10px;align-items:end;margin-bottom:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#00000012}
-    .call-patient-panel label{display:block;margin-bottom:6px;font-size:12px;color:var(--muted)}
-    .call-patient-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    <title>VividMedi - Consultation Notes & Q&A</title>
+    <style>
 
-    html[data-stealth="on"] { --bg:#f3f3f3; --bg2:#ffffff; --panel:#ffffff; --text:#000000; --muted:#555; --line:#d0d0d0; }
-    html[data-stealth="on"] body{background:#f3f3f3}
-    html[data-stealth="on"] .container{background:#f3f3f3}
-    html[data-stealth="on"] .header{background:#ede7f4;color:#2c2c2c;border-color:#c9bdd7;box-shadow:none}
-    html[data-stealth="on"] .saved-outputs-sidebar{background:#ececec;border-right-color:#d0d0d0}
-    html[data-stealth="on"] .main-content, html[data-stealth="on"] .work-area{background:#ffffff;background-image:url("/static/stealth%20UI.png");background-size:cover;background-position:center}
-    html[data-stealth="on"] .input-wrapper, html[data-stealth="on"] .output-wrapper, html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d0d0d0;box-shadow:none}
-    html[data-stealth="on"] select, html[data-stealth="on"] textarea, html[data-stealth="on"] .output-text{background:#fff;border-color:#d0d0d0;color:#000}
-    html[data-stealth="on"] .tab-btn, html[data-stealth="on"] .btn-secondary, html[data-stealth="on"] .auth-btn{background:#f3f3f3;color:#444;border-color:#d0d0d0;box-shadow:none}
-    html[data-stealth="on"] .tab-btn.active{background:#ece6f3;border-color:#b7acc3;color:#333}
-    html[data-stealth="on"] .btn-primary{background:#e8e8e8;color:#333;border-color:#c6c6c6;box-shadow:none}
-    html[data-stealth="on"] .page-title{font-size:12px}
-    html[data-stealth="on"] .logo-main{display:none}
-    html[data-stealth="on"] .saved-note-title, html[data-stealth="on"] .sidebar-header{color:#444}
-    @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
-  </style>
+    </style>
 </head>
 <body>
-<div class="container">
-  <aside class="saved-outputs-sidebar"><div class="sidebar-header">Saved Outputs</div><div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div></aside>
-  <main class="main-content">
-    <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid #5f1a84;font-size:12px;color:#fff;background:#7719aa">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div><header class="header">
-      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.jpg" alt="Vivid Medi" class="vivid-logo" onerror="this.style.display='none'; document.body.classList.add('logo-missing');"><div class="brand-fallback">Vivid Medi</div><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
-      <div class="header-right">
-        <label class="switch-row"><span id="themeLabel">Night</span><input type="checkbox" id="themeSwitch"><span class="slider"></span></label>
-        <label class="switch-row"><span id="stealthLabel">Focus Mode Off</span><input type="checkbox" id="stealthSwitch"><span class="slider"></span></label>
-        <button class="auth-btn" id="upgradeBtn" style="display:none">Upgrade to Pro</button><button class="auth-btn" id="authBtn">Logout</button>
-      </div>
-    </header>
-    <section class="work-area">
-      <div class="tab-navigation"><button class="tab-btn active" id="consultNotesTab" data-tab="notes-tab">Consultation Notes</button><button class="tab-btn" id="clinicalQuestionsTab" data-tab="qa-tab">Clinical Questions</button></div>
-      <div class="tab-content active" id="notes-tab">
-        <div class="section-title">Clinical Data Input</div>
-        <div class="call-patient-panel">
-          <div>
-            <label for="patientPhone">Patient Phone (E.164)</label>
-            <input id="patientPhone" type="tel" placeholder="+61400000000" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:#0000001c;color:var(--text)">
-          </div>
-          <div class="call-patient-actions">
-            <button class="btn btn-primary" id="callPatientBtn" type="button">Call Patient</button>
-            <div id="callStatus" style="font-size:12px;color:var(--muted)">Ready to place call</div>
-          </div>
+    <div class="container">
+                <div class="header-right">
+                </div>
+                <div class="tab-content active" id="notes-tab">
+                        <div class="section-title">Clinical Data Input</div>
+                        <div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-content" id="qa-tab">
         </div>
-        <div class="controls-row parent-container"><div><label>Consult Type</label><select id="consultType"></select></div></div>
-        <div class="input-output-grid"><div class="input-wrapper"><textarea id="clinicalInput" placeholder="Paste clinical data or transcribed notes..."></textarea><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" id="startMicBtn" type="button">Start Mic Dictation</button><button class="btn btn-secondary" id="stopMicBtn" type="button" disabled>Stop Mic Dictation</button></div><div id="micStatus" style="margin:8px 0 0;color:var(--muted);font-size:12px">Mic dictation inactive</div><div style="margin:4px 0 8px;color:var(--muted);font-size:12px">Confirm patient consent before using dictation or call transcription.</div><div id="transcriptionStatus" style="margin:8px 0;color:var(--muted);font-size:12px">Transcription stopped</div><div class="action-buttons"><button class="btn btn-primary" id="convertBtn">Convert to Notes</button><button class="btn btn-secondary" id="clearBtn">Clear</button></div></div><div class="output-wrapper"><label for="outputBox">Output</label><details id="safetyPanel" style="display:none;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px;font-size:12px;color:var(--muted)"><summary>Safety & Completeness</summary><div id="safetyPanelContent"></div></details><div class="output-text" id="outputBox">Output will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyBtn">Copy</button><button class="btn btn-secondary" id="downloadBtn">Download</button></div></div></div>
-      </div>
-      <div class="tab-content" id="qa-tab">
-        <div class="section-title">Clinical Questions</div>
-        <div class="qa-grid"><div class="input-wrapper"><textarea id="clinicalQuestion" placeholder="Ask your clinical question..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="askBtn">Generate Answer</button><button class="btn btn-secondary" id="clearQaBtn">Clear</button></div></div><div class="output-wrapper"><div class="output-text" id="clinicalAnswer">Answer will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyAnswerBtn">Copy</button><button class="btn btn-secondary" id="downloadAnswerBtn">Download</button></div></div></div>
-      </div>
-    </section><footer style="padding:8px 24px;color:var(--muted);font-size:11px">Vivid Medi supports clinical documentation and safety checking. It does not replace clinician judgement, local policy, Therapeutic Guidelines, product information, or regulatory requirements. The treating clinician is responsible for final assessment, prescribing and follow-up.</footer>
-  </main>
-</div>
-<script>
-document.addEventListener("DOMContentLoaded", () => { initApp(); });
-const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
-let savedOutputs=JSON.parse(localStorage.getItem("vivid_saved_outputs")||"[]");
-let selectedConsultType="";
-let micRecognition=null;
-let micFinalBase="";
-let micIsActive=false;
-function initApp(){populateConsultTypes();bindUIEvents();setTheme("night");setFocusMode(false);setMode("notes");renderSavedOutputs();initMicDictation();connectTranscriptSocket();}
-function populateConsultTypes(){const select=document.getElementById("consultType");if(!select){console.error("Missing #consultType select");return;}select.innerHTML="";for(const type of CONSULT_TYPES){const option=document.createElement("option");option.value=type;option.textContent=type;select.appendChild(option);}selectedConsultType=CONSULT_TYPES[0];select.value=selectedConsultType;}
-function bindUIEvents(){const convertBtn=document.getElementById("convertBtn");const clearBtn=document.getElementById("clearBtn");const copyBtn=document.getElementById("copyBtn");const downloadBtn=document.getElementById("downloadBtn");const input=document.getElementById("clinicalInput");const notesTab=document.getElementById("consultNotesTab");const questionsTab=document.getElementById("clinicalQuestionsTab");const themeSwitch=document.getElementById("themeSwitch");const stealthSwitch=document.getElementById("stealthSwitch");const askBtn=document.getElementById("askBtn");const clearQaBtn=document.getElementById("clearQaBtn");const consultType=document.getElementById("consultType");const callBtn=document.getElementById("callPatientBtn");if(convertBtn)convertBtn.addEventListener("click",()=>generateOutput(selectedConsultType));if(clearBtn)clearBtn.addEventListener("click",clearForm);if(copyBtn)copyBtn.addEventListener("click",copyOutput);if(downloadBtn)downloadBtn.addEventListener("click",downloadOutput);if(askBtn)askBtn.addEventListener("click",askQuestion);if(clearQaBtn)clearQaBtn.addEventListener("click",clearQuestion);if(callBtn)callBtn.addEventListener("click",callPatient);if(consultType){consultType.addEventListener("change",e=>{selectedConsultType=e.target.value||CONSULT_TYPES[0];});}if(input){input.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();generateOutput(selectedConsultType);}});}const qInput=document.getElementById("clinicalQuestion");if(qInput){qInput.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();document.getElementById("askBtn")?.click();}});}if(notesTab)notesTab.addEventListener("click",()=>setMode("notes"));if(questionsTab)questionsTab.addEventListener("click",()=>setMode("questions"));if(themeSwitch){themeSwitch.addEventListener("change",e=>setTheme(e.target.checked?"day":"night"));}if(stealthSwitch){stealthSwitch.addEventListener("change",e=>setFocusMode(e.target.checked));}const authBtn=document.getElementById("authBtn");if(authBtn){authBtn.addEventListener("click",async()=>{await fetch("/auth/logout",{method:"POST"});window.location.href="/login";});}}
-async function callPatient(){const phone=(document.getElementById("patientPhone")?.value||"").trim();const callStatus=document.getElementById("callStatus");const callBtn=document.getElementById("callPatientBtn");if(!phone){if(callStatus)callStatus.textContent="Enter a patient phone number first.";return;}if(callStatus)callStatus.textContent="Placing call...";if(callBtn)callBtn.disabled=true;try{const res=await fetch('/api/call-patient',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patientPhone:phone})});const data=await res.json().catch(()=>({}));if(!res.ok){throw new Error(data?.error||'Call failed');}if(callStatus)callStatus.textContent=`Call started (SID: ${data.sid||'n/a'})`;}catch(err){if(callStatus)callStatus.textContent=`Call failed: ${err.message||'Unknown error'}`;}finally{if(callBtn)callBtn.disabled=false;}}
-async function generateOutput(consultTypeArg){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(!input||!output){console.error("Missing input or output element");return;}const raw=input.value.trim();const type=consultTypeArg||selectedConsultType||CONSULT_TYPES[0];if(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"){console.debug("selectedConsultType before generation:",type);}if(!raw){output.textContent="Please enter clinical information first.";return;}output.textContent="Generating...";try{const res=await fetch('/convert-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clinical_data:raw,note_type:'consultation_note',consult_type:type})});if(!res.ok) throw new Error('convert failed');const data=await res.json();output.textContent=data.clinical_notes||data.output||'No output generated.';}catch{output.textContent=`Consult type: ${type}
-
-Clinical note:
-${raw}
-
-Assessment:
-[Draft assessment generated from input.]
-
-Plan:
-[Draft plan generated from input.]
-
-Safety-netting:
-[Draft safety-netting generated from input.]`;}}
-async function askQuestion(){const q=document.getElementById("clinicalQuestion")?.value?.trim()||"";const out=document.getElementById("clinicalAnswer");if(!out)return;if(!q){out.textContent='Please enter a question first.';return;}out.textContent='Generating...';try{const res=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});if(!res.ok) throw new Error('ask failed');const data=await res.json();out.textContent=data.answer||data.output||'No answer generated.';}catch{out.textContent='Unable to generate answer right now. Please try again.';}}
-function clearForm(){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(output)saveToSidebar(output.textContent,"note");if(input)input.value="";if(output)output.textContent="Output will appear here...";}
-function clearQuestion(){const input=document.getElementById("clinicalQuestion");const output=document.getElementById("clinicalAnswer");if(output)saveToSidebar(output.textContent,"question");if(input)input.value="";if(output)output.textContent="Answer will appear here...";}
-async function copyOutput(){const output=document.getElementById("outputBox");const text=output?.textContent||"";if(!text||text==="Output will appear here...")return;await navigator.clipboard.writeText(text);}
-function downloadOutput(){const output=document.getElementById("outputBox");const text=output?.textContent||"";if(!text||text==="Output will appear here...")return;const blob=new Blob([text],{type:"text/plain;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="vivid-medi-note.txt";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
-
-function saveToSidebar(content,type){if(!content||content.includes("appear here"))return;const item={id:Date.now()+Math.random(),title:`${type==="question"?"Q&A":"Consult"} ${new Date().toLocaleString()}`,content,type};savedOutputs.unshift(item);savedOutputs=savedOutputs.slice(0,40);localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();}
-function renderSavedOutputs(){const list=document.getElementById("savedNotesList");if(!list)return;if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}list.innerHTML=savedOutputs.map((item,idx)=>`<div class="saved-note-card"><div class="saved-note-header"><div class="saved-note-title">${item.title}</div><button class="saved-note-btn" onclick="deleteSavedOutput(${idx})">✕</button></div><div class="saved-note-text">${item.content.replace(/</g,'&lt;')}</div></div>`).join('');}
-window.deleteSavedOutput=function(idx){savedOutputs.splice(idx,1);localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();};
+    </div>
+    <script>
 
 
-function setMicStatus(status){const el=document.getElementById("micStatus");if(!el)return;if(status==="active")el.textContent="Mic dictation active";else if(status==="unsupported")el.textContent="Mic dictation unsupported";else el.textContent="Mic dictation inactive";}
-function updateMicButtons(isActive){const startBtn=document.getElementById("startMicBtn");const stopBtn=document.getElementById("stopMicBtn");if(startBtn)startBtn.disabled=isActive||!micRecognition;if(stopBtn)stopBtn.disabled=!isActive;}
-function initMicDictation(){const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;const startBtn=document.getElementById("startMicBtn");const stopBtn=document.getElementById("stopMicBtn");if(!SpeechRecognition){setMicStatus("unsupported");if(startBtn)startBtn.disabled=true;if(stopBtn)stopBtn.disabled=true;return;}micRecognition=new SpeechRecognition();micRecognition.continuous=true;micRecognition.interimResults=true;micRecognition.lang="en-AU";if(startBtn){startBtn.addEventListener("click",()=>{const input=document.getElementById("clinicalInput");if(!input||!micRecognition)return;micFinalBase=input.value;micIsActive=true;setMicStatus("active");updateMicButtons(true);micRecognition.start();});}if(stopBtn){stopBtn.addEventListener("click",()=>{if(!micRecognition)return;micIsActive=false;micRecognition.stop();setMicStatus("inactive");updateMicButtons(false);});}micRecognition.onresult=(event)=>{const input=document.getElementById("clinicalInput");if(!input)return;let finalChunk="";let interimChunk="";for(let i=event.resultIndex;i<event.results.length;i+=1){const transcript=(event.results[i][0]?.transcript||"").trim();if(!transcript)continue;if(event.results[i].isFinal)finalChunk+=`${transcript} `;else interimChunk+=`${transcript} `;}const finalText=finalChunk.trim();const interimText=interimChunk.trim();let committed=micFinalBase.trimEnd();if(finalText){committed=committed?`${committed} ${finalText}`:finalText;micFinalBase=committed;}input.value=interimText?`${committed}${committed?" ":""}${interimText}`:committed;input.dispatchEvent(new Event("input",{bubbles:true}));};micRecognition.onend=()=>{if(micIsActive){try{micRecognition.start();return;}catch{};}micIsActive=false;setMicStatus("inactive");updateMicButtons(false);};micRecognition.onerror=()=>{micIsActive=false;setMicStatus("inactive");updateMicButtons(false);};setMicStatus("inactive");updateMicButtons(false);}
-function setTheme(theme){document.documentElement.setAttribute("data-theme",theme);const label=document.getElementById("themeLabel");if(label)label.textContent=theme==="day"?"Day":"Night";const sw=document.getElementById("themeSwitch");if(sw)sw.checked=theme==="day";}
-function setFocusMode(isOn){document.documentElement.setAttribute("data-stealth",isOn?"on":"off");const label=document.getElementById("stealthLabel");if(label)label.textContent=isOn?"Focus Mode On":"Focus Mode Off";const sw=document.getElementById("stealthSwitch");if(sw)sw.checked=!!isOn;const ribbon=document.querySelector(".stealth-ribbon");if(ribbon)ribbon.style.display=isOn?"block":"none";}
-window.setStealth=setFocusMode;
-function setMode(mode){const notes=mode==="notes";document.getElementById("notes-tab")?.classList.toggle("active",notes);document.getElementById("qa-tab")?.classList.toggle("active",!notes);document.getElementById("consultNotesTab")?.classList.toggle("active",notes);document.getElementById("clinicalQuestionsTab")?.classList.toggle("active",!notes);}
-function setTranscriptStatus(status){const el=document.getElementById("transcriptionStatus");if(!el)return;if(status==="connected")el.textContent="Connected to transcript server";else if(status==="active")el.textContent="Call transcription active";else el.textContent="Transcription stopped";}
-function appendTranscriptToConsultInput(text){const input=document.getElementById("clinicalInput");if(!input)return;const clean=(text||"").trim();if(!clean)return;const spacer=input.value&&![...input.value].slice(-2).join("").includes("\n\n")?"\n\n":input.value?"\n":"";input.value=`${input.value}${spacer}${clean}`;input.dispatchEvent(new Event("input",{bubbles:true}));}
-function connectTranscriptSocket(){const configured=(window.TRANSCRIPT_WS_URL||"").trim();const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");const suppressAuto=localStorage.getItem("vivid_transcript_ws_unavailable")==="1";if(!wsUrl||(!configured&&suppressAuto)){setTranscriptStatus("stopped");return;}if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){console.warn("Transcript WebSocket tunnel URL blocked by default. Set window.ALLOW_TUNNEL_WS=true to override.");setTranscriptStatus("stopped");return;}try{const socket=new WebSocket(wsUrl);socket.addEventListener("open",()=>{localStorage.removeItem("vivid_transcript_ws_unavailable");setTranscriptStatus("connected");});socket.addEventListener("close",()=>setTranscriptStatus("stopped"));socket.addEventListener("error",()=>{if(!configured){localStorage.setItem("vivid_transcript_ws_unavailable","1");}setTranscriptStatus("stopped");});socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});}catch{setTranscriptStatus("stopped");}}
-</script>
+                
+                
+                
+
+            
+    </script>
 </body>
 </html>
