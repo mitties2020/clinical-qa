@@ -1109,6 +1109,22 @@
         // Check plan on page load
         checkUserPlan();
 
+
+        // ENTER KEY HANDLERS - Ctrl+Enter to submit
+        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                document.getElementById('convertBtn').click();
+            }
+        });
+
+        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                document.getElementById('askBtn').click();
+            }
+        });
+
         // Initialize
         renderSavedOutputs();
     </script>
