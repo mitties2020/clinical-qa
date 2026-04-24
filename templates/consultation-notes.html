@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VividMedi - Consultation Notes & Q&A</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         * {
             margin: 0;
@@ -567,10 +566,6 @@
                 max-height: 200px;
             }
         }
-
-        #g_id_onload {
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -596,7 +591,6 @@
                         <button class="theme-toggle-btn active" id="darkBtn" data-theme="dark">Dark</button>
                         <button class="theme-toggle-btn" id="lightBtn" data-theme="light">Light</button>
                     </div>
-                    <button class="auth-btn" id="upgradeBtn" style="display:none; background: linear-gradient(135deg, #d4af7a, #c9a561); border: none; box-shadow: 0 4px 15px rgba(201, 165, 97, 0.3); color: #0a0e27; font-weight: 600;">Upgrade to Pro</button>
                     <div id="signInDiv"></div>
                     <button class="auth-btn" id="authBtn" style="display:none;">Sign out</button>
                 </div>
@@ -698,70 +692,63 @@
     </div>
 
     <script>
-        // Initialize Google Sign-In
+        // Simple auth with code 931986
+        let isAuthenticated = localStorage.getItem('authenticated') === 'true';
+
         window.onload = function() {
-            google.accounts.id.initialize({
-                client_id: '{{ google_client_id }}',
-                callback: handleCredentialResponse
-            });
-            google.accounts.id.renderButton(
-                document.getElementById('signInDiv'),
-                { 
-                    theme: 'dark',
-                    size: 'large',
-                    text: 'signin_with'
-                }
-            );
+            updateAuthUI();
         };
 
-        function handleCredentialResponse(response) {
-            const token = response.credential;
-            fetch('/auth/google', {
+        function updateAuthUI() {
+            const signInDiv = document.getElementById('signInDiv');
+            const authBtn = document.getElementById('authBtn');
+            
+            if (isAuthenticated) {
+                signInDiv.style.display = 'none';
+                authBtn.style.display = 'block';
+            } else {
+                signInDiv.style.display = 'block';
+                authBtn.style.display = 'none';
+                signInDiv.innerHTML = `
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="password" id="authCodeInput" placeholder="Enter code" style="padding: 8px 12px; border-radius: 6px; border: none; width: 120px;">
+                        <button onclick="submitAuthCode()" style="padding: 8px 16px; background: var(--metallic-gold); color: var(--primary-dark); border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Sign In</button>
+                    </div>
+                `;
+            }
+        }
+
+        window.submitAuthCode = function() {
+            const code = document.getElementById('authCodeInput').value.trim();
+            if (!code) return;
+
+            fetch('/authenticate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ credential: token })
+                body: JSON.stringify({ code: code })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.ok) {
-                    localStorage.setItem('auth_token', data.token);
-                    localStorage.setItem('user_email', data.user.email);
-                    localStorage.setItem('user_plan', data.user.plan);
-                    document.getElementById('signInDiv').style.display = 'none';
-                    document.getElementById('authBtn').style.display = 'block';
-                    
-                    // Show upgrade button if free plan
-                    if (data.user.plan === 'free') {
-                        document.getElementById('upgradeBtn').style.display = 'block';
-                    }
-                    
-                    alert('Signed in as ' + data.user.email);
+                    isAuthenticated = true;
+                    localStorage.setItem('authenticated', 'true');
+                    updateAuthUI();
+                    alert('Signed in!');
+                } else {
+                    alert('Invalid code');
                 }
             })
-            .catch(err => console.error('Auth error:', err));
-        }
+            .catch(err => alert('Error: ' + err.message));
+        };
 
         // Auth button (sign out)
         document.getElementById('authBtn').addEventListener('click', () => {
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user_email');
-            document.getElementById('signInDiv').style.display = 'block';
-            document.getElementById('authBtn').style.display = 'none';
-            google.accounts.id.renderButton(
-                document.getElementById('signInDiv'),
-                { 
-                    theme: 'dark',
-                    size: 'large',
-                    text: 'signin_with'
-                }
-            );
+            fetch('/auth/logout', { method: 'POST' }).then(() => {
+                isAuthenticated = false;
+                localStorage.removeItem('authenticated');
+                updateAuthUI();
+            });
         });
-
-        // Check if already signed in
-        if (localStorage.getItem('auth_token')) {
-            document.getElementById('signInDiv').style.display = 'none';
-            document.getElementById('authBtn').style.display = 'block';
-        }
 
         // Theme Toggle
         const darkBtn = document.getElementById('darkBtn');
@@ -960,7 +947,6 @@
             answer.innerHTML = '<span class="loading"></span><span class="loading"></span><span class="loading"></span>';
 
             try {
-                // Build context from last 3 questions for follow-ups
                 const context = qaHistory.slice(-3).map((q, i) => `Q${i+1}: ${q.question}\nA${i+1}: ${q.answer.substring(0, 200)}...`).join('\n\n');
                 
                 const response = await fetch('/ask', {
@@ -971,12 +957,10 @@
                 const data = await response.json();
                 answer.textContent = data.answer || 'No answer generated';
                 
-                // Save to history for future follow-ups
                 qaHistory.push({ question: question, answer: data.answer });
                 if (qaHistory.length > 10) qaHistory = qaHistory.slice(-10);
                 localStorage.setItem('vividmedi_qa_history', JSON.stringify(qaHistory));
                 
-                // Clear input after successful answer
                 document.getElementById('clinicalQuestion').value = '';
                 document.getElementById('clinicalQuestion').style.height = 'auto';
             } catch (err) {
@@ -993,7 +977,6 @@
             document.getElementById('clinicalAnswer').textContent = 'Answer will appear here...';
             document.getElementById('clinicalQuestion').style.height = 'auto';
             
-            // Optional: Ask if user wants to clear history
             if (qaHistory.length > 0) {
                 if (confirm('Clear conversation history for fresh start?')) {
                     qaHistory = [];
@@ -1033,25 +1016,6 @@
             this.style.height = Math.min(this.scrollHeight, 400) + 'px';
         });
 
-
-        // ENTER KEY HANDLERS
-        // For Consultation Notes - Ctrl+Enter to convert
-        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('convertBtn').click();
-            }
-        });
-
-        // For Clinical Questions - Ctrl+Enter to ask
-        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('askBtn').click();
-            }
-        });
-
-
         // ENTER KEY HANDLERS - Enter to submit, Shift+Enter for new line
         document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1062,64 +1026,6 @@
 
         document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('askBtn').click();
-            }
-        });
-
-
-        // Check user plan and show upgrade button
-        async function checkUserPlan() {
-            try {
-                const response = await fetch('/api/me');
-                const data = await response.json();
-                
-                if (data.logged_in && data.plan === 'free') {
-                    document.getElementById('upgradeBtn').style.display = 'block';
-                } else if (!data.logged_in) {
-                    document.getElementById('upgradeBtn').style.display = 'none';
-                }
-            } catch (err) {
-                console.error('Error checking plan:', err);
-            }
-        }
-
-        // Upgrade button handler
-        document.getElementById('upgradeBtn').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/api/stripe/create-checkout-session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
-                
-                if (data.url) {
-                    window.location.href = data.url;
-                }
-            } catch (err) {
-                alert('Error creating checkout session: ' + err.message);
-            }
-        });
-
-        // Check plan on page load
-        checkUserPlan();
-
-
-        // ENTER KEY HANDLERS - Ctrl+Enter to submit
-        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('convertBtn').click();
-            }
-        });
-
-        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 document.getElementById('askBtn').click();
             }
