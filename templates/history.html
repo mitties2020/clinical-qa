@@ -77,27 +77,35 @@
             el.innerHTML = items.map(formatter).join("");
         }
 
-        const savedOutputs = JSON.parse(localStorage.getItem('vividmedi_saved_outputs') || '[]');
-        const qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history') || '[]');
+        async function loadServerHistory() {
+            const res = await fetch('/api/history/list');
+            const data = await res.json();
+            const items = data.items || [];
+            const notes = items.filter((x) => x.item_type === 'note');
+            const questions = items.filter((x) => x.item_type === 'question');
 
-        renderList(
-            "savedOutputs",
-            savedOutputs,
-            (item) => `<pre>${(item.content || "").replace(/</g, "&lt;")}</pre>`,
-            "No saved outputs yet."
-        );
+            renderList(
+                "savedOutputs",
+                notes,
+                (item) => `<pre>${(item.content || "").replace(/</g, "&lt;")}</pre>`,
+                "No saved outputs yet."
+            );
 
-        renderList(
-            "qaHistory",
-            qaHistory,
-            (item) => `<pre>Q: ${(item.question || "").replace(/</g, "&lt;")}\n\nA: ${(item.answer || "").replace(/</g, "&lt;")}</pre>`,
-            "No Q&A history yet."
-        );
+            renderList(
+                "qaHistory",
+                questions,
+                (item) => `<pre>${(item.content || "").replace(/</g, "&lt;")}</pre>`,
+                "No Q&A history yet."
+            );
+        }
 
-        document.getElementById("clearAllBtn").addEventListener("click", () => {
-            localStorage.removeItem("vividmedi_saved_outputs");
-            localStorage.removeItem("vividmedi_qa_history");
-            window.location.reload();
+        document.getElementById("clearAllBtn").addEventListener("click", async () => {
+            alert("Clear-all is not enabled yet in this build.");
+        });
+
+        loadServerHistory().catch(() => {
+            document.getElementById("savedOutputs").textContent = "Unable to load server history.";
+            document.getElementById("qaHistory").textContent = "Unable to load server history.";
         });
     </script>
 </body>

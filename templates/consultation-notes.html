@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VividMedi - Consultation Notes & Q&A</title>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         * {
             margin: 0;
@@ -597,8 +596,7 @@
                         <button class="theme-toggle-btn" id="lightBtn" data-theme="light">Light</button>
                     </div>
                     <button class="auth-btn" id="upgradeBtn" style="display:none; background: linear-gradient(135deg, #d4af7a, #c9a561); border: none; box-shadow: 0 4px 15px rgba(201, 165, 97, 0.3); color: #0a0e27; font-weight: 600;">Upgrade to Pro</button>
-                    <div id="signInDiv"></div>
-                    <button class="auth-btn" id="authBtn" style="display:none;">Sign out</button>
+                    <button class="auth-btn" id="authBtn">Logout</button>
                 </div>
             </div>
 
@@ -698,79 +696,13 @@
     </div>
 
     <script>
-        // Initialize Google Sign-In (guarded so UI still works if Google script/client ID is missing)
-        window.onload = function() {
-            const clientId = '{{ google_client_id }}';
-            const googleReady = window.google && google.accounts && google.accounts.id;
-            if (!googleReady || !clientId) {
-                console.warn('Google Sign-In not configured; continuing without OAuth UI init.');
-                return;
-            }
-
-            google.accounts.id.initialize({
-                client_id: clientId,
-                callback: handleCredentialResponse
-            });
-            google.accounts.id.renderButton(
-                document.getElementById('signInDiv'),
-                {
-                    theme: 'dark',
-                    size: 'large',
-                    text: 'signin_with'
-                }
-            );
-        };
-
-        function handleCredentialResponse(response) {
-            const token = response.credential;
-            fetch('/auth/google', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ credential: token })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.ok) {
-                    localStorage.setItem('auth_token', data.token);
-                    localStorage.setItem('user_email', data.user.email);
-                    localStorage.setItem('user_plan', data.user.plan);
-                    document.getElementById('signInDiv').style.display = 'none';
-                    document.getElementById('authBtn').style.display = 'block';
-                    
-                    // Show upgrade button if free plan
-                    if (data.user.plan === 'free') {
-                        document.getElementById('upgradeBtn').style.display = 'block';
-                    }
-                    
-                    alert('Signed in as ' + data.user.email);
-                }
-            })
-            .catch(err => console.error('Auth error:', err));
-        }
-
-        // Auth button (sign out)
+        // Logout button
         document.getElementById('authBtn').addEventListener('click', () => {
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('user_email');
-            document.getElementById('signInDiv').style.display = 'block';
-            document.getElementById('authBtn').style.display = 'none';
-            if (window.google && google.accounts && google.accounts.id) {
-                google.accounts.id.renderButton(
-                    document.getElementById('signInDiv'),
-                    {
-                        theme: 'dark',
-                        size: 'large',
-                        text: 'signin_with'
-                    }
-                );
-            }
+            fetch('/auth/logout', { method: 'POST' })
+                .finally(() => {
+                    window.location.href = '/login';
+                });
         });
-
-        // Check if already signed in
-        if (localStorage.getItem('auth_token')) {
-            document.getElementById('signInDiv').style.display = 'none';
-            document.getElementById('authBtn').style.display = 'block';
-        }
 
         // Theme Toggle
         const darkBtn = document.getElementById('darkBtn');
@@ -874,6 +806,13 @@
             
             localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
             renderSavedOutputs();
+
+            // Persist to server-side history (behind login code).
+            fetch('/api/history/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, content })
+            }).catch(() => {});
         };
 
         window.loadOutput = function(idx) {
@@ -956,7 +895,7 @@
         });
 
         // QA TAB - WITH CONVERSATION MEMORY
-        let qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history')) || [];
+        let qaHistory = [];
 
         document.getElementById('askBtn').addEventListener('click', async () => {
             const question = document.getElementById('clinicalQuestion').value.trim();
@@ -1101,8 +1040,34 @@
         checkUserPlan();
 
 
+        async function hydrateFromServerHistory() {
+            try {
+                const res = await fetch('/api/history/list');
+                const data = await res.json();
+                const items = data.items || [];
+                const nowLabel = new Date().toLocaleString();
+
+                savedOutputs = items.map((item) => ({
+                    title: `${item.item_type === 'question' ? '❓' : '📝'} ${item.created_at || nowLabel}`,
+                    content: item.content,
+                    type: item.item_type === 'question' ? 'question' : 'note',
+                }));
+                localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
+
+                qaHistory = items
+                    .filter((x) => x.item_type === 'question')
+                    .map((x) => ({ question: '[Saved question]', answer: x.content }))
+                    .slice(0, 10);
+            } catch (err) {
+                console.warn('Could not load server history', err);
+                qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history')) || [];
+            }
+        }
+
         // Initialize
-        renderSavedOutputs();
+        hydrateFromServerHistory().finally(() => {
+            renderSavedOutputs();
+        });
     </script>
 </body>
 </html>
