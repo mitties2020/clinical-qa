@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VividMedi - History</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f1419;
+            color: #f0f0f0;
+            padding: 24px;
+        }
+        .topbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid #3a4052;
+            background: #1a1f2e;
+            color: #f0f0f0;
+            cursor: pointer;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .card {
+            background: #1a1f2e;
+            border: 1px solid #3a4052;
+            border-radius: 12px;
+            padding: 14px;
+            min-height: 280px;
+        }
+        h2 { margin: 0 0 12px; font-size: 16px; }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #0f1419;
+            border: 1px solid #3a4052;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <button class="btn" onclick="window.location.href='/'">← Home</button>
+        <button class="btn" id="clearAllBtn">Clear local history</button>
+    </div>
+
+    <div class="grid">
+        <section class="card">
+            <h2>Saved outputs</h2>
+            <div id="savedOutputs"></div>
+        </section>
+        <section class="card">
+            <h2>Q&A history</h2>
+            <div id="qaHistory"></div>
+        </section>
+    </div>
+
+    <script>
+        function renderList(containerId, items, formatter, emptyText) {
+            const el = document.getElementById(containerId);
+            if (!items.length) {
+                el.textContent = emptyText;
+                return;
+            }
+            el.innerHTML = items.map(formatter).join("");
+        }
+
+        async function loadServerHistory() {
+            const res = await fetch('/api/history/list');
+            const data = await res.json();
+            const items = data.items || [];
+            const notes = items.filter((x) => x.item_type === 'note');
+            const questions = items.filter((x) => x.item_type === 'question');
+
+            renderList(
+                "savedOutputs",
+                notes,
+                (item) => `<pre>${(item.content || "").replace(/</g, "&lt;")}</pre>`,
+                "No saved outputs yet."
+            );
+
+            renderList(
+                "qaHistory",
+                questions,
+                (item) => `<pre>${(item.content || "").replace(/</g, "&lt;")}</pre>`,
+                "No Q&A history yet."
+            );
+        }
+
+        document.getElementById("clearAllBtn").addEventListener("click", async () => {
+            alert("Clear-all is not enabled yet in this build.");
+        });
+
+        loadServerHistory().catch(() => {
+            document.getElementById("savedOutputs").textContent = "Unable to load server history.";
+            document.getElementById("qaHistory").textContent = "Unable to load server history.";
+        });
+    </script>
+</body>
+</html>
