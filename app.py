@@ -229,29 +229,50 @@ def index():
     return redirect(url_for("login"))
 
 
-@app.get("/consultation-notes", endpoint="consultation_notes_page")
+@app.get("/consultation-notes")
 @require_auth
-def consultation_notes_page():
+def consultation_notes():
     return render_template("consultation-notes.html")
 
 
-@app.get("/dashboard", endpoint="dashboard_page")
+@app.get("/dashboard")
 @require_auth
-def dashboard_page():
+def dashboard():
     return render_template("dashboard.html")
 
 
-@app.get("/history", endpoint="history_page")
+@app.get("/history")
 @require_auth
-def history_page():
+def history():
     return render_template("history.html")
 
 
-@app.get("/login", endpoint="login")
+@app.get("/login")
 def login():
     if session.get("authenticated") is True:
-        return redirect(url_for("consultation_notes_page"))
+        return redirect(url_for("consultation_notes"))
     return render_template("login.html")
+
+
+@app.get("/consultation-notes")
+def consultation_notes():
+    return render_template("consultation-notes.html")
+
+
+@app.get("/dashboard")
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.get("/history")
+def history():
+    return render_template("history.html")
+
+
+@app.get("/login")
+def login():
+    # Keep existing buttons/links functional even when OAuth is not configured.
+    return render_template("consultation-notes.html")
 
 @app.get("/api/session")
 def api_session():
