@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import tempfile
 import threading
 import subprocess
@@ -7,18 +8,23 @@ import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from uuid import uuid4
+from functools import wraps
 
 import requests
 from flask import (
     Flask,
+    g,
     request,
     jsonify,
     render_template,
     session,
     make_response,
+    redirect,
+    url_for,
 )
 
 from faster_whisper import WhisperModel
+from performance_monitor import monitor
 
 if os.getenv("RENDER") is None:
     from dotenv import load_dotenv
@@ -30,11 +36,84 @@ DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/c
 
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
+DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
 
 http = requests.Session()
+
+
+@app.before_request
+def _track_request_start():
+    g._req_start = time.time()
+
+
+@app.after_request
+def _track_request_end(response):
+    start = getattr(g, "_req_start", None)
+    if start is not None:
+        duration_ms = (time.time() - start) * 1000
+        monitor.record_endpoint(request.path, request.method, response.status_code, duration_ms)
+    return response
+
+
+def require_auth(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if session.get("authenticated") is not True:
+            if request.path.startswith("/api/") or request.path in {"/ask", "/convert-notes"}:
+                return jsonify({"error": "Unauthorized"}), 401
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapped
+
+
+def db_conn():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_history_db():
+    with db_conn() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS history_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_key TEXT NOT NULL,
+                item_type TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+
+
+def session_user_key() -> str:
+    return "code_user" if session.get("authenticated") is True else "guest"
+
+
+def save_history(item_type: str, content: str):
+    with db_conn() as conn:
+        conn.execute(
+            "INSERT INTO history_entries (user_key, item_type, content, created_at) VALUES (?, ?, ?, ?)",
+            (session_user_key(), item_type, content, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+
+
+def load_history(limit: int = 200):
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, item_type, content, created_at FROM history_entries WHERE user_key = ? ORDER BY id DESC LIMIT ?",
+            (session_user_key(), limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+init_history_db()
 
 @app.get("/health")
 def health():
@@ -144,8 +223,35 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 
 @app.get("/")
 def index():
-    resp = make_response(render_template("index.html"))
-    return resp
+    if session.get("authenticated") is True:
+        resp = make_response(render_template("consultation-notes.html"))
+        return resp
+    return redirect(url_for("login"))
+
+
+@app.get("/consultation-notes")
+@require_auth
+def consultation_notes():
+    return render_template("consultation-notes.html")
+
+
+@app.get("/dashboard")
+@require_auth
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.get("/history")
+@require_auth
+def history():
+    return render_template("history.html")
+
+
+@app.get("/login")
+def login():
+    if session.get("authenticated") is True:
+        return redirect(url_for("consultation_notes"))
+    return render_template("login.html")
 
 @app.get("/api/session")
 def api_session():
@@ -162,6 +268,33 @@ def api_me():
         "remaining": 1000000 if is_authenticated else 10,
     })
 
+
+@app.get("/api/perf/summary")
+@require_auth
+def perf_summary():
+    stats = monitor.get_stats() or {}
+    return jsonify({
+        "uptime_seconds": round(stats.get("uptime_seconds", 0), 2),
+        "requests": stats.get("requests", 0),
+        "avg_duration_ms": round(stats.get("avg_duration_ms", 0), 2),
+        "p95_duration_ms": round(stats.get("p95_duration_ms", 0), 2),
+    })
+
+
+@app.get("/api/perf/health")
+@require_auth
+def perf_health():
+    return jsonify({
+        "status": "ok",
+        "tracked_endpoints": len(monitor.metrics),
+    })
+
+
+@app.get("/api/perf/stats")
+@require_auth
+def perf_stats():
+    return jsonify({"endpoints": monitor.get_all_stats()})
+
 @app.post("/authenticate")
 def authenticate():
     data = request.get_json(silent=True) or {}
@@ -177,6 +310,7 @@ def auth_logout():
     return jsonify({"ok": True})
 
 @app.post("/api/generate")
+@require_auth
 def generate():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
@@ -207,7 +341,34 @@ def generate():
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
 
+
+@app.post("/ask")
+@require_auth
+def ask_legacy():
+    """Backward-compatible endpoint used by consultation-notes.html."""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    context = (data.get("context") or "").strip()
+    if not question:
+        return jsonify({"error": "Empty question"}), 400
+
+    try:
+        user_content = f"Clinical question:\n{question}"
+        if context:
+            user_content += f"\n\nRecent context:\n{context}"
+        user_content += "\n\nIf pasted data is included, sort it into the correct headings."
+        answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+        save_history("question", answer)
+        return jsonify({"answer": answer})
+    except Exception as e:
+        print("DEEPSEEK ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
 @app.post("/api/consult")
+@require_auth
 def consult():
     if not DEEPSEEK_API_KEY:
         return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
@@ -241,7 +402,57 @@ def consult():
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
 
+
+@app.post("/convert-notes")
+@require_auth
+def convert_notes_legacy():
+    """Backward-compatible endpoint used by consultation-notes.html."""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    text = (data.get("clinical_data") or "").strip()
+    note_type = (data.get("note_type") or "consultation_note").strip().lower()
+    if not text:
+        return jsonify({"error": "Empty input"}), 400
+
+    try:
+        mode = "handover" if note_type == "handover" else "consult_note"
+        if mode == "handover":
+            user_content = (
+                "Create a handover/presentation from the following raw dictation/pasted data. "
+                "If the context is not ED, adapt appropriately.\n\n"
+                f"{text}"
+            )
+            answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
+        else:
+            user_content = (
+                "Create a structured clinical note from the following raw dictation/pasted data. "
+                "Do not invent facts; organise clearly.\n\n"
+                f"{text}"
+            )
+            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+        save_history("note", answer)
+        return jsonify({"clinical_notes": answer})
+    except Exception as e:
+        print("DEEPSEEK ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
+
+@app.post("/auth/google")
+def auth_google_not_configured():
+    # Explicit response avoids silent 404s in the legacy UI.
+    return jsonify({"ok": False, "error": "Google auth is not configured in this build"}), 501
+
+
+@app.post("/api/stripe/create-checkout-session")
+@require_auth
+def stripe_checkout_not_configured():
+    # Explicit response avoids silent 404s in the legacy UI.
+    return jsonify({"error": "Stripe checkout is not configured in this build"}), 501
+
 @app.post("/api/transcribe")
+@require_auth
 def transcribe():
     f = request.files.get("audio")
     if not f:
@@ -274,6 +485,26 @@ def transcribe():
                         os.remove(p)
                     except Exception:
                         pass
+
+
+@app.get("/api/history/list")
+@require_auth
+def api_history_list():
+    return jsonify({"items": load_history()})
+
+
+@app.post("/api/history/save")
+@require_auth
+def api_history_save():
+    data = request.get_json(silent=True) or {}
+    item_type = (data.get("type") or "").strip().lower()
+    content = (data.get("content") or "").strip()
+    if item_type not in {"note", "question"}:
+        return jsonify({"error": "Invalid type"}), 400
+    if not content:
+        return jsonify({"error": "Empty content"}), 400
+    save_history(item_type, content)
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
