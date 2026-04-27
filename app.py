@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import tempfile
 import threading
 import subprocess
@@ -11,6 +12,7 @@ from uuid import uuid4
 import requests
 from flask import (
     Flask,
+    g,
     request,
     jsonify,
     render_template,
@@ -19,6 +21,7 @@ from flask import (
 )
 
 from faster_whisper import WhisperModel
+from performance_monitor import monitor
 
 if os.getenv("RENDER") is None:
     from dotenv import load_dotenv
@@ -35,6 +38,20 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
 
 http = requests.Session()
+
+
+@app.before_request
+def _track_request_start():
+    g._req_start = time.time()
+
+
+@app.after_request
+def _track_request_end(response):
+    start = getattr(g, "_req_start", None)
+    if start is not None:
+        duration_ms = (time.time() - start) * 1000
+        monitor.record_endpoint(request.path, request.method, response.status_code, duration_ms)
+    return response
 
 @app.get("/health")
 def health():
@@ -144,8 +161,30 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
 
 @app.get("/")
 def index():
-    resp = make_response(render_template("index.html"))
+    # Use the consultation notes interface as default landing page.
+    resp = make_response(render_template("consultation-notes.html"))
     return resp
+
+
+@app.get("/consultation-notes")
+def consultation_notes():
+    return render_template("consultation-notes.html")
+
+
+@app.get("/dashboard")
+def dashboard():
+    return render_template("dashboard.html")
+
+
+@app.get("/history")
+def history():
+    return render_template("history.html")
+
+
+@app.get("/login")
+def login():
+    # Keep existing buttons/links functional even when OAuth is not configured.
+    return render_template("consultation-notes.html")
 
 @app.get("/api/session")
 def api_session():
@@ -161,6 +200,30 @@ def api_me():
         "limit": 1000000 if is_authenticated else 10,
         "remaining": 1000000 if is_authenticated else 10,
     })
+
+
+@app.get("/api/perf/summary")
+def perf_summary():
+    stats = monitor.get_stats() or {}
+    return jsonify({
+        "uptime_seconds": round(stats.get("uptime_seconds", 0), 2),
+        "requests": stats.get("requests", 0),
+        "avg_duration_ms": round(stats.get("avg_duration_ms", 0), 2),
+        "p95_duration_ms": round(stats.get("p95_duration_ms", 0), 2),
+    })
+
+
+@app.get("/api/perf/health")
+def perf_health():
+    return jsonify({
+        "status": "ok",
+        "tracked_endpoints": len(monitor.metrics),
+    })
+
+
+@app.get("/api/perf/stats")
+def perf_stats():
+    return jsonify({"endpoints": monitor.get_all_stats()})
 
 @app.post("/authenticate")
 def authenticate():
@@ -207,6 +270,30 @@ def generate():
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
 
+
+@app.post("/ask")
+def ask_legacy():
+    """Backward-compatible endpoint used by consultation-notes.html."""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    question = (data.get("question") or "").strip()
+    context = (data.get("context") or "").strip()
+    if not question:
+        return jsonify({"error": "Empty question"}), 400
+
+    try:
+        user_content = f"Clinical question:\n{question}"
+        if context:
+            user_content += f"\n\nRecent context:\n{context}"
+        user_content += "\n\nIf pasted data is included, sort it into the correct headings."
+        answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+        return jsonify({"answer": answer})
+    except Exception as e:
+        print("DEEPSEEK ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
 @app.post("/api/consult")
 def consult():
     if not DEEPSEEK_API_KEY:
@@ -240,6 +327,52 @@ def consult():
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
+
+
+@app.post("/convert-notes")
+def convert_notes_legacy():
+    """Backward-compatible endpoint used by consultation-notes.html."""
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    text = (data.get("clinical_data") or "").strip()
+    note_type = (data.get("note_type") or "consultation_note").strip().lower()
+    if not text:
+        return jsonify({"error": "Empty input"}), 400
+
+    try:
+        mode = "handover" if note_type == "handover" else "consult_note"
+        if mode == "handover":
+            user_content = (
+                "Create a handover/presentation from the following raw dictation/pasted data. "
+                "If the context is not ED, adapt appropriately.\n\n"
+                f"{text}"
+            )
+            answer = call_deepseek(HANDOVER_SYSTEM_PROMPT, user_content)
+        else:
+            user_content = (
+                "Create a structured clinical note from the following raw dictation/pasted data. "
+                "Do not invent facts; organise clearly.\n\n"
+                f"{text}"
+            )
+            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+        return jsonify({"clinical_notes": answer})
+    except Exception as e:
+        print("DEEPSEEK ERROR:", repr(e))
+        return jsonify({"error": "AI request failed"}), 502
+
+
+@app.post("/auth/google")
+def auth_google_not_configured():
+    # Explicit response avoids silent 404s in the legacy UI.
+    return jsonify({"ok": False, "error": "Google auth is not configured in this build"}), 501
+
+
+@app.post("/api/stripe/create-checkout-session")
+def stripe_checkout_not_configured():
+    # Explicit response avoids silent 404s in the legacy UI.
+    return jsonify({"error": "Stripe checkout is not configured in this build"}), 501
 
 @app.post("/api/transcribe")
 def transcribe():

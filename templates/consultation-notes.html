@@ -698,15 +698,22 @@
     </div>
 
     <script>
-        // Initialize Google Sign-In
+        // Initialize Google Sign-In (guarded so UI still works if Google script/client ID is missing)
         window.onload = function() {
+            const clientId = '{{ google_client_id }}';
+            const googleReady = window.google && google.accounts && google.accounts.id;
+            if (!googleReady || !clientId) {
+                console.warn('Google Sign-In not configured; continuing without OAuth UI init.');
+                return;
+            }
+
             google.accounts.id.initialize({
-                client_id: '{{ google_client_id }}',
+                client_id: clientId,
                 callback: handleCredentialResponse
             });
             google.accounts.id.renderButton(
                 document.getElementById('signInDiv'),
-                { 
+                {
                     theme: 'dark',
                     size: 'large',
                     text: 'signin_with'
@@ -747,14 +754,16 @@
             localStorage.removeItem('user_email');
             document.getElementById('signInDiv').style.display = 'block';
             document.getElementById('authBtn').style.display = 'none';
-            google.accounts.id.renderButton(
-                document.getElementById('signInDiv'),
-                { 
-                    theme: 'dark',
-                    size: 'large',
-                    text: 'signin_with'
-                }
-            );
+            if (window.google && google.accounts && google.accounts.id) {
+                google.accounts.id.renderButton(
+                    document.getElementById('signInDiv'),
+                    {
+                        theme: 'dark',
+                        size: 'large',
+                        text: 'signin_with'
+                    }
+                );
+            }
         });
 
         // Check if already signed in
@@ -1034,24 +1043,6 @@
         });
 
 
-        // ENTER KEY HANDLERS
-        // For Consultation Notes - Ctrl+Enter to convert
-        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('convertBtn').click();
-            }
-        });
-
-        // For Clinical Questions - Ctrl+Enter to ask
-        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('askBtn').click();
-            }
-        });
-
-
         // ENTER KEY HANDLERS - Enter to submit, Shift+Enter for new line
         document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1109,21 +1100,6 @@
         // Check plan on page load
         checkUserPlan();
 
-
-        // ENTER KEY HANDLERS - Ctrl+Enter to submit
-        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('convertBtn').click();
-            }
-        });
-
-        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                document.getElementById('askBtn').click();
-            }
-        });
 
         // Initialize
         renderSavedOutputs();
