@@ -221,7 +221,7 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
     answer = (((out.get("choices") or [{}])[0]).get("message", {}) or {}).get("content", "").strip()
     return answer or "No response."
 
-@app.get("/")
+@app.get("/", endpoint="index")
 def index():
     if session.get("authenticated") is True:
         resp = make_response(render_template("consultation-notes.html"))
