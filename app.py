@@ -254,26 +254,6 @@ def login():
     return render_template("login.html")
 
 
-@app.get("/consultation-notes")
-def consultation_notes():
-    return render_template("consultation-notes.html")
-
-
-@app.get("/dashboard")
-def dashboard():
-    return render_template("dashboard.html")
-
-
-@app.get("/history")
-def history():
-    return render_template("history.html")
-
-
-@app.get("/login")
-def login():
-    # Keep existing buttons/links functional even when OAuth is not configured.
-    return render_template("consultation-notes.html")
-
 @app.get("/api/session")
 def api_session():
     return jsonify({"ok": True})
