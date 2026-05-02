@@ -1,1073 +1,118 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-stealth="off">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VividMedi - Consultation Notes & Q&A</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --primary-dark: #0f1419;
-            --secondary-dark: #1a1f2e;
-            --tertiary-dark: #252d3d;
-            --metallic-gold: #c9a561;
-            --metallic-silver: #b8bcc4;
-            --accent-teal: #00d9ff;
-            --text-primary: #f0f0f0;
-            --text-secondary: #a0a0a0;
-            --border-color: #3a4052;
-            --success-green: #00d97f;
-        }
-
-        html, body {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #1a232f 50%, var(--secondary-dark) 100%);
-            color: var(--text-primary);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-            overflow: hidden;
-        }
-
-        body {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .container {
-            display: flex;
-            height: 100%;
-            width: 100%;
-        }
-
-        /* Left Sidebar - Saved Outputs */
-        .saved-outputs-sidebar {
-            width: 280px;
-            background: rgba(26, 31, 46, 0.6);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            backdrop-filter: blur(10px);
-        }
-
-        .sidebar-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .saved-notes-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .saved-note-card {
-            background: rgba(37, 45, 61, 0.6);
-            border: 1px solid rgba(201, 165, 97, 0.2);
-            border-radius: 8px;
-            overflow: hidden;
-            transition: all 0.2s ease;
-        }
-
-        .saved-note-card:hover {
-            border-color: rgba(201, 165, 97, 0.5);
-            background: rgba(37, 45, 61, 0.8);
-        }
-
-        .saved-note-header {
-            padding: 12px;
-            background: rgba(201, 165, 97, 0.1);
-            border-bottom: 1px solid rgba(201, 165, 97, 0.2);
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            user-select: none;
-        }
-
-        .saved-note-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--metallic-gold);
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .saved-note-toggle {
-            width: 16px;
-            height: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--metallic-gold);
-            font-size: 12px;
-            transition: transform 0.2s ease;
-        }
-
-        .saved-note-toggle.open {
-            transform: rotate(90deg);
-        }
-
-        .saved-note-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-        }
-
-        .saved-note-content.open {
-            max-height: 500px;
-        }
-
-        .saved-note-text {
-            padding: 12px;
-            font-size: 11px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-break: break-word;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .saved-note-actions {
-            padding: 8px 12px;
-            border-top: 1px solid rgba(201, 165, 97, 0.1);
-            display: flex;
-            gap: 6px;
-        }
-
-        .saved-note-btn {
-            flex: 1;
-            padding: 5px 6px;
-            background: rgba(201, 165, 97, 0.1);
-            border: 1px solid rgba(201, 165, 97, 0.3);
-            color: var(--metallic-gold);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 10px;
-            transition: all 0.2s ease;
-        }
-
-        .saved-note-btn:hover {
-            background: rgba(201, 165, 97, 0.2);
-        }
-
-        .empty-state {
-            padding: 20px 12px;
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 12px;
-        }
-
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 40px;
-            border-bottom: 1px solid var(--border-color);
-            background: rgba(26, 31, 46, 0.4);
-            backdrop-filter: blur(10px);
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-        }
-
-        .logo {
-            font-size: 28px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #d4af7a 0%, #c9a561 50%, #e6d5a8 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: -1px;
-            cursor: pointer;
-            text-shadow: 0 2px 8px rgba(201, 165, 97, 0.2);
-            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
-        }
-
-        html[data-theme="light"] .logo {
-            background: linear-gradient(135deg, #a67c4f 0%, #8b6f47 50%, #c9a561 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .page-title {
-            font-size: 18px;
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        /* Theme Toggle */
-        .theme-toggle {
-            display: flex;
-            align-items: center;
-            background: var(--tertiary-dark);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 4px;
-            cursor: pointer;
-            gap: 0;
-            transition: all 0.3s ease;
-        }
-
-        .theme-toggle-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .theme-toggle-btn.active {
-            background: rgba(201, 165, 97, 0.2);
-            color: var(--metallic-gold);
-        }
-
-        .auth-btn {
-            padding: 10px 24px;
-            background: rgba(201, 165, 97, 0.15);
-            border: 1px solid var(--metallic-gold);
-            color: var(--metallic-gold);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .auth-btn:hover {
-            background: rgba(201, 165, 97, 0.25);
-            box-shadow: 0 0 20px rgba(201, 165, 97, 0.3);
-        }
-
-        /* Work Area */
-        .work-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 40px;
-            gap: 20px;
-            overflow-y: auto;
-        }
-
-        .section {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-primary);
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        /* Tab Navigation */
-        .tab-navigation {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0;
-        }
-
-        .tab-btn {
-            padding: 12px 20px;
-            background: transparent;
-            border: none;
-            border-bottom: 2px solid transparent;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-weight: 500;
-            font-size: 14px;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-        }
-
-        .tab-btn:hover {
-            color: var(--metallic-gold);
-        }
-
-        .tab-btn.active {
-            color: var(--metallic-gold);
-            border-bottom-color: var(--metallic-gold);
-        }
-
-        .tab-content {
-            display: none;
-            animation: slideUp 0.3s ease;
-            flex: 1;
-        }
-
-        .tab-content.active {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            flex: 1;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .input-output-grid,
-        .qa-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-            flex: 1;
-        }
-
-        .input-wrapper, .output-wrapper {
-            background: rgba(37, 45, 61, 0.6);
-            border: 1px solid rgba(201, 165, 97, 0.3);
-            border-radius: 12px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-        }
-
-        .input-wrapper:focus-within, .output-wrapper:focus-within {
-            border-color: var(--metallic-gold);
-            box-shadow: 0 0 30px rgba(201, 165, 97, 0.15);
-            background: rgba(37, 45, 61, 0.8);
-        }
-
-        textarea, .output-text {
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            font-size: 14px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            resize: none;
-            flex: 1;
-            outline: none;
-            line-height: 1.6;
-        }
-
-        textarea::placeholder {
-            color: var(--text-secondary);
-            opacity: 0.7;
-        }
-
-        .output-text {
-            white-space: pre-wrap;
-            word-break: break-word;
-            min-height: 200px;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 12px;
-            margin-top: 16px;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-weight: 500;
-            font-size: 14px;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--metallic-gold), #d4af7a);
-            color: var(--primary-dark);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(201, 165, 97, 0.3);
-        }
-
-        .btn-secondary {
-            background: rgba(201, 165, 97, 0.15);
-            color: var(--metallic-gold);
-            border: 1px solid rgba(201, 165, 97, 0.5);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(201, 165, 97, 0.25);
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-        }
-
-        .input-options {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .option-btn {
-            padding: 8px 16px;
-            background: rgba(201, 165, 97, 0.1);
-            border: 1px solid rgba(201, 165, 97, 0.3);
-            color: var(--metallic-gold);
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s ease;
-        }
-
-        .option-btn:hover {
-            background: rgba(201, 165, 97, 0.2);
-        }
-
-        .option-btn.active {
-            background: rgba(201, 165, 97, 0.3);
-            border-color: var(--metallic-gold);
-        }
-
-        .loading {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--metallic-gold);
-            animation: pulse 1.5s infinite;
-            margin: 0 4px;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
-        }
-
-        /* Light theme */
-        html[data-theme="light"] {
-            --primary-dark: #fafbfc;
-            --secondary-dark: #ffffff;
-            --tertiary-dark: #f0f2f5;
-            --text-primary: #0a0e27;
-            --text-secondary: #3a3a3a;
-            --border-color: #d0d5e0;
-        }
-
-        html[data-theme="light"] .saved-outputs-sidebar {
-            background: rgba(240, 242, 245, 0.6);
-        }
-
-        html[data-theme="light"] .saved-note-card {
-            background: rgba(240, 242, 245, 0.8);
-            border-color: rgba(201, 165, 97, 0.2);
-        }
-
-        html[data-theme="light"] .header {
-            background: rgba(255, 255, 255, 0.8);
-            border-bottom-color: var(--border-color);
-        }
-
-        html[data-theme="light"] .input-wrapper,
-        html[data-theme="light"] .output-wrapper {
-            background: rgba(240, 242, 245, 0.8);
-            border-color: rgba(201, 165, 97, 0.3);
-        }
-
-        html[data-theme="light"] .input-wrapper:focus-within,
-        html[data-theme="light"] .output-wrapper:focus-within {
-            background: rgba(240, 242, 245, 1);
-        }
-
-        html[data-theme="light"] textarea,
-        html[data-theme="light"] .output-text {
-            color: #0a0e27;
-        }
-
-        html[data-theme="light"] textarea::placeholder {
-            color: #666666;
-            opacity: 0.8;
-        }
-
-        @media (max-width: 1200px) {
-            .input-output-grid,
-            .qa-grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
-            .saved-outputs-sidebar {
-                width: 200px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-
-            .work-area {
-                padding: 20px;
-            }
-
-            .input-output-grid,
-            .qa-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .saved-outputs-sidebar {
-                width: 100%;
-                max-height: 200px;
-            }
-        }
-
-        #g_id_onload {
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VividMedi - Consultation Notes & Q&A</title>
+  <style>
+    :root { --bg:#0c1220; --bg2:#131c2f; --panel:#1b2638cc; --text:#eef3ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#6f7bf7; --accent2:#8f66ff; --ok:#35c9a0; }
+    html[data-theme="light"] { --bg:#f4f7fc; --bg2:#e8eef8; --panel:#ffffffdd; --text:#1c2440; --muted:#607098; --line:#d3ddef; --accent:#5b5de7; --accent2:#824bdf; }
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
+    .container{display:flex;height:100%}
+    .saved-outputs-sidebar{width:260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px)}
+    .sidebar-header{padding:14px 16px;font-weight:700;border-bottom:1px solid var(--line)}
+    .saved-notes-list{padding:10px;overflow:auto;height:calc(100% - 55px)}
+    .saved-note-card{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#00000010}
+    .saved-note-header{padding:10px;display:flex;justify-content:space-between;cursor:pointer}
+    .saved-note-title{font-size:12px;color:var(--muted)} .saved-note-content{max-height:0;overflow:hidden;transition:.25s} .saved-note-content.open{max-height:420px}
+    .saved-note-text{font-size:12px;white-space:pre-wrap;padding:0 10px 10px;color:var(--text)} .saved-note-actions{display:flex;gap:6px;padding:0 10px 10px}
+    .saved-note-btn{flex:1;border:1px solid var(--line);background:transparent;color:var(--muted);padding:6px;border-radius:8px}
+    .main-content{flex:1;display:flex;flex-direction:column;min-width:0}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
+    .logo{font-size:28px;font-weight:800;letter-spacing:-.8px;background:linear-gradient(120deg,var(--accent2),var(--accent));-webkit-background-clip:text;color:transparent}
+    .page-title{font-weight:600;color:var(--muted)}
+    .header-right{display:flex;align-items:center;gap:12px}
+    .toggle-pill{position:relative;display:flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:#00000020}
+    .toggle-pill button{border:0;background:transparent;color:var(--muted);padding:7px 14px;border-radius:999px;font-weight:600;cursor:pointer}
+    .toggle-pill button.active{background:linear-gradient(120deg,var(--accent),var(--accent2));color:white;box-shadow:0 8px 16px #0000002e}
+    .auth-btn{padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600}
+    .work-area{padding:24px;overflow:auto}
+    .tab-navigation{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .tab-btn{padding:12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--muted);font-weight:700;cursor:pointer}
+    .tab-btn.active{background:linear-gradient(120deg,#6f7bf72a,#8f66ff2a);color:var(--text);border-color:#7e73f0}
+    .section-title{font-size:18px;font-weight:700;margin:8px 0 10px}
+    .controls-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+    select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:12px;background:#0000001c;color:var(--text);padding:12px;font-size:14px}
+    .input-options{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .option-btn{padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted)}
+    .option-btn.active{background:#6f7bf730;color:var(--text);border-color:#7381f8}
+    .input-output-grid,.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .input-wrapper,.output-wrapper{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);min-height:350px;display:flex;flex-direction:column;gap:10px}
+    textarea{min-height:260px;resize:vertical}
+    .output-text{min-height:260px;white-space:pre-wrap;line-height:1.55;overflow:auto}
+    .action-buttons{display:grid;grid-template-columns:repeat(2,minmax(120px,180px));gap:10px}
+    .btn{height:44px;border-radius:12px;border:1px solid var(--line);font-weight:700;cursor:pointer}
+    .btn-primary{background:linear-gradient(120deg,var(--accent),var(--accent2));color:#fff;border:0}
+    .btn-secondary{background:transparent;color:var(--muted)}
+    .tab-content{display:none}.tab-content.active{display:block}
+    .empty-state{color:var(--muted);font-size:13px;padding:12px}
+    .loading{display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:999px;animation:p 1s infinite;margin:0 3px}@keyframes p{50%{opacity:.25}}
+
+    html[data-stealth="on"] body, html[data-stealth="on"]{background:#ececef;color:#222}
+    html[data-stealth="on"] .container{background:#ececef}
+    html[data-stealth="on"] .header{background:#6b2fa7;color:#fff;border-color:#5f2896}
+    html[data-stealth="on"] .logo, html[data-stealth="on"] .page-title{color:#fff;background:none;-webkit-text-fill-color:initial}
+    html[data-stealth="on"] .saved-outputs-sidebar{background:#e4e7ed;border-right-color:#cbd2dc}
+    html[data-stealth="on"] .main-content, html[data-stealth="on"] .work-area{background:#f2f3f6}
+    html[data-stealth="on"] .input-wrapper, html[data-stealth="on"] .output-wrapper, html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d4d9e2}
+    html[data-stealth="on"] select, html[data-stealth="on"] textarea, html[data-stealth="on"] .output-text{background:#fff;border-color:#d4d9e2;color:#1f2532}
+    html[data-stealth="on"] .tab-btn.active{background:#efe7ff;border-color:#a686d8;color:#4a306f}
+    html[data-stealth="on"] .btn-primary{background:#6b2fa7}
+    @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Left Sidebar - Saved Outputs -->
-        <div class="saved-outputs-sidebar">
-            <div class="sidebar-header">📌 Saved Outputs</div>
-            <div class="saved-notes-list" id="savedNotesList">
-                <div class="empty-state">No saved outputs yet</div>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Header -->
-            <div class="header">
-                <div class="header-left">
-                    <div class="logo" id="logoClick">VividMedi</div>
-                    <div class="page-title">Consultation Notes & Q&A</div>
-                </div>
-                <div class="header-right">
-                    <div class="theme-toggle">
-                        <button class="theme-toggle-btn active" id="darkBtn" data-theme="dark">Dark</button>
-                        <button class="theme-toggle-btn" id="lightBtn" data-theme="light">Light</button>
-                    </div>
-                    <button class="auth-btn" id="upgradeBtn" style="display:none; background: linear-gradient(135deg, #d4af7a, #c9a561); border: none; box-shadow: 0 4px 15px rgba(201, 165, 97, 0.3); color: #0a0e27; font-weight: 600;">Upgrade to Pro</button>
-                    <button class="auth-btn" id="authBtn">Logout</button>
-                </div>
-            </div>
-
-            <!-- Work Area -->
-            <div class="work-area">
-                <!-- Tab Navigation -->
-                <div class="tab-navigation">
-                    <button class="tab-btn active" data-tab="notes-tab">📝 Consultation Notes</button>
-                    <button class="tab-btn" data-tab="qa-tab">❓ Clinical Questions</button>
-                </div>
-
-                <!-- Notes Tab -->
-                <div class="tab-content active" id="notes-tab">
-                    <div class="section">
-                        <div class="section-title">Clinical Data Input</div>
-                        <div style="display: flex; gap: 16px; margin-bottom: 16px;">
-                            <div style="flex: 1;">
-                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;">Report Type</label>
-                                <select id="noteTypeSelect" style="width: 100%; padding: 10px; background: rgba(37, 45, 61, 0.6); border: 1px solid rgba(201, 165, 97, 0.3); border-radius: 6px; color: var(--text-primary); font-size: 14px; cursor: pointer;">
-                                    <option value="consultation_note">Consultation Note</option>
-                                    <option value="referral_letter">Referral Letter</option>
-                                    <option value="discharge_summary">Discharge Summary</option>
-                                    <option value="progress_note">Progress Note</option>
-                                    <option value="clinical_report">Clinical Report</option>
-                                    <option value="soap_note">SOAP Note</option>
-                                    <option value="procedure_note">Procedure Note</option>
-                                </select>
-                            </div>
-                            <div style="flex: 1;">
-                                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;">Input Format</label>
-                                <div class="input-options" style="margin: 0;">
-                                    <button class="option-btn active" data-type="text" style="flex: 1;">Text</button>
-                                    <button class="option-btn" data-type="voice" style="flex: 1;">Voice</button>
-                                    <button class="option-btn" data-type="file" style="flex: 1;">File</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="input-output-grid">
-                        <!-- Input Section -->
-                        <div>
-                            <div class="input-wrapper" id="inputWrapper">
-                                <textarea id="clinicalInput" placeholder="Paste clinical data, transcribed notes, or raw case information here..." rows="10"></textarea>
-                                <div class="action-buttons">
-                                    <button class="btn btn-primary" id="convertBtn">Convert to Notes</button>
-                                    <button class="btn btn-secondary" id="clearBtn">Clear</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Output Section -->
-                        <div>
-                            <div class="output-wrapper" id="outputWrapper">
-                                <div class="output-text" id="clinicalOutput">Output will appear here...</div>
-                                <div class="action-buttons">
-                                    <button class="btn btn-secondary" id="copyBtn">Copy</button>
-                                    <button class="btn btn-secondary" id="downloadBtn">Download</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- QA Tab -->
-                <div class="tab-content" id="qa-tab">
-                    <div class="section">
-                        <div class="section-title">Ask a Clinical Question</div>
-                    </div>
-
-                    <div class="qa-grid">
-                        <!-- Question Input -->
-                        <div>
-                            <div class="input-wrapper" id="qaInputWrapper">
-                                <textarea id="clinicalQuestion" placeholder="Ask a clinical question about diagnosis, management, investigation, or treatment..." rows="10"></textarea>
-                                <div class="action-buttons">
-                                    <button class="btn btn-primary" id="askBtn">Ask Question</button>
-                                    <button class="btn btn-secondary" id="clearQaBtn">Clear</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Answer Output -->
-                        <div>
-                            <div class="output-wrapper" id="qaOutputWrapper">
-                                <div class="output-text" id="clinicalAnswer">Answer will appear here...</div>
-                                <div class="action-buttons">
-                                    <button class="btn btn-secondary" id="copyAnswerBtn">Copy</button>
-                                    <button class="btn btn-secondary" id="downloadAnswerBtn">Download</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Logout button
-        document.getElementById('authBtn').addEventListener('click', () => {
-            fetch('/auth/logout', { method: 'POST' })
-                .finally(() => {
-                    window.location.href = '/login';
-                });
-        });
-
-        // Theme Toggle
-        const darkBtn = document.getElementById('darkBtn');
-        const lightBtn = document.getElementById('lightBtn');
-        const htmlEl = document.documentElement;
-
-        darkBtn.addEventListener('click', () => {
-            htmlEl.setAttribute('data-theme', 'dark');
-            darkBtn.classList.add('active');
-            lightBtn.classList.remove('active');
-            localStorage.setItem('theme', 'dark');
-        });
-
-        lightBtn.addEventListener('click', () => {
-            htmlEl.setAttribute('data-theme', 'light');
-            lightBtn.classList.add('active');
-            darkBtn.classList.remove('active');
-            localStorage.setItem('theme', 'light');
-        });
-
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        htmlEl.setAttribute('data-theme', savedTheme);
-        if (savedTheme === 'light') {
-            lightBtn.classList.add('active');
-            darkBtn.classList.remove('active');
-        }
-
-        // Logo click
-        document.getElementById('logoClick').addEventListener('click', () => {
-            window.location.href = '/';
-        });
-
-        // Tab Navigation
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const tabId = this.getAttribute('data-tab');
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                document.getElementById(tabId).classList.add('active');
-            });
-        });
-
-        // Input type selection
-        document.querySelectorAll('.option-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-            });
-        });
-
-        // Saved outputs management
-        let savedOutputs = JSON.parse(localStorage.getItem('vividmedi_saved_outputs')) || [];
-
-        function renderSavedOutputs() {
-            const list = document.getElementById('savedNotesList');
-            if (savedOutputs.length === 0) {
-                list.innerHTML = '<div class="empty-state">No saved outputs yet</div>';
-                return;
-            }
-
-            list.innerHTML = savedOutputs.map((item, idx) => `
-                <div class="saved-note-card">
-                    <div class="saved-note-header" onclick="window.toggleOutput(${idx})">
-                        <div class="saved-note-title">${item.title}</div>
-                        <div class="saved-note-toggle" id="toggle-${idx}">▶</div>
-                    </div>
-                    <div class="saved-note-content" id="content-${idx}">
-                        <div class="saved-note-text">${escapeHtml(item.content)}</div>
-                        <div class="saved-note-actions">
-                            <button class="saved-note-btn" onclick="window.loadOutput(${idx})">Load</button>
-                            <button class="saved-note-btn" onclick="window.copyOutput(${idx})">Copy</button>
-                            <button class="saved-note-btn" onclick="window.deleteOutput(${idx})">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        window.toggleOutput = function(idx) {
-            const content = document.getElementById(`content-${idx}`);
-            const toggle = document.getElementById(`toggle-${idx}`);
-            content.classList.toggle('open');
-            toggle.classList.toggle('open');
-        };
-
-        window.saveOutput = function(content, type = 'note') {
-            if (!content || content.trim() === '' || content === 'Output will appear here...' || content === 'Answer will appear here...' || content.includes('loading')) {
-                return;
-            }
-
-            const timestamp = new Date().toLocaleString();
-            const typeLabel = type === 'question' ? '❓' : '📝';
-            const title = `${typeLabel} ${timestamp}`;
-            
-            savedOutputs.unshift({ title, content, type });
-            
-            if (savedOutputs.length > 20) {
-                savedOutputs = savedOutputs.slice(0, 20);
-            }
-            
-            localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
-            renderSavedOutputs();
-
-            // Persist to server-side history (behind login code).
-            fetch('/api/history/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, content })
-            }).catch(() => {});
-        };
-
-        window.loadOutput = function(idx) {
-            const output = savedOutputs[idx];
-            if (output.type === 'question') {
-                document.getElementById('clinicalAnswer').textContent = output.content;
-            } else {
-                document.getElementById('clinicalOutput').textContent = output.content;
-            }
-        };
-
-        window.copyOutput = function(idx) {
-            navigator.clipboard.writeText(savedOutputs[idx].content);
-        };
-
-        window.deleteOutput = function(idx) {
-            savedOutputs.splice(idx, 1);
-            localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
-            renderSavedOutputs();
-        };
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // CONSULTATION NOTES TAB
-        document.getElementById('convertBtn').addEventListener('click', async () => {
-            const input = document.getElementById('clinicalInput').value.trim();
-            if (!input) {
-                document.getElementById('clinicalOutput').textContent = 'Please enter clinical data...';
-                return;
-            }
-
-            const output = document.getElementById('clinicalOutput');
-            output.innerHTML = '<span class="loading"></span><span class="loading"></span><span class="loading"></span>';
-
-            try {
-                const response = await fetch('/convert-notes', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ clinical_data: input, note_type: document.getElementById('noteTypeSelect').value })
-                });
-                const data = await response.json();
-                output.textContent = data.clinical_notes || 'No output generated';
-            } catch (err) {
-                output.textContent = `Error: ${err.message}`;
-            }
-        });
-
-        document.getElementById('clearBtn').addEventListener('click', () => {
-            const output = document.getElementById('clinicalOutput').textContent;
-            if (output && output !== 'Output will appear here...' && output.trim() && !output.includes('loading')) {
-                window.saveOutput(output, 'note');
-            }
-            document.getElementById('clinicalInput').value = '';
-            document.getElementById('clinicalOutput').textContent = 'Output will appear here...';
-            document.getElementById('clinicalInput').style.height = 'auto';
-            document.getElementById('clinicalInput').focus();
-        });
-
-        document.getElementById('copyBtn').addEventListener('click', (e) => {
-            const text = document.getElementById('clinicalOutput').textContent;
-            navigator.clipboard.writeText(text);
-            const btn = e.target;
-            btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = 'Copy', 2000);
-        });
-
-        document.getElementById('downloadBtn').addEventListener('click', () => {
-            const text = document.getElementById('clinicalOutput').textContent;
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-            element.setAttribute('download', 'clinical-notes.txt');
-            element.style.display = 'none';
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
-        });
-
-        // QA TAB - WITH CONVERSATION MEMORY
-        let qaHistory = [];
-
-        document.getElementById('askBtn').addEventListener('click', async () => {
-            const question = document.getElementById('clinicalQuestion').value.trim();
-            if (!question) {
-                document.getElementById('clinicalAnswer').textContent = 'Please enter a question...';
-                return;
-            }
-
-            const answer = document.getElementById('clinicalAnswer');
-            answer.innerHTML = '<span class="loading"></span><span class="loading"></span><span class="loading"></span>';
-
-            try {
-                // Build context from last 3 questions for follow-ups
-                const context = qaHistory.slice(-3).map((q, i) => `Q${i+1}: ${q.question}\nA${i+1}: ${q.answer.substring(0, 200)}...`).join('\n\n');
-                
-                const response = await fetch('/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question, context: context })
-                });
-                const data = await response.json();
-                answer.textContent = data.answer || 'No answer generated';
-                
-                // Save to history for future follow-ups
-                qaHistory.push({ question: question, answer: data.answer });
-                if (qaHistory.length > 10) qaHistory = qaHistory.slice(-10);
-                localStorage.setItem('vividmedi_qa_history', JSON.stringify(qaHistory));
-                
-                // Clear input after successful answer
-                document.getElementById('clinicalQuestion').value = '';
-                document.getElementById('clinicalQuestion').style.height = 'auto';
-            } catch (err) {
-                answer.textContent = `Error: ${err.message}`;
-            }
-        });
-
-        document.getElementById('clearQaBtn').addEventListener('click', () => {
-            const answer = document.getElementById('clinicalAnswer').textContent;
-            if (answer && answer !== 'Answer will appear here...' && answer.trim() && !answer.includes('loading')) {
-                window.saveOutput(answer, 'question');
-            }
-            document.getElementById('clinicalQuestion').value = '';
-            document.getElementById('clinicalAnswer').textContent = 'Answer will appear here...';
-            document.getElementById('clinicalQuestion').style.height = 'auto';
-            
-            // Optional: Ask if user wants to clear history
-            if (qaHistory.length > 0) {
-                if (confirm('Clear conversation history for fresh start?')) {
-                    qaHistory = [];
-                    localStorage.removeItem('vividmedi_qa_history');
-                }
-            }
-            document.getElementById('clinicalQuestion').focus();
-        });
-
-        document.getElementById('copyAnswerBtn').addEventListener('click', (e) => {
-            const text = document.getElementById('clinicalAnswer').textContent;
-            navigator.clipboard.writeText(text);
-            const btn = e.target;
-            btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = 'Copy', 2000);
-        });
-
-        document.getElementById('downloadAnswerBtn').addEventListener('click', () => {
-            const text = document.getElementById('clinicalAnswer').textContent;
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-            element.setAttribute('download', 'clinical-answer.txt');
-            element.style.display = 'none';
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
-        });
-
-        // Auto-resize textareas
-        document.getElementById('clinicalInput').addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 400) + 'px';
-        });
-
-        document.getElementById('clinicalQuestion').addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 400) + 'px';
-        });
-
-
-        // ENTER KEY HANDLERS - Enter to submit, Shift+Enter for new line
-        document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('convertBtn').click();
-            }
-        });
-
-        document.getElementById('clinicalQuestion').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('askBtn').click();
-            }
-        });
-
-
-        // Check user plan and show upgrade button
-        async function checkUserPlan() {
-            try {
-                const response = await fetch('/api/me');
-                const data = await response.json();
-                
-                if (data.logged_in && data.plan === 'free') {
-                    document.getElementById('upgradeBtn').style.display = 'block';
-                } else if (!data.logged_in) {
-                    document.getElementById('upgradeBtn').style.display = 'none';
-                }
-            } catch (err) {
-                console.error('Error checking plan:', err);
-            }
-        }
-
-        // Upgrade button handler
-        document.getElementById('upgradeBtn').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/api/stripe/create-checkout-session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
-                
-                if (data.url) {
-                    window.location.href = data.url;
-                }
-            } catch (err) {
-                alert('Error creating checkout session: ' + err.message);
-            }
-        });
-
-        // Check plan on page load
-        checkUserPlan();
-
-
-        async function hydrateFromServerHistory() {
-            try {
-                const res = await fetch('/api/history/list');
-                const data = await res.json();
-                const items = data.items || [];
-                const nowLabel = new Date().toLocaleString();
-
-                savedOutputs = items.map((item) => ({
-                    title: `${item.item_type === 'question' ? '❓' : '📝'} ${item.created_at || nowLabel}`,
-                    content: item.content,
-                    type: item.item_type === 'question' ? 'question' : 'note',
-                }));
-                localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
-
-                qaHistory = items
-                    .filter((x) => x.item_type === 'question')
-                    .map((x) => ({ question: '[Saved question]', answer: x.content }))
-                    .slice(0, 10);
-            } catch (err) {
-                console.warn('Could not load server history', err);
-                qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history')) || [];
-            }
-        }
-
-        // Initialize
-        hydrateFromServerHistory().finally(() => {
-            renderSavedOutputs();
-        });
-    </script>
+<div class="container">
+  <aside class="saved-outputs-sidebar"><div class="sidebar-header">Saved Outputs</div><div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div></aside>
+  <main class="main-content">
+    <header class="header">
+      <div><div class="logo" id="logoClick">VividMedi</div><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
+      <div class="header-right">
+        <div class="toggle-pill"><button id="darkBtn" class="active">Night</button><button id="lightBtn">Day</button></div>
+        <div class="toggle-pill"><button id="stealthOffBtn" class="active">Stealth Off</button><button id="stealthOnBtn">Stealth On</button></div>
+        <button class="auth-btn" id="upgradeBtn" style="display:none">Upgrade to Pro</button><button class="auth-btn" id="authBtn">Logout</button>
+      </div>
+    </header>
+    <section class="work-area">
+      <div class="tab-navigation"><button class="tab-btn active" data-tab="notes-tab">Consultation Notes</button><button class="tab-btn" data-tab="qa-tab">Clinical Questions</button></div>
+      <div class="tab-content active" id="notes-tab">
+        <div class="section-title">Clinical Data Input</div>
+        <div class="controls-row"><div><label>Report Type</label><select id="noteTypeSelect"><option value="consultation_note">Consultation Note</option><option value="referral_letter">Referral Letter</option><option value="discharge_summary">Discharge Summary</option></select></div><div><label>Input Format</label><div class="input-options"><button class="option-btn active" data-type="text">Text</button><button class="option-btn" data-type="voice">Voice</button><button class="option-btn" data-type="file">File</button></div></div></div>
+        <div class="input-output-grid"><div class="input-wrapper"><textarea id="clinicalInput" placeholder="Paste clinical data or transcribed notes..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="convertBtn">Convert to Notes</button><button class="btn btn-secondary" id="clearBtn">Clear</button></div></div><div class="output-wrapper"><div class="output-text" id="clinicalOutput">Output will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyBtn">Copy</button><button class="btn btn-secondary" id="downloadBtn">Download</button></div></div></div>
+      </div>
+      <div class="tab-content" id="qa-tab">
+        <div class="section-title">Clinical Questions</div>
+        <div class="qa-grid"><div class="input-wrapper"><textarea id="clinicalQuestion" placeholder="Ask your clinical question..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="askBtn">Ask Question</button><button class="btn btn-secondary" id="clearQaBtn">Clear</button></div></div><div class="output-wrapper"><div class="output-text" id="clinicalAnswer">Answer will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyAnswerBtn">Copy</button><button class="btn btn-secondary" id="downloadAnswerBtn">Download</button></div></div></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+const byId=(id)=>document.getElementById(id);const htmlEl=document.documentElement;
+byId('authBtn').addEventListener('click',()=>fetch('/auth/logout',{method:'POST'}).finally(()=>location.href='/login'));
+byId('darkBtn').addEventListener('click',()=>setTheme('dark'));byId('lightBtn').addEventListener('click',()=>setTheme('light'));
+function setTheme(mode){htmlEl.dataset.theme=mode;localStorage.setItem('theme',mode);byId('darkBtn').classList.toggle('active',mode==='dark');byId('lightBtn').classList.toggle('active',mode==='light');}
+function setStealth(mode){htmlEl.dataset.stealth=mode;localStorage.setItem('stealth_mode',mode);byId('stealthOnBtn').classList.toggle('active',mode==='on');byId('stealthOffBtn').classList.toggle('active',mode==='off');}
+byId('stealthOnBtn').addEventListener('click',()=>setStealth('on'));byId('stealthOffBtn').addEventListener('click',()=>setStealth('off'));
+setTheme(localStorage.getItem('theme')||'dark');setStealth(localStorage.getItem('stealth_mode')||'off');
+byId('logoClick').addEventListener('click',()=>location.href='/');
+document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',function(){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));this.classList.add('active');byId(this.dataset.tab).classList.add('active');}));
+document.querySelectorAll('.option-btn').forEach(btn=>btn.addEventListener('click',function(){document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');}));
+let savedOutputs=JSON.parse(localStorage.getItem('vividmedi_saved_outputs')||'[]');let qaHistory=[];
+function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+function renderSavedOutputs(){const list=byId('savedNotesList');if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}list.innerHTML=savedOutputs.map((it,i)=>`<div class="saved-note-card"><div class="saved-note-header" onclick="toggleOutput(${i})"><div class="saved-note-title">${it.title}</div><div id="toggle-${i}">›</div></div><div class="saved-note-content" id="content-${i}"><div class="saved-note-text">${escapeHtml(it.content)}</div><div class="saved-note-actions"><button class="saved-note-btn" onclick="loadOutput(${i})">Load</button><button class="saved-note-btn" onclick="copyOutput(${i})">Copy</button><button class="saved-note-btn" onclick="deleteOutput(${i})">Delete</button></div></div></div>`).join('');}
+window.toggleOutput=(i)=>byId(`content-${i}`).classList.toggle('open');window.loadOutput=(i)=>{const o=savedOutputs[i];byId(o.type==='question'?'clinicalAnswer':'clinicalOutput').textContent=o.content};window.copyOutput=(i)=>navigator.clipboard.writeText(savedOutputs[i].content);window.deleteOutput=(i)=>{savedOutputs.splice(i,1);localStorage.setItem('vividmedi_saved_outputs',JSON.stringify(savedOutputs));renderSavedOutputs();};
+window.saveOutput=(content,type='note')=>{if(!content||content.includes('appear here'))return;savedOutputs.unshift({title:`${type==='question'?'Q&A':'Consult'} ${new Date().toLocaleString()}`,content,type});savedOutputs=savedOutputs.slice(0,20);localStorage.setItem('vividmedi_saved_outputs',JSON.stringify(savedOutputs));renderSavedOutputs();fetch('/api/history/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,content})}).catch(()=>{});};
+byId('convertBtn').addEventListener('click',async()=>{const input=byId('clinicalInput').value.trim();if(!input)return byId('clinicalOutput').textContent='Please enter clinical data...';byId('clinicalOutput').innerHTML='<span class="loading"></span><span class="loading"></span><span class="loading"></span>';const r=await fetch('/convert-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clinical_data:input,note_type:byId('noteTypeSelect').value})});const d=await r.json();byId('clinicalOutput').textContent=d.clinical_notes||'No output generated';});
+byId('askBtn').addEventListener('click',async()=>{const q=byId('clinicalQuestion').value.trim();if(!q)return byId('clinicalAnswer').textContent='Please enter a question...';byId('clinicalAnswer').innerHTML='<span class="loading"></span><span class="loading"></span><span class="loading"></span>';const context=qaHistory.slice(-3).map((x,i)=>`Q${i+1}:${x.question}\nA${i+1}:${x.answer?.slice(0,180)}`).join('\n\n');const r=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context})});const d=await r.json();byId('clinicalAnswer').textContent=d.answer||'No answer generated';qaHistory.push({question:q,answer:d.answer||''});byId('clinicalQuestion').value='';});
+[['clearBtn','clinicalInput','clinicalOutput','note'],['clearQaBtn','clinicalQuestion','clinicalAnswer','question']].forEach(([b,i,o,t])=>byId(b).addEventListener('click',()=>{const txt=byId(o).textContent; if(txt&&!txt.includes('appear here')) window.saveOutput(txt,t);byId(i).value='';byId(o).textContent=t==='note'?'Output will appear here...':'Answer will appear here...';}));
+[['copyBtn','clinicalOutput'],['copyAnswerBtn','clinicalAnswer']].forEach(([b,o])=>byId(b).addEventListener('click',()=>navigator.clipboard.writeText(byId(o).textContent)));
+[['downloadBtn','clinicalOutput','clinical-notes.txt'],['downloadAnswerBtn','clinicalAnswer','clinical-answer.txt']].forEach(([b,o,n])=>byId(b).addEventListener('click',()=>{const a=document.createElement('a');a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(byId(o).textContent);a.download=n;a.click();}));
+['clinicalInput','clinicalQuestion'].forEach((id,idx)=>byId(id).addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();byId(idx===0?'convertBtn':'askBtn').click();}}));
+async function checkUserPlan(){try{const r=await fetch('/api/me');const d=await r.json();byId('upgradeBtn').style.display=(d.logged_in&&d.plan==='free')?'block':'none';}catch{}}
+byId('upgradeBtn').addEventListener('click',async()=>{const r=await fetch('/api/stripe/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'}});const d=await r.json();if(d.url) location.href=d.url;});
+async function hydrateFromServerHistory(){try{const r=await fetch('/api/history/list');const d=await r.json();const items=d.items||[];savedOutputs=items.map(x=>({title:`${x.item_type==='question'?'Q&A':'Consult'} ${x.created_at||new Date().toLocaleString()}`,content:x.content,type:x.item_type==='question'?'question':'note'}));qaHistory=items.filter(x=>x.item_type==='question').map(x=>({question:'[Saved question]',answer:x.content})).slice(0,10);localStorage.setItem('vividmedi_saved_outputs',JSON.stringify(savedOutputs));}catch{qaHistory=JSON.parse(localStorage.getItem('vividmedi_qa_history')||'[]')}}
+checkUserPlan();hydrateFromServerHistory().finally(renderSavedOutputs);
+</script>
 </body>
 </html>
