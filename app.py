@@ -91,6 +91,21 @@ def init_history_db():
         conn.commit()
 
 
+def delete_history_entry(entry_id: int) -> bool:
+    with db_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM history_entries WHERE id = ? AND user_key = ?",
+            (entry_id, session_user_key()),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def clear_history_entries() -> int:
+    with db_conn() as conn:
+        cur = conn.execute("DELETE FROM history_entries WHERE user_key = ?", (session_user_key(),))
+        conn.commit()
+        return cur.rowcount
 def session_user_key() -> str:
     return "code_user" if session.get("authenticated") is True else "guest"
 
@@ -493,6 +508,26 @@ def transcribe():
 def api_history_list():
     return jsonify({"items": load_history()})
 
+
+
+
+@app.post("/api/history/delete")
+@require_auth
+def api_history_delete():
+    data = request.get_json(silent=True) or {}
+    entry_id = data.get("id")
+    if not isinstance(entry_id, int):
+        return jsonify({"error": "Invalid id"}), 400
+    if not delete_history_entry(entry_id):
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/history/clear")
+@require_auth
+def api_history_clear():
+    deleted = clear_history_entries()
+    return jsonify({"ok": True, "deleted": deleted})
 
 @app.post("/api/history/save")
 @require_auth
