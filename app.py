@@ -35,7 +35,7 @@ DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/completions").strip()
 
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
-AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
+AUTH_CODE = (os.getenv("AUTH_CODE") or "").strip()
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
