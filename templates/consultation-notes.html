@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-stealth="off">
+<html lang="en" data-theme="night" data-stealth="off">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VividMedi - Consultation Notes & Q&A</title>
   <style>
     :root { --bg:#0c1220; --bg2:#131c2f; --panel:#1b2638cc; --text:#eef3ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#2e7acb; --accent2:#18a4b8; --ok:#35c9a0; }
-    html[data-theme="light"] { --bg:#f4f7fc; --bg2:#e8eef8; --panel:#ffffffdd; --text:#1c2440; --muted:#607098; --line:#d3ddef; --accent:#286eb8; --accent2:#1490a3; }
+    html[data-theme="day"] { --bg:#f4f7fc; --bg2:#e8eef8; --panel:#ffffffdd; --text:#1c2440; --muted:#607098; --line:#d3ddef; --accent:#286eb8; --accent2:#1490a3; }
     html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
+    .parent-container{overflow:visible}
     .container{display:flex;height:100%}
     .saved-outputs-sidebar{width:260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px)}
     .sidebar-header{padding:14px 16px;font-weight:700;border-bottom:1px solid var(--line)}
@@ -21,6 +22,7 @@
     .header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
     .logo{font-size:28px;font-weight:800;letter-spacing:-.8px;background:linear-gradient(120deg,var(--accent2),var(--accent));-webkit-background-clip:text;color:transparent}
     .page-title{font-weight:600;color:var(--muted)}
+    .logo-main{height:40px;width:auto;object-fit:contain}
     .header-right{display:flex;align-items:center;gap:12px}
     .toggle-pill{position:relative;display:flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:#00000020}
     .toggle-pill button{border:0;background:transparent;color:var(--muted);padding:7px 14px;border-radius:999px;font-weight:600;cursor:pointer}
@@ -32,7 +34,11 @@
     .tab-btn.active{background:linear-gradient(120deg,#2e7acb2a,#18a4b82a);color:var(--text);border-color:#2f8ac9}
     .section-title{font-size:18px;font-weight:700;margin:8px 0 10px}
     .controls-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-    select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:12px;background:#0000001c;color:var(--text);padding:12px;font-size:14px}
+    select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px}
+    select{background-color:var(--panel);color:var(--text);z-index:1000;position:relative}
+    select option{background-color:#1b2638;color:#ffffff}
+    html[data-theme="day"] select option{background-color:#ffffff;color:#000000}
+    textarea,.output-text{background:#0000001c;color:var(--text)}
     .input-options{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     .option-btn{padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted)}
     .option-btn.active{background:#2e7acb30;color:var(--text);border-color:#2f8ac9}
@@ -48,20 +54,20 @@
     .empty-state{color:var(--muted);font-size:13px;padding:12px}
     .loading{display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:999px;animation:p 1s infinite;margin:0 3px}@keyframes p{50%{opacity:.25}}
 
-    html[data-stealth="on"] body, html[data-stealth="on"]{background:#ececef;color:#222}
-    html[data-stealth="on"] .container{background:#ececef}
-    html[data-stealth="on"] .header{background:#f5f6f8;color:#303540;border-color:#d8dde5}
-    html[data-stealth="on"] .logo-wrap{opacity:.45;filter:grayscale(1)}
-    html[data-stealth="on"] .page-title{display:none}
-    html[data-stealth="on"] .saved-outputs-sidebar{background:#e4e7ed;border-right-color:#cbd2dc}
-    html[data-stealth="on"] .main-content, html[data-stealth="on"] .work-area{background:#f2f3f6}
-    html[data-stealth="on"] .input-wrapper, html[data-stealth="on"] .output-wrapper, html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d4d9e2}
-    html[data-stealth="on"] select, html[data-stealth="on"] textarea, html[data-stealth="on"] .output-text{background:#fff;border-color:#d4d9e2;color:#1f2532}
-    html[data-stealth="on"] .tab-btn.active{background:#e7effa;border-color:#9ab9db;color:#355273}
-    html[data-stealth="on"] .btn-primary{background:#4f657e}
-    html[data-stealth="on"] .tab-btn, html[data-stealth="on"] .option-btn, html[data-stealth="on"] .btn-secondary, html[data-stealth="on"] .auth-btn{background:#eef1f5;color:#4a4f59;border-color:#ced5de;box-shadow:none}
-    html[data-stealth="on"] .tab-navigation{gap:6px}
-    html[data-stealth="on"] .saved-note-title, html[data-stealth="on"] .sidebar-header{color:#434a57}
+    html[data-stealth="on"] { --bg:#f3f3f3; --bg2:#ffffff; --panel:#ffffff; --text:#000000; --muted:#555; --line:#d0d0d0; }
+    html[data-stealth="on"] body{background:#f3f3f3}
+    html[data-stealth="on"] .container{background:#f3f3f3}
+    html[data-stealth="on"] .header{background:#ede7f4;color:#2c2c2c;border-color:#c9bdd7;box-shadow:none}
+    html[data-stealth="on"] .saved-outputs-sidebar{background:#ececec;border-right-color:#d0d0d0}
+    html[data-stealth="on"] .main-content, html[data-stealth="on"] .work-area{background:#ffffff}
+    html[data-stealth="on"] .input-wrapper, html[data-stealth="on"] .output-wrapper, html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d0d0d0;box-shadow:none}
+    html[data-stealth="on"] select, html[data-stealth="on"] textarea, html[data-stealth="on"] .output-text{background:#fff;border-color:#d0d0d0;color:#000}
+    html[data-stealth="on"] .tab-btn, html[data-stealth="on"] .option-btn, html[data-stealth="on"] .btn-secondary, html[data-stealth="on"] .auth-btn{background:#f3f3f3;color:#444;border-color:#d0d0d0;box-shadow:none}
+    html[data-stealth="on"] .tab-btn.active{background:#ece6f3;border-color:#b7acc3;color:#333}
+    html[data-stealth="on"] .btn-primary{background:#e8e8e8;color:#333;border-color:#c6c6c6;box-shadow:none}
+    html[data-stealth="on"] .page-title{font-size:12px}
+    html[data-stealth="on"] .logo-main{display:none}
+    html[data-stealth="on"] .saved-note-title, html[data-stealth="on"] .sidebar-header{color:#444}
     @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
   </style>
 </head>
@@ -69,11 +75,11 @@
 <div class="container">
   <aside class="saved-outputs-sidebar"><div class="sidebar-header">Saved Outputs</div><div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div></aside>
   <main class="main-content">
-    <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid var(--line);font-size:13px;color:#606a78">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div><header class="header">
-      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.png" alt="VividMedi" style="height:34px;width:auto;border-radius:6px"/><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
+    <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid #5f1a84;font-size:12px;color:#fff;background:#7719aa">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div><header class="header">
+      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.png" class="logo-main" alt="VividMedi"/><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
       <div class="header-right">
-        <div class="toggle-pill"><button id="darkBtn" class="active">Night</button><button id="lightBtn">Day</button></div>
-        <div class="toggle-pill"><button id="stealthOffBtn" class="active">Stealth Off</button><button id="stealthOnBtn">Stealth On</button></div>
+        <div class="toggle-pill"><button id="themeToggle" class="active">Night</button></div>
+        <div class="toggle-pill"><button id="stealthToggle">Stealth Off</button></div>
         <button class="auth-btn" id="upgradeBtn" style="display:none">Upgrade to Pro</button><button class="auth-btn" id="authBtn">Logout</button>
       </div>
     </header>
@@ -81,7 +87,7 @@
       <div class="tab-navigation"><button class="tab-btn active" data-tab="notes-tab">Consultation Notes</button><button class="tab-btn" data-tab="qa-tab">Clinical Questions</button></div>
       <div class="tab-content active" id="notes-tab">
         <div class="section-title">Clinical Data Input</div>
-        <div class="controls-row"><div><label>Consult Type</label><select id="consultTypeSelect"></select></div><div><label>Report Type</label><select id="noteTypeSelect"><option value="consultation_note">Consultation Note</option><option value="referral_letter">Referral Letter</option><option value="discharge_summary">Discharge Summary</option></select></div><div><label>Input Format</label><div class="input-options"><button class="option-btn active" data-type="text">Text</button><button class="option-btn" data-type="voice">Voice</button><button class="option-btn" data-type="file">File</button></div></div></div>
+        <div class="controls-row parent-container"><div><label>Consult Type</label><select id="consultTypeSelect"></select></div><div><label>Report Type</label><select id="noteTypeSelect"><option value="consultation_note">Consultation Note</option><option value="referral_letter">Referral Letter</option><option value="discharge_summary">Discharge Summary</option></select></div><div><label>Input Format</label><div class="input-options"><button class="option-btn active" data-type="text">Text</button><button class="option-btn" data-type="voice">Voice</button><button class="option-btn" data-type="file">File</button></div></div></div>
         <div class="input-output-grid"><div class="input-wrapper"><details id="extrasDrawer" style="margin-bottom:8px"><summary style="cursor:pointer;color:var(--muted)">Create extras</summary><div id="extrasOptions" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:8px"></div></details><textarea id="clinicalInput" placeholder="Paste clinical data or transcribed notes..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="convertBtn">Convert to Notes</button><button class="btn btn-secondary" id="clearBtn">Clear</button></div></div><div class="output-wrapper"><div id="safetyPanel" style="border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--muted)">Safety & Completeness: waiting for input.</div><div class="output-text" id="clinicalOutput">Output will appear here...</div><div id="outputBlocks" style="display:grid;gap:6px"></div><div class="action-buttons"><button class="btn btn-secondary" id="copyBtn">Copy</button><button class="btn btn-secondary" id="downloadBtn">Download</button></div></div></div>
       </div>
       <div class="tab-content" id="qa-tab">
@@ -94,11 +100,15 @@
 <script>
 const byId=(id)=>document.getElementById(id);const htmlEl=document.documentElement;
 byId('authBtn').addEventListener('click',()=>fetch('/auth/logout',{method:'POST'}).finally(()=>location.href='/login'));
-byId('darkBtn').addEventListener('click',()=>setTheme('dark'));byId('lightBtn').addEventListener('click',()=>setTheme('light'));
-function setTheme(mode){htmlEl.dataset.theme=mode;localStorage.setItem('theme',mode);byId('darkBtn').classList.toggle('active',mode==='dark');byId('lightBtn').classList.toggle('active',mode==='light');}
-function setStealth(mode){htmlEl.dataset.stealth=mode;localStorage.setItem('stealth_mode',mode);byId('stealthOnBtn').classList.toggle('active',mode==='on');byId('stealthOffBtn').classList.toggle('active',mode==='off');const rib=document.querySelector('.stealth-ribbon');if(rib) rib.style.display=mode==='on'?'block':'none';}
-byId('stealthOnBtn').addEventListener('click',()=>setStealth('on'));byId('stealthOffBtn').addEventListener('click',()=>setStealth('off'));
-setTheme(localStorage.getItem('theme')||'dark');setStealth(localStorage.getItem('stealth_mode')||'off');document.querySelector('.stealth-ribbon').style.display=(localStorage.getItem('stealth_mode')||'off')==='on'?'block':'none';
+let currentTheme=localStorage.getItem('theme')||'night';
+let stealthMode=(localStorage.getItem('stealth_mode')||'off')==='on';
+function applyTheme(){document.documentElement.setAttribute('data-theme',currentTheme);byId('themeToggle').textContent=currentTheme==='night'?'Night':'Day';byId('themeToggle').classList.toggle('active',currentTheme==='night');localStorage.setItem('theme',currentTheme);}
+function applyStealth(){document.documentElement.setAttribute('data-stealth',stealthMode?'on':'off');byId('stealthToggle').textContent=stealthMode?'Stealth On':'Stealth Off';byId('stealthToggle').classList.toggle('active',stealthMode);const rib=document.querySelector('.stealth-ribbon');if(rib) rib.style.display=stealthMode?'block':'none';localStorage.setItem('stealth_mode',stealthMode?'on':'off');}
+function toggleTheme(){currentTheme=currentTheme==='night'?'day':'night';applyTheme();}
+function toggleStealth(){stealthMode=!stealthMode;applyStealth();}
+byId('themeToggle').addEventListener('click',toggleTheme);
+byId('stealthToggle').addEventListener('click',toggleStealth);
+applyTheme();applyStealth();
 byId('logoClick').addEventListener('click',()=>location.href='/');
 document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',function(){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));this.classList.add('active');byId(this.dataset.tab).classList.add('active');}));
 document.querySelectorAll('.option-btn').forEach(btn=>btn.addEventListener('click',function(){document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');}));
