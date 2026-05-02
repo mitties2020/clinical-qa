@@ -35,7 +35,7 @@ DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/completions").strip()
 
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
-AUTH_CODE = (os.getenv("AUTH_CODE") or "931986").strip()
+AUTH_CODE = (os.getenv("AUTH_CODE") or "").strip()
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -91,6 +91,21 @@ def init_history_db():
         conn.commit()
 
 
+def delete_history_entry(entry_id: int) -> bool:
+    with db_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM history_entries WHERE id = ? AND user_key = ?",
+            (entry_id, session_user_key()),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def clear_history_entries() -> int:
+    with db_conn() as conn:
+        cur = conn.execute("DELETE FROM history_entries WHERE user_key = ?", (session_user_key(),))
+        conn.commit()
+        return cur.rowcount
 def session_user_key() -> str:
     return "code_user" if session.get("authenticated") is True else "guest"
 
@@ -253,26 +268,6 @@ def login():
         return redirect(url_for("consultation_notes"))
     return render_template("login.html")
 
-
-@app.get("/consultation-notes")
-def consultation_notes():
-    return render_template("consultation-notes.html")
-
-
-@app.get("/dashboard")
-def dashboard():
-    return render_template("dashboard.html")
-
-
-@app.get("/history")
-def history():
-    return render_template("history.html")
-
-
-@app.get("/login")
-def login():
-    # Keep existing buttons/links functional even when OAuth is not configured.
-    return render_template("consultation-notes.html")
 
 @app.get("/api/session")
 def api_session():
@@ -513,6 +508,26 @@ def transcribe():
 def api_history_list():
     return jsonify({"items": load_history()})
 
+
+
+
+@app.post("/api/history/delete")
+@require_auth
+def api_history_delete():
+    data = request.get_json(silent=True) or {}
+    entry_id = data.get("id")
+    if not isinstance(entry_id, int):
+        return jsonify({"error": "Invalid id"}), 400
+    if not delete_history_entry(entry_id):
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/history/clear")
+@require_auth
+def api_history_clear():
+    deleted = clear_history_entries()
+    return jsonify({"ok": True, "deleted": deleted})
 
 @app.post("/api/history/save")
 @require_auth
