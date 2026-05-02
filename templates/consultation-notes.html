@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VividMedi - Consultation Notes & Q&A</title>
   <style>
-    :root { --bg:#0c1220; --bg2:#131c2f; --panel:#1b2638cc; --text:#eef3ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#2e7acb; --accent2:#18a4b8; --ok:#35c9a0; }
-    html[data-theme="day"] { --bg:#f4f7fc; --bg2:#e8eef8; --panel:#ffffffdd; --text:#1c2440; --muted:#607098; --line:#d3ddef; --accent:#286eb8; --accent2:#1490a3; }
+    :root { --bg:#080d1a; --bg2:#131c2f; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; --accent2:#18a4b8; --ok:#35c9a0; }
+    html[data-theme="night"] { --bg:#080d1a; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; }
+    html[data-theme="day"] { --bg:#f5f7fb; --bg2:#e8eef8; --panel:#ffffff; --text:#111827; --muted:#4b5563; --line:#d1d5db; --accent:#2563eb; --accent2:#1490a3; }
     html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
     .parent-container{overflow:visible}
     .container{display:flex;height:100%}
@@ -22,7 +23,7 @@
     .header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
     .logo{font-size:28px;font-weight:800;letter-spacing:-.8px;background:linear-gradient(120deg,var(--accent2),var(--accent));-webkit-background-clip:text;color:transparent}
     .page-title{font-weight:600;color:var(--muted)}
-    .logo-main{height:40px;width:auto;object-fit:contain}
+    .vivid-logo{max-height:44px;max-width:260px;object-fit:contain}.brand-fallback{display:none;font-weight:700}.logo-missing .brand-fallback{display:block}
     .header-right{display:flex;align-items:center;gap:12px}
     .switch-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
     .switch-row input{display:none}
@@ -79,7 +80,7 @@
   <aside class="saved-outputs-sidebar"><div class="sidebar-header">Saved Outputs</div><div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div></aside>
   <main class="main-content">
     <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid #5f1a84;font-size:12px;color:#fff;background:#7719aa">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div><header class="header">
-      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.png" class="logo-main" alt="VividMedi"/><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
+      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="assets/vividmedi-logo.png" alt="Vivid Medi" class="vivid-logo" onerror="this.style.display='none'; document.body.classList.add('logo-missing');"><div class="brand-fallback">Vivid Medi</div><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
       <div class="header-right">
         <label class="switch-row"><span id="themeLabel">Night</span><input type="checkbox" id="themeSwitch"><span class="slider"></span></label>
         <label class="switch-row"><span id="stealthLabel">Stealth Off</span><input type="checkbox" id="stealthSwitch"><span class="slider"></span></label>
@@ -91,7 +92,7 @@
       <div class="tab-content active" id="notes-tab">
         <div class="section-title">Clinical Data Input</div>
         <div class="controls-row parent-container"><div><label>Consult Type</label><select id="consultType"></select></div><div><label>Input Format</label><div class="input-options"><button class="option-btn active" data-type="text">Text</button><button class="option-btn" data-type="voice">Voice</button><button class="option-btn" data-type="file">File</button></div></div></div>
-        <div class="input-output-grid"><div class="input-wrapper"><details id="extrasDrawer" style="margin-bottom:8px"><summary style="cursor:pointer;color:var(--muted)">Create extras</summary><div id="extrasOptions" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:8px"></div></details><textarea id="clinicalInput" placeholder="Paste clinical data or transcribed notes..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="convertBtn">Convert to Notes</button><button class="btn btn-secondary" id="clearBtn">Clear</button></div></div><div class="output-wrapper"><details id="safetyPanel" style="display:none;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px;font-size:12px;color:var(--muted)"><summary>Safety & Completeness</summary><div id="safetyPanelContent"></div></details><div class="output-text" id="outputBox">Output will appear here...</div><div id="outputBlocks" style="display:grid;gap:6px"></div><div class="action-buttons"><button class="btn btn-secondary" id="copyBtn">Copy</button><button class="btn btn-secondary" id="downloadBtn">Download</button></div></div></div>
+        <div class="input-output-grid"><div class="input-wrapper"><textarea id="clinicalInput" placeholder="Paste clinical data or transcribed notes..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="convertBtn">Convert to Notes</button><button class="btn btn-secondary" id="clearBtn">Clear</button></div></div><div class="output-wrapper"><details id="safetyPanel" style="display:none;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px;font-size:12px;color:var(--muted)"><summary>Safety & Completeness</summary><div id="safetyPanelContent"></div></details><div class="output-text" id="outputBox">Output will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyBtn">Copy</button><button class="btn btn-secondary" id="downloadBtn">Download</button></div></div></div>
       </div>
       <div class="tab-content" id="qa-tab">
         <div class="section-title">Clinical Questions</div>
@@ -101,46 +102,30 @@
   </main>
 </div>
 <script>
-document.addEventListener('DOMContentLoaded',()=>{initialiseApp();});
-function initialiseApp(){bindEvents();populateConsultTypeDropdown();setTheme('night');setStealth(false);renderSavedOutputs();checkUserPlan();hydrateFromServerHistory().finally(renderSavedOutputs);}
-const byId=(id)=>document.getElementById(id);
-const consultTypes=["General consultation note","Weight loss initial consult","Weight loss follow-up","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up"];
-let savedOutputs=JSON.parse(localStorage.getItem('vividmedi_saved_outputs')||'[]');let qaHistory=[];
-function bindEvents(){byId('convertBtn')?.addEventListener('click',generateNotes);byId('clearBtn')?.addEventListener('click',clearInput);byId('copyBtn')?.addEventListener('click',copyOutput);byId('downloadBtn')?.addEventListener('click',downloadOutput);byId('askBtn')?.addEventListener('click',askQuestion);byId('clearQaBtn')?.addEventListener('click',clearQuestion);byId('copyAnswerBtn')?.addEventListener('click',()=>navigator.clipboard.writeText(byId('clinicalAnswer').textContent));byId('downloadAnswerBtn')?.addEventListener('click',()=>downloadText(byId('clinicalAnswer').textContent,'clinical-answer.txt'));byId('consultNotesTab')?.addEventListener('click',()=>setMode('notes'));byId('clinicalQuestionsTab')?.addEventListener('click',()=>setMode('questions'));byId('themeSwitch')?.addEventListener('change',e=>setTheme(e.target.checked?'day':'night'));byId('stealthSwitch')?.addEventListener('change',e=>setStealth(e.target.checked));byId('clinicalInput')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();generateNotes();}});byId('authBtn')?.addEventListener('click',()=>fetch('/auth/logout',{method:'POST'}).finally(()=>location.href='/login'));byId('upgradeBtn')?.addEventListener('click',async()=>{const r=await fetch('/api/stripe/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'}});const d=await r.json();if(d.url) location.href=d.url;});document.querySelectorAll('.option-btn').forEach(btn=>btn.addEventListener('click',function(){document.querySelectorAll('.option-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');}));}
-function setMode(mode){const notes=mode==='notes';byId('notes-tab').classList.toggle('active',notes);byId('qa-tab').classList.toggle('active',!notes);byId('consultNotesTab').classList.toggle('active',notes);byId('clinicalQuestionsTab').classList.toggle('active',!notes);}
-function populateConsultTypeDropdown(){const select=byId('consultType');if(!select)return;select.innerHTML='';consultTypes.forEach(type=>{const o=document.createElement('option');o.value=type;o.textContent=type;select.appendChild(o);});}
-function setTheme(theme){document.documentElement.setAttribute('data-theme',theme);const label=byId('themeLabel');if(label)label.textContent=theme==='day'?'Day':'Night';const sw=byId('themeSwitch');if(sw)sw.checked=theme==='day';}
-function setStealth(isOn){document.documentElement.setAttribute('data-stealth',isOn?'on':'off');const label=byId('stealthLabel');if(label)label.textContent=isOn?'Stealth On':'Stealth Off';const sw=byId('stealthSwitch');if(sw)sw.checked=!!isOn;const rib=document.querySelector('.stealth-ribbon');if(rib)rib.style.display=isOn?'block':'none';}
-function renderSafetyPanel(text){const panel=byId('safetyPanel');const content=byId('safetyPanelContent');if(!panel||!content)return;const low=text.toLowerCase();const flags=[];if(low.includes('severe abdominal pain'))flags.push('Red flag: severe abdominal pain documented.');if(low.includes('persistent vomiting'))flags.push('Red flag: persistent vomiting documented.');const status=flags.length?'Caution':'No major red flags';content.innerHTML=`<div>Status: <b>${status}</b></div><div>${flags.join('<br>')||'No immediate safety contradictions detected.'}</div>`;panel.style.display='block';}
-async function generateNotes(){const input=byId('clinicalInput')?.value?.trim()||'';const consultType=byId('consultType')?.value||'General consultation note';const output=byId('outputBox');if(!output)return;if(!input){output.textContent='Please enter clinical information first.';return;}try{const r=await fetch('/convert-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clinical_data:input,note_type:'consultation_note'})});if(!r.ok) throw new Error('api');const d=await r.json();output.textContent=d.clinical_notes||'No output generated';}catch{output.textContent=`Consult type: ${consultType}
+document.addEventListener("DOMContentLoaded", () => { initApp(); });
+const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up"];
+function initApp(){populateConsultTypes();bindUIEvents();setTheme("night");setStealth(false);setMode("notes");}
+function populateConsultTypes(){const select=document.getElementById("consultType");if(!select){console.error("Missing #consultType select");return;}select.innerHTML="";for(const type of CONSULT_TYPES){const option=document.createElement("option");option.value=type;option.textContent=type;select.appendChild(option);}select.value=CONSULT_TYPES[0];}
+function bindUIEvents(){const convertBtn=document.getElementById("convertBtn");const clearBtn=document.getElementById("clearBtn");const copyBtn=document.getElementById("copyBtn");const downloadBtn=document.getElementById("downloadBtn");const input=document.getElementById("clinicalInput");const notesTab=document.getElementById("consultNotesTab");const questionsTab=document.getElementById("clinicalQuestionsTab");const themeSwitch=document.getElementById("themeSwitch");const stealthSwitch=document.getElementById("stealthSwitch");if(convertBtn)convertBtn.addEventListener("click",generateOutput);if(clearBtn)clearBtn.addEventListener("click",clearForm);if(copyBtn)copyBtn.addEventListener("click",copyOutput);if(downloadBtn)downloadBtn.addEventListener("click",downloadOutput);if(input){input.addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();generateOutput();}});}if(notesTab)notesTab.addEventListener("click",()=>setMode("notes"));if(questionsTab)questionsTab.addEventListener("click",()=>setMode("questions"));if(themeSwitch){themeSwitch.addEventListener("change",e=>setTheme(e.target.checked?"day":"night"));}if(stealthSwitch){stealthSwitch.addEventListener("change",e=>setStealth(e.target.checked));}}
+function generateOutput(){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");const consultType=document.getElementById("consultType");if(!input||!output){console.error("Missing input or output element");return;}const raw=input.value.trim();const type=consultType?.value||"General consultation note";if(!raw){output.textContent="Please enter clinical information first.";return;}output.textContent=`Consult type: ${type}
 
-Structured clinical note:
-
-${input}
+Clinical note:
+${raw}
 
 Assessment:
-[Generated assessment will appear here.]
+[Draft assessment generated from input.]
 
 Plan:
-[Generated plan will appear here.]
+[Draft plan generated from input.]
 
 Safety-netting:
-[Generated safety-netting will appear here.]`;}
-renderSafetyPanel(output.textContent);}
-function clearInput(){byId('clinicalInput').value='';byId('outputBox').textContent='Output will appear here...';const p=byId('safetyPanel');if(p)p.style.display='none';}
-function copyOutput(){navigator.clipboard.writeText(byId('outputBox').textContent||'');}
-function downloadText(text,name){const a=document.createElement('a');a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(text||'');a.download=name;a.click();}
-function downloadOutput(){downloadText(byId('outputBox').textContent,'clinical-notes.txt');}
-async function askQuestion(){const q=byId('clinicalQuestion').value.trim();if(!q){byId('clinicalAnswer').textContent='Please enter a question...';return;}byId('clinicalAnswer').textContent='Generating...';try{const context=qaHistory.slice(-3).map((x,i)=>`Q${i+1}:${x.question}
-A${i+1}:${x.answer?.slice(0,180)}`).join('
-
-');const r=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context})});const d=await r.json();byId('clinicalAnswer').textContent=d.answer||'No answer generated';qaHistory.push({question:q,answer:d.answer||''});}catch{byId('clinicalAnswer').textContent='Unable to reach backend. Please try again.';}}
-function clearQuestion(){byId('clinicalQuestion').value='';byId('clinicalAnswer').textContent='Answer will appear here...';}
-function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
-function renderSavedOutputs(){const list=byId('savedNotesList');if(!list)return;if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}list.innerHTML=savedOutputs.map((it,i)=>`<div class="saved-note-card"><div class="saved-note-header" onclick="toggleOutput(${i})"><div class="saved-note-title">${it.title}</div><div>›</div></div><div class="saved-note-content" id="content-${i}"><div class="saved-note-text">${escapeHtml(it.content)}</div><div class="saved-note-actions"><button class="saved-note-btn" onclick="loadOutput(${i})">Load</button><button class="saved-note-btn" onclick="copySavedOutput(${i})">Copy</button></div></div></div>`).join('');}
-window.toggleOutput=(i)=>byId(`content-${i}`).classList.toggle('open');window.loadOutput=(i)=>{const o=savedOutputs[i];byId(o.type==='question'?'clinicalAnswer':'outputBox').textContent=o.content};window.copySavedOutput=(i)=>navigator.clipboard.writeText(savedOutputs[i].content);
-async function checkUserPlan(){try{const r=await fetch('/api/me');const d=await r.json();byId('upgradeBtn').style.display=(d.logged_in&&d.plan==='free')?'block':'none';}catch{}}
-async function hydrateFromServerHistory(){try{const r=await fetch('/api/history/list');const d=await r.json();const items=d.items||[];savedOutputs=items.map(x=>({id:x.id,title:`${x.item_type==='question'?'Q&A':'Consult'} ${x.created_at||new Date().toLocaleString()}`,content:x.content,type:x.item_type==='question'?'question':'note'}));localStorage.setItem('vividmedi_saved_outputs',JSON.stringify(savedOutputs));}catch{}}
+[Draft safety-netting generated from input.]`;}
+function clearForm(){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(input)input.value="";if(output)output.textContent="Output will appear here...";}
+async function copyOutput(){const output=document.getElementById("outputBox");const text=output?.textContent||"";if(!text||text==="Output will appear here...")return;await navigator.clipboard.writeText(text);}
+function downloadOutput(){const output=document.getElementById("outputBox");const text=output?.textContent||"";if(!text||text==="Output will appear here...")return;const blob=new Blob([text],{type:"text/plain;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="vivid-medi-note.txt";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
+function setTheme(theme){document.documentElement.setAttribute("data-theme",theme);const label=document.getElementById("themeLabel");if(label)label.textContent=theme==="day"?"Day":"Night";const sw=document.getElementById("themeSwitch");if(sw)sw.checked=theme==="day";}
+function setStealth(isOn){document.documentElement.setAttribute("data-stealth",isOn?"on":"off");const label=document.getElementById("stealthLabel");if(label)label.textContent=isOn?"Stealth On":"Stealth Off";const sw=document.getElementById("stealthSwitch");if(sw)sw.checked=!!isOn;}
+function setMode(mode){const notes=mode==="notes";document.getElementById("notes-tab")?.classList.toggle("active",notes);document.getElementById("qa-tab")?.classList.toggle("active",!notes);document.getElementById("consultNotesTab")?.classList.toggle("active",notes);document.getElementById("clinicalQuestionsTab")?.classList.toggle("active",!notes);}
 </script>
 </body>
 </html>
