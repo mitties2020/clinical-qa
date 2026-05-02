@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VividMedi - Consultation Notes & Q&A</title>
   <style>
-    :root { --bg:#0c1220; --bg2:#131c2f; --panel:#1b2638cc; --text:#eef3ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#6f7bf7; --accent2:#8f66ff; --ok:#35c9a0; }
-    html[data-theme="light"] { --bg:#f4f7fc; --bg2:#e8eef8; --panel:#ffffffdd; --text:#1c2440; --muted:#607098; --line:#d3ddef; --accent:#5b5de7; --accent2:#824bdf; }
+    :root { --bg:#0c1220; --bg2:#131c2f; --panel:#1b2638cc; --text:#eef3ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#2e7acb; --accent2:#18a4b8; --ok:#35c9a0; }
+    html[data-theme="light"] { --bg:#f4f7fc; --bg2:#e8eef8; --panel:#ffffffdd; --text:#1c2440; --muted:#607098; --line:#d3ddef; --accent:#286eb8; --accent2:#1490a3; }
     html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
     .container{display:flex;height:100%}
     .saved-outputs-sidebar{width:260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px)}
@@ -29,13 +29,13 @@
     .work-area{padding:24px;overflow:auto}
     .tab-navigation{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
     .tab-btn{padding:12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--muted);font-weight:700;cursor:pointer}
-    .tab-btn.active{background:linear-gradient(120deg,#6f7bf72a,#8f66ff2a);color:var(--text);border-color:#7e73f0}
+    .tab-btn.active{background:linear-gradient(120deg,#2e7acb2a,#18a4b82a);color:var(--text);border-color:#2f8ac9}
     .section-title{font-size:18px;font-weight:700;margin:8px 0 10px}
     .controls-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
     select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:12px;background:#0000001c;color:var(--text);padding:12px;font-size:14px}
     .input-options{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
     .option-btn{padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted)}
-    .option-btn.active{background:#6f7bf730;color:var(--text);border-color:#7381f8}
+    .option-btn.active{background:#2e7acb30;color:var(--text);border-color:#2f8ac9}
     .input-output-grid,.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     .input-wrapper,.output-wrapper{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);min-height:350px;display:flex;flex-direction:column;gap:10px}
     textarea{min-height:260px;resize:vertical}
@@ -50,14 +50,18 @@
 
     html[data-stealth="on"] body, html[data-stealth="on"]{background:#ececef;color:#222}
     html[data-stealth="on"] .container{background:#ececef}
-    html[data-stealth="on"] .header{background:#6b2fa7;color:#fff;border-color:#5f2896}
-    html[data-stealth="on"] .logo, html[data-stealth="on"] .page-title{color:#fff;background:none;-webkit-text-fill-color:initial}
+    html[data-stealth="on"] .header{background:#f5f6f8;color:#303540;border-color:#d8dde5}
+    html[data-stealth="on"] .logo-wrap{opacity:.45;filter:grayscale(1)}
+    html[data-stealth="on"] .page-title{display:none}
     html[data-stealth="on"] .saved-outputs-sidebar{background:#e4e7ed;border-right-color:#cbd2dc}
     html[data-stealth="on"] .main-content, html[data-stealth="on"] .work-area{background:#f2f3f6}
     html[data-stealth="on"] .input-wrapper, html[data-stealth="on"] .output-wrapper, html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d4d9e2}
     html[data-stealth="on"] select, html[data-stealth="on"] textarea, html[data-stealth="on"] .output-text{background:#fff;border-color:#d4d9e2;color:#1f2532}
-    html[data-stealth="on"] .tab-btn.active{background:#efe7ff;border-color:#a686d8;color:#4a306f}
-    html[data-stealth="on"] .btn-primary{background:#6b2fa7}
+    html[data-stealth="on"] .tab-btn.active{background:#e7effa;border-color:#9ab9db;color:#355273}
+    html[data-stealth="on"] .btn-primary{background:#4f657e}
+    html[data-stealth="on"] .tab-btn, html[data-stealth="on"] .option-btn, html[data-stealth="on"] .btn-secondary, html[data-stealth="on"] .auth-btn{background:#eef1f5;color:#4a4f59;border-color:#ced5de;box-shadow:none}
+    html[data-stealth="on"] .tab-navigation{gap:6px}
+    html[data-stealth="on"] .saved-note-title, html[data-stealth="on"] .sidebar-header{color:#434a57}
     @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
   </style>
 </head>
@@ -66,7 +70,7 @@
   <aside class="saved-outputs-sidebar"><div class="sidebar-header">Saved Outputs</div><div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div></aside>
   <main class="main-content">
     <header class="header">
-      <div><div class="logo" id="logoClick">VividMedi</div><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
+      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.png" alt="VividMedi" style="height:34px;width:auto;border-radius:6px"/><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
       <div class="header-right">
         <div class="toggle-pill"><button id="darkBtn" class="active">Night</button><button id="lightBtn">Day</button></div>
         <div class="toggle-pill"><button id="stealthOffBtn" class="active">Stealth Off</button><button id="stealthOnBtn">Stealth On</button></div>
@@ -82,7 +86,7 @@
       </div>
       <div class="tab-content" id="qa-tab">
         <div class="section-title">Clinical Questions</div>
-        <div class="qa-grid"><div class="input-wrapper"><textarea id="clinicalQuestion" placeholder="Ask your clinical question..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="askBtn">Ask Question</button><button class="btn btn-secondary" id="clearQaBtn">Clear</button></div></div><div class="output-wrapper"><div class="output-text" id="clinicalAnswer">Answer will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyAnswerBtn">Copy</button><button class="btn btn-secondary" id="downloadAnswerBtn">Download</button></div></div></div>
+        <div class="qa-grid"><div class="input-wrapper"><textarea id="clinicalQuestion" placeholder="Ask your clinical question..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="askBtn">Generate Answer</button><button class="btn btn-secondary" id="clearQaBtn">Clear</button></div></div><div class="output-wrapper"><div class="output-text" id="clinicalAnswer">Answer will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyAnswerBtn">Copy</button><button class="btn btn-secondary" id="downloadAnswerBtn">Download</button></div></div></div>
       </div>
     </section>
   </main>
