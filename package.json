@@ -6,6 +6,7 @@
     "build:css": "tailwindcss -i ./static/input.css -o ./static/style.css --minify"
   },
   "dependencies": {
-    "tailwindcss": "^3.4.1"
+    "tailwindcss": "^3.4.1",
+    "ws": "^8.18.3"
   }
 }
