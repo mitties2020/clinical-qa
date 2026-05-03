@@ -210,6 +210,33 @@ HANDOVER_SYSTEM_PROMPT = (
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
 
+CONSULT_TYPE_INSTRUCTIONS = {
+    "weight loss initial consult": "Focus on baseline obesity/metabolic history, contraindications, goals, and initial management plan.",
+    "weight loss follow-up": "Focus on response to treatment, adverse effects, adherence, dose changes, and next-step plan.",
+    "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
+    "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
+    "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
+    "men’s health consult": "Focus on men's health concerns, sexual/reproductive history, cardiovascular/metabolic risk, and shared plan.",
+    "dva allied health referral": "Use DVA referral framing including accepted conditions, referral rationale, renewal checks, and audit readiness.",
+    "gp letter": "Format as a GP letter with reason for correspondence, summary, assessment, actions, and requested follow-up.",
+    "patient instructions": "Write clear patient-facing instructions: diagnosis summary, medicines, self-care, warning signs, and when to seek help.",
+    "medical certificate / work capacity note": "Focus on work capacity, restrictions, likely duration, review timing, and legal/clinical clarity.",
+    "pathology review": "Focus on abnormal/normal result interpretation, clinical significance, differential, and actionable plan.",
+    "medication follow-up": "Focus on efficacy, side effects, adherence, interactions, and medicine optimisation plan.",
+    "general consultation note": "Use a comprehensive general consultation note structure suitable for routine primary care.",
+}
+
+
+def build_consult_prompt_context(consult_type: str) -> str:
+    normalized = (consult_type or "").strip().lower()
+    chosen_type = normalized or "general consultation note"
+    guidance = CONSULT_TYPE_INSTRUCTIONS.get(chosen_type, CONSULT_TYPE_INSTRUCTIONS["general consultation note"])
+    return (
+        f"Consult type selected: {chosen_type}.\n"
+        f"Structure emphasis: {guidance}\n"
+        "Ensure headings and ordering are appropriate to this consult type."
+    )
+
 def call_deepseek(system_prompt: str, user_content: str) -> str:
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
@@ -392,6 +419,7 @@ def consult():
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
     mode = (data.get("mode") or "consult_note").strip().lower()
+    consult_type = (data.get("consult_type") or "general consultation note").strip()
 
     if not text:
         return jsonify({"error": "Empty input"}), 400
@@ -408,6 +436,7 @@ def consult():
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
                 "Do not invent facts; organise clearly.\n\n"
+                f"{build_consult_prompt_context(consult_type)}\n\n"
                 f"{text}"
             )
             answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
@@ -429,6 +458,7 @@ def convert_notes_legacy():
     data = request.get_json(silent=True) or {}
     text = (data.get("clinical_data") or "").strip()
     note_type = (data.get("note_type") or "consultation_note").strip().lower()
+    consult_type = (data.get("consult_type") or "general consultation note").strip()
     if not text:
         return jsonify({"error": "Empty input"}), 400
 
@@ -445,6 +475,7 @@ def convert_notes_legacy():
             user_content = (
                 "Create a structured clinical note from the following raw dictation/pasted data. "
                 "Do not invent facts; organise clearly.\n\n"
+                f"{build_consult_prompt_context(consult_type)}\n\n"
                 f"{text}"
             )
             answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
