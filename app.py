@@ -194,7 +194,10 @@ CONSULT_NOTE_SYSTEM_PROMPT = (
     "You are an Australian clinician assistant.\n\n"
     "Task: Convert the provided raw dictation/pasted data into a high-quality clinical note.\n"
     "If content is messy or partial, infer structure but do not invent facts.\n"
-    "Use Australian spelling.\n\n"
+    "Use Australian spelling.\n"
+    "Optimise for clinical utility: concise, specific, and action-oriented.\n"
+    "Carry forward key positives/negatives and unresolved risks when present in input.\n"
+    "When details are missing, write 'Not documented' instead of guessing.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
 )
@@ -223,6 +226,7 @@ CONSULT_TYPE_INSTRUCTIONS = {
     "medical certificate / work capacity note": "Focus on work capacity, restrictions, likely duration, review timing, and legal/clinical clarity.",
     "pathology review": "Focus on abnormal/normal result interpretation, clinical significance, differential, and actionable plan.",
     "medication follow-up": "Focus on efficacy, side effects, adherence, interactions, and medicine optimisation plan.",
+    "emergency department note": "Use standard Australian ED admission note structure with Presenting Complaint, History of Presenting Complaint, Medical History, Social History, Medications, Allergies, On Examination, Investigations, and Plan.",
     "general consultation note": "Use a comprehensive general consultation note structure suitable for routine primary care.",
 }
 
@@ -231,10 +235,28 @@ def build_consult_prompt_context(consult_type: str) -> str:
     normalized = (consult_type or "").strip().lower()
     chosen_type = normalized or "general consultation note"
     guidance = CONSULT_TYPE_INSTRUCTIONS.get(chosen_type, CONSULT_TYPE_INSTRUCTIONS["general consultation note"])
+    if chosen_type == "emergency department note":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n"
+            "Use this exact heading order for this note type:\n"
+            "Presenting Complaint\n"
+            "History of Presenting Complaint\n"
+            "Medical History\n"
+            "Social History\n"
+            "Medications\n"
+            "Allergies\n"
+            "On Examination\n"
+            "Investigations\n"
+            "Plan\n"
+            "For any missing section details, write 'Not documented'."
+        )
+
     return (
         f"Consult type selected: {chosen_type}.\n"
         f"Structure emphasis: {guidance}\n"
-        "Ensure headings and ordering are appropriate to this consult type."
+        "Ensure headings and ordering are appropriate to this consult type.\n"
+        "Prioritise concise, clinically actionable output and do not invent missing facts."
     )
 
 def call_deepseek(system_prompt: str, user_content: str) -> str:
