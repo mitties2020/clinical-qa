@@ -164,28 +164,53 @@ def call_patient():
     if not patient_phone:
         return jsonify({"ok": False, "error": "Invalid patientPhone. Use E.164 (e.g. +614XXXXXXXX) or AU mobile format."}), 400
 
-    twiml_url = urljoin(base_url if base_url.endswith("/") else f"{base_url}/", "twiml/connect-patient")
+    base_url_norm = base_url if base_url.endswith("/") else f"{base_url}/"
     status_url = urljoin(base_url if base_url.endswith("/") else f"{base_url}/", "api/call-status")
+    conference_name = f"consult-{uuid4().hex}"
+    doctor_phone = normalize_au_phone((os.getenv("DOCTOR_PHONE") or "").strip())
+    patient_twiml_url = urljoin(base_url_norm, f"twiml/join-consult?room={conference_name}&role=patient")
+    doctor_twiml_url = urljoin(base_url_norm, f"twiml/join-consult?room={conference_name}&role=doctor")
 
     try:
-        call_res = http.post(
+        if doctor_phone:
+            doctor_res = http.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls.json",
+                auth=(account_sid, auth_token),
+                data={
+                    "To": doctor_phone,
+                    "From": twilio_number,
+                    "Url": doctor_twiml_url,
+                    "StatusCallback": status_url,
+                    "StatusCallbackMethod": "POST",
+                    "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
+                },
+                timeout=20,
+            )
+            if doctor_res.status_code >= 400:
+                detail = doctor_res.json().get("message") if "application/json" in doctor_res.headers.get("content-type", "") else doctor_res.text
+                return jsonify({"ok": False, "error": f"Twilio doctor leg failed: {detail}"}), 502
+            doctor_sid = doctor_res.json().get("sid")
+        else:
+            doctor_sid = None
+
+        patient_res = http.post(
             f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls.json",
             auth=(account_sid, auth_token),
             data={
                 "To": patient_phone,
                 "From": twilio_number,
-                "Url": twiml_url,
+                "Url": patient_twiml_url,
                 "StatusCallback": status_url,
                 "StatusCallbackMethod": "POST",
                 "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
             },
             timeout=20,
         )
-        if call_res.status_code >= 400:
-            detail = call_res.json().get("message") if "application/json" in call_res.headers.get("content-type", "") else call_res.text
-            return jsonify({"ok": False, "error": f"Twilio call creation failed: {detail}"}), 502
-        call_data = call_res.json()
-        return jsonify({"ok": True, "sid": call_data.get("sid"), "to": patient_phone}), 200
+        if patient_res.status_code >= 400:
+            detail = patient_res.json().get("message") if "application/json" in patient_res.headers.get("content-type", "") else patient_res.text
+            return jsonify({"ok": False, "error": f"Twilio patient leg failed: {detail}"}), 502
+        patient_sid = patient_res.json().get("sid")
+        return jsonify({"ok": True, "room": conference_name, "patientSid": patient_sid, "doctorSid": doctor_sid, "to": patient_phone}), 200
     except requests.RequestException as exc:
         return jsonify({"ok": False, "error": f"Twilio request failed: {exc}"}), 502
 
@@ -197,6 +222,22 @@ def twiml_connect_patient():
         xml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="{stream_url}" /></Connect></Response>'
     else:
         xml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Please hold while we connect your consultation.</Say><Pause length="60"/></Response>'
+    return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
+
+
+@app.post("/twiml/join-consult")
+def twiml_join_consult():
+    room = (request.args.get("room") or f"consult-{uuid4().hex}").strip()
+    role = (request.args.get("role") or "participant").strip().lower()
+    start_on_enter = "true" if role == "doctor" else "false"
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response><Dial><Conference "
+        f'startConferenceOnEnter="{start_on_enter}" '
+        'endConferenceOnExit="false" '
+        'beep="false">'
+        f"{room}</Conference></Dial></Response>"
+    )
     return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
 
 
