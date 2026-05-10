@@ -142,6 +142,15 @@ def healthz():
 def ping():
     return "pong", 200
 
+
+@app.post("/api/call-patient")
+@require_auth
+def call_patient():
+    return jsonify({
+        "ok": False,
+        "error": "Outbound calling is not configured on this Flask service. Deploy the Node voice bridge and set /api/call-patient there."
+    }), 501
+
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
 _transcribe_lock = threading.Lock()
