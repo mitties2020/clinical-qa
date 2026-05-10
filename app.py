@@ -9,6 +9,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 from functools import wraps
+from urllib.parse import urljoin
 
 import requests
 from flask import (
@@ -141,6 +142,80 @@ def healthz():
 @app.get("/_ping")
 def ping():
     return "pong", 200
+
+
+@app.post("/api/call-patient")
+@require_auth
+def call_patient():
+    account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
+    auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
+    twilio_number = (os.getenv("TWILIO_NUMBER") or "").strip()
+    base_url = (os.getenv("BASE_URL") or request.host_url).strip()
+
+    if not (account_sid and auth_token and twilio_number):
+        return jsonify({
+            "ok": False,
+            "error": "Calling is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_NUMBER."
+        }), 503
+
+    payload = request.get_json(silent=True) or {}
+    patient_phone_raw = str(payload.get("patientPhone") or "").strip()
+    patient_phone = normalize_au_phone(patient_phone_raw)
+    if not patient_phone:
+        return jsonify({"ok": False, "error": "Invalid patientPhone. Use E.164 (e.g. +614XXXXXXXX) or AU mobile format."}), 400
+
+    twiml_url = urljoin(base_url if base_url.endswith("/") else f"{base_url}/", "twiml/connect-patient")
+    status_url = urljoin(base_url if base_url.endswith("/") else f"{base_url}/", "api/call-status")
+
+    try:
+        call_res = http.post(
+            f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls.json",
+            auth=(account_sid, auth_token),
+            data={
+                "To": patient_phone,
+                "From": twilio_number,
+                "Url": twiml_url,
+                "StatusCallback": status_url,
+                "StatusCallbackMethod": "POST",
+                "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
+            },
+            timeout=20,
+        )
+        if call_res.status_code >= 400:
+            detail = call_res.json().get("message") if "application/json" in call_res.headers.get("content-type", "") else call_res.text
+            return jsonify({"ok": False, "error": f"Twilio call creation failed: {detail}"}), 502
+        call_data = call_res.json()
+        return jsonify({"ok": True, "sid": call_data.get("sid"), "to": patient_phone}), 200
+    except requests.RequestException as exc:
+        return jsonify({"ok": False, "error": f"Twilio request failed: {exc}"}), 502
+
+
+@app.post("/twiml/connect-patient")
+def twiml_connect_patient():
+    stream_url = (os.getenv("STREAM_URL") or "").strip()
+    if stream_url:
+        xml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="{stream_url}" /></Connect></Response>'
+    else:
+        xml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Please hold while we connect your consultation.</Say><Pause length="60"/></Response>'
+    return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
+
+
+@app.post("/api/call-status")
+def call_status():
+    monitor.record_system_metric("twilio.call_status.webhook", 1.0)
+    return "", 204
+
+
+def normalize_au_phone(phone: str) -> str:
+    cleaned = re.sub(r"[^\d+]", "", phone or "")
+    if cleaned.startswith("+") and re.fullmatch(r"\+\d{8,15}", cleaned):
+        return cleaned
+    digits = re.sub(r"\D", "", cleaned)
+    if digits.startswith("61") and len(digits) == 11:
+        return f"+{digits}"
+    if digits.startswith("0") and len(digits) == 10:
+        return f"+61{digits[1:]}"
+    return ""
 
 _whisper_model = None
 _whisper_init_lock = threading.Lock()
