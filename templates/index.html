@@ -5,6 +5,7 @@
   <title>VividMedi</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='appointments.css') }}">
 
   <!-- Google Identity Services (One Tap + button) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -74,18 +75,37 @@
             <input id="sidebarSearch" class="topic-search" type="text" placeholder="Search saved..." />
           </div>
 
-          <div class="sidebar-subhead">Saved Clinical Questions</div>
-          <div id="savedQuestionsList" class="conversation-list"></div>
+          <section class="saved-outputs-section" aria-label="Saved outputs">
+            <div class="sidebar-subhead">Saved Clinical Questions</div>
+            <div id="savedQuestionsList" class="conversation-list"></div>
 
-          <div class="sidebar-subhead">Consultation Notes (saved)</div>
-          <div id="savedWrList" class="conversation-list"></div>
+            <div class="sidebar-subhead">Consultation Notes (saved)</div>
+            <div id="savedWrList" class="conversation-list"></div>
 
-          <div class="sidebar-subhead">Handovers (saved)</div>
-          <div id="savedHandoverList" class="conversation-list"></div>
+            <div class="sidebar-subhead">Handovers (saved)</div>
+            <div id="savedHandoverList" class="conversation-list"></div>
 
-          <div class="sidebar-footer">
-            <span class="sidebar-hint">Locally stored • Per device</span>
-          </div>
+            <div class="sidebar-footer">
+              <span class="sidebar-hint">Locally stored • Per device</span>
+            </div>
+          </section>
+
+          <section class="appointments-section" id="appointmentsSection" aria-label="Appointments">
+            <div class="appointments-header">
+              <div>
+                <div class="appointments-title">Appointments</div>
+                <div class="appointments-subtitle">Today</div>
+              </div>
+              <div class="appointments-actions">
+                <button type="button" id="syncAppointmentsBtn">Sync</button>
+                <button type="button" id="openAppointmentImportBtn">Import</button>
+              </div>
+            </div>
+            <div class="appointments-sync-status" id="appointmentsSyncStatus" aria-live="polite"></div>
+            <div class="appointments-scroll" id="appointmentsList">
+              <div class="conv-empty">No appointments loaded.</div>
+            </div>
+          </section>
         </aside>
 
         <!-- MAIN -->
@@ -219,6 +239,25 @@
       </div>
     </div>
   </div>
+
+  <div class="appointment-import-modal" id="appointmentImportModal" hidden>
+    <div class="appointment-import-panel" role="dialog" aria-modal="true" aria-labelledby="appointmentImportTitle">
+      <div class="appointment-import-top">
+        <h2 id="appointmentImportTitle">Paste MediRecords appointment JSON</h2>
+        <button type="button" class="appointment-import-close" id="closeAppointmentImportBtn" aria-label="Close import dialog">&times;</button>
+      </div>
+      <textarea id="appointmentImportJson" placeholder="Paste MediRecords appointment JSON"></textarea>
+      <div class="appointment-import-error" id="appointmentImportError" aria-live="polite"></div>
+      <div class="appointment-import-actions">
+        <button type="button" id="cancelAppointmentImportBtn">Cancel</button>
+        <button type="button" id="submitAppointmentImportBtn">Import appointments</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/appointments-storage.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/appointments-medirecords.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/appointments-ui.js') }}"></script>
 
   <script>
   window.addEventListener("DOMContentLoaded", () => {
