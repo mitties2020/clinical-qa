@@ -206,13 +206,10 @@
     if (!raw) throw new Error("Paste appointment JSON first.");
 
     const candidates = [raw];
-    const firstJsonChar = raw.search(/[{"]/);
-    const firstArrayChar = raw.indexOf("[");
-    const firstObjectChar = raw.indexOf("{");
-    const firstJsonStart = firstArrayChar === -1 ? firstObjectChar : firstObjectChar === -1 ? firstArrayChar : Math.min(firstArrayChar, firstObjectChar);
+    const firstJsonChar = raw.search(/[\{\[]/);
     const lastJsonChar = Math.max(raw.lastIndexOf("}"), raw.lastIndexOf("]"));
-    if (firstJsonStart >= 0 && lastJsonChar > firstJsonStart) {
-      candidates.push(raw.slice(firstJsonStart, lastJsonChar + 1));
+    if (firstJsonChar >= 0 && lastJsonChar > firstJsonChar) {
+      candidates.push(raw.slice(firstJsonChar, lastJsonChar + 1));
     }
 
     for (const candidate of candidates) {
