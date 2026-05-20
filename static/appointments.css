@@ -213,6 +213,17 @@
   min-height: 90px;
 }
 
+.appointment-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.appointment-analyse-btn {
+  min-width: 112px;
+  padding: 0 10px;
+}
+
 .appointment-save-status {
   margin-top: 6px;
   color: var(--ok);
