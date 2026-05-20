@@ -1,0 +1,9 @@
+{
+  "appId": "com.vividmedi.app",
+  "appName": "vividmedi",
+  "webDir": "static",
+  "server": {
+    "url": "https://www.vividmedi.com",
+    "cleartext": false
+  }
+}
