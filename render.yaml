@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: clinical-qa
+    name: vividmedi
     env: python
     plan: standard
     buildCommand: |
