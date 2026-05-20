@@ -272,8 +272,9 @@
     renderAppointments();
     if (visibleAppointments().length) {
       setStatus(`${visibleAppointments().length} saved appointment${visibleAppointments().length === 1 ? "" : "s"}.`);
+    } else {
+      setStatus("Use Import to paste MediRecords JSON. Sync works once the backend endpoint is connected.");
     }
-    syncAppointments();
   }
 
   if (document.readyState === "loading") {
