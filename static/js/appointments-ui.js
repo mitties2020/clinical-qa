@@ -65,6 +65,35 @@
     saveSoon();
   }
 
+  function analyseAppointmentNote(appointmentGuid) {
+    const appointment = appointmentById(appointmentGuid);
+    if (!appointment) return;
+
+    const note = String(appointment.consultNote || appointment.appointmentNote || "").trim();
+    if (!note) {
+      setStatus("Paste consult notes into the appointment first.");
+      return;
+    }
+
+    const clinicalInput = document.getElementById("clinicalInput");
+    if (!clinicalInput) {
+      setStatus("Main consultation note box was not found.");
+      return;
+    }
+
+    document.getElementById("consultNotesTab")?.click();
+    clinicalInput.value = [
+      `Patient: ${appointment.patientName || "Unknown patient"}`,
+      `Appointment type: ${appointment.appointmentType || "-"}`,
+      `WA time: ${appointment.startTimeWA || "-"}`,
+      "",
+      note
+    ].join("\n");
+    clinicalInput.dispatchEvent(new Event("input", { bubbles: true }));
+    setStatus("Appointment notes copied to the analyser.");
+    document.getElementById("convertBtn")?.click();
+  }
+
   function renderCollapsedAppointment(appointment) {
     const row = makeEl("button", "appointment-row");
     row.type = "button";
@@ -133,6 +162,13 @@
     saveStatus.innerHTML = "&#10003; Saved";
     textarea.addEventListener("input", (event) => updateConsultNote(appointment.appointmentGuid, event.target.value, saveStatus));
     card.appendChild(textarea);
+
+    const noteActions = makeEl("div", "appointment-note-actions");
+    const analyseButton = makeEl("button", "btn btn-primary appointment-analyse-btn", "Analyse notes");
+    analyseButton.type = "button";
+    analyseButton.addEventListener("click", () => analyseAppointmentNote(appointment.appointmentGuid));
+    noteActions.appendChild(analyseButton);
+    card.appendChild(noteActions);
     card.appendChild(saveStatus);
 
     if (appointment.missingFromLatestSync) {
@@ -184,9 +220,10 @@
     if (!input) return;
 
     try {
-      const payload = JSON.parse(input.value);
+      const payload = service.parseAppointmentPayloadText(input.value);
       const rawAppointments = service.extractAppointmentArrayFromPayload(payload);
       const incoming = service.normaliseMediRecordsAppointments(rawAppointments);
+      if (!incoming.length) throw new Error("No appointments found in the pasted data.");
       appointments = service.mergeAppointments(appointments, incoming);
       saveNow();
       renderAppointments();
@@ -248,6 +285,7 @@
   window.VividMediAppointmentsUI = {
     renderAppointments,
     syncAppointments,
-    importAppointmentsFromText
+    importAppointmentsFromText,
+    analyseAppointmentNote
   };
 })();
