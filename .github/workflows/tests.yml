@@ -27,15 +27,3 @@ jobs:
       - name: Lint with flake8
         run: flake8 app.py --max-line-length=150 --extend-ignore=E203,W503
         continue-on-error: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: mittens2020/clinical-qa:test
-          cache-from: type=gha
