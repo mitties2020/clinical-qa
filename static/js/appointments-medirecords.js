@@ -81,44 +81,65 @@
     return age;
   }
 
+  function rawValue(raw, names) {
+    if (!raw || typeof raw !== "object") return undefined;
+    for (const name of names) {
+      if (raw[name] !== undefined && raw[name] !== null) return raw[name];
+    }
+
+    const lowerNames = new Set(names.map((name) => String(name).toLowerCase()));
+    const matchedKey = Object.keys(raw).find((key) => lowerNames.has(key.toLowerCase()));
+    return matchedKey ? raw[matchedKey] : undefined;
+  }
+
+  function hasAnyField(raw, names) {
+    return rawValue(raw, names) !== undefined;
+  }
+
   function buildPatientName(raw) {
-    return [raw.firstName, raw.middleName, raw.lastName]
+    return [
+      rawValue(raw, ["firstName", "FirstName", "first_name"]),
+      rawValue(raw, ["middleName", "MiddleName", "middle_name"]),
+      rawValue(raw, ["lastName", "LastName", "last_name"])
+    ]
       .map((part) => String(part || "").trim())
       .filter(Boolean)
-      .join(" ") || raw.patientName || "Unknown patient";
+      .join(" ") || rawValue(raw, ["patientName", "PatientName", "name", "Name"]) || "Unknown patient";
   }
 
   function fallbackAppointmentGuid(raw) {
     return [
-      raw.appointmentGuid,
-      raw.patientGuid,
-      raw.kendoStartTime,
-      raw.startTimeOriginal
+      rawValue(raw, ["appointmentGuid", "AppointmentGuid", "appointmentGUID", "id", "Id"]),
+      rawValue(raw, ["patientGuid", "PatientGuid"]),
+      rawValue(raw, ["kendoStartTime", "KendoStartTime", "startTimeOriginal", "StartTimeOriginal"]),
+      rawValue(raw, ["start", "Start"])
     ].map((part) => String(part || "").trim()).filter(Boolean).join("-");
   }
 
   function normaliseMediRecordsAppointment(raw) {
-    const sourceTimeZone = raw.canonicalId || raw.timezone || "Australia/Brisbane";
-    const startDate = parseMediRecordsDateTime(raw.kendoStartTime || raw.startTimeOriginal, sourceTimeZone);
-    const endDate = parseMediRecordsDateTime(raw.kendoEndTime || raw.endTimeOriginal, sourceTimeZone);
-    const appointmentGuid = String(raw.appointmentGuid || fallbackAppointmentGuid(raw));
+    const sourceTimeZone = rawValue(raw, ["canonicalId", "CanonicalId", "timezone", "TimeZone"]) || "Australia/Brisbane";
+    const startTimeOriginal = rawValue(raw, ["kendoStartTime", "KendoStartTime", "startTimeOriginal", "StartTimeOriginal", "start", "Start"]) || "";
+    const endTimeOriginal = rawValue(raw, ["kendoEndTime", "KendoEndTime", "endTimeOriginal", "EndTimeOriginal", "end", "End"]) || "";
+    const startDate = parseMediRecordsDateTime(startTimeOriginal, sourceTimeZone);
+    const endDate = parseMediRecordsDateTime(endTimeOriginal, sourceTimeZone);
+    const appointmentGuid = String(rawValue(raw, ["appointmentGuid", "AppointmentGuid", "appointmentGUID", "id", "Id"]) || fallbackAppointmentGuid(raw));
 
     return {
       appointmentGuid,
-      patientGuid: raw.patientGuid || "",
+      patientGuid: rawValue(raw, ["patientGuid", "PatientGuid"]) || "",
       patientName: buildPatientName(raw),
-      age: calculateAgeFromMediRecordsDob(raw.dob),
-      mobilePhone: raw.mobilePhone || raw.mobile || raw.phone || "",
-      appointmentType: raw.practiceAppointmentTypeName || raw.appointmentType || "",
-      appointmentNote: raw.appointmentNote || "",
-      startTimeOriginal: raw.kendoStartTime || raw.startTimeOriginal || "",
+      age: calculateAgeFromMediRecordsDob(rawValue(raw, ["dob", "DOB", "dateOfBirth", "DateOfBirth"])),
+      mobilePhone: rawValue(raw, ["mobilePhone", "MobilePhone", "mobile", "Mobile", "phone", "Phone"]) || "",
+      appointmentType: rawValue(raw, ["practiceAppointmentTypeName", "PracticeAppointmentTypeName", "appointmentType", "AppointmentType"]) || "",
+      appointmentNote: rawValue(raw, ["appointmentNote", "AppointmentNote", "note", "Note"]) || "",
+      startTimeOriginal,
       startTimeWA: formatTimeInPerth(startDate),
       endTimeWA: formatTimeInPerth(endDate),
       startTimeUtc: startDate ? startDate.toISOString() : "",
       endTimeUtc: endDate ? endDate.toISOString() : "",
-      statusId: raw.appointmentStatusId ?? raw.statusId ?? null,
-      providerGuid: raw.userGuid || raw.providerGuid || "",
-      practiceGuid: raw.practiceGuid || "",
+      statusId: rawValue(raw, ["appointmentStatusId", "AppointmentStatusId", "statusId", "StatusId"]) ?? null,
+      providerGuid: rawValue(raw, ["userGuid", "UserGuid", "providerGuid", "ProviderGuid"]) || "",
+      practiceGuid: rawValue(raw, ["practiceGuid", "PracticeGuid"]) || "",
       timezone: sourceTimeZone,
       consultNote: "",
       isExpanded: false,
@@ -139,16 +160,21 @@
 
   function looksLikeAppointment(item) {
     return Boolean(item && typeof item === "object" && (
-      item.appointmentGuid ||
-      item.kendoStartTime ||
-      item.patientGuid ||
-      item.practiceAppointmentTypeName
+      hasAnyField(item, ["appointmentGuid", "AppointmentGuid", "appointmentGUID", "id", "Id"]) ||
+      hasAnyField(item, ["kendoStartTime", "KendoStartTime", "startTimeOriginal", "StartTimeOriginal", "start", "Start"]) ||
+      hasAnyField(item, ["patientGuid", "PatientGuid"]) ||
+      hasAnyField(item, ["practiceAppointmentTypeName", "PracticeAppointmentTypeName", "appointmentType", "AppointmentType"])
     ));
   }
 
   function findAppointmentArray(value) {
     if (Array.isArray(value)) {
-      return value.some(looksLikeAppointment) ? value : null;
+      if (value.some(looksLikeAppointment)) return value;
+      for (const item of value) {
+        const found = findAppointmentArray(item);
+        if (found) return found;
+      }
+      return null;
     }
     if (!value || typeof value !== "object") return null;
 
@@ -166,9 +192,39 @@
   }
 
   function extractAppointmentArrayFromPayload(payload) {
+    if (typeof payload === "string") {
+      return extractAppointmentArrayFromPayload(parseAppointmentPayloadText(payload));
+    }
+    if (looksLikeAppointment(payload)) return [payload];
     const found = findAppointmentArray(payload);
     if (!found) throw new Error("No appointment array found in pasted JSON.");
     return found;
+  }
+
+  function parseAppointmentPayloadText(text) {
+    const raw = String(text || "").trim();
+    if (!raw) throw new Error("Paste appointment JSON first.");
+
+    const candidates = [raw];
+    const firstJsonChar = raw.search(/[{"]/);
+    const firstArrayChar = raw.indexOf("[");
+    const firstObjectChar = raw.indexOf("{");
+    const firstJsonStart = firstArrayChar === -1 ? firstObjectChar : firstObjectChar === -1 ? firstArrayChar : Math.min(firstArrayChar, firstObjectChar);
+    const lastJsonChar = Math.max(raw.lastIndexOf("}"), raw.lastIndexOf("]"));
+    if (firstJsonStart >= 0 && lastJsonChar > firstJsonStart) {
+      candidates.push(raw.slice(firstJsonStart, lastJsonChar + 1));
+    }
+
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate);
+        return typeof parsed === "string" ? parseAppointmentPayloadText(parsed) : parsed;
+      } catch {
+        // Try the next candidate.
+      }
+    }
+
+    throw new Error("Could not read the pasted appointments. Paste the raw JSON response or appointment array.");
   }
 
   function mergeAppointments(existingAppointments, incomingAppointments) {
@@ -248,6 +304,7 @@
     normaliseMediRecordsAppointment,
     normaliseMediRecordsAppointments,
     extractAppointmentArrayFromPayload,
+    parseAppointmentPayloadText,
     mergeAppointments,
     todayDateString
   };
