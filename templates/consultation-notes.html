@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VividMedi - Consultation Notes & Q&A</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         * {
             margin: 0;
@@ -596,7 +597,8 @@
                         <button class="theme-toggle-btn" id="lightBtn" data-theme="light">Light</button>
                     </div>
                     <button class="auth-btn" id="upgradeBtn" style="display:none; background: linear-gradient(135deg, #d4af7a, #c9a561); border: none; box-shadow: 0 4px 15px rgba(201, 165, 97, 0.3); color: #0a0e27; font-weight: 600;">Upgrade to Pro</button>
-                    <button class="auth-btn" id="authBtn">Logout</button>
+                    <div id="signInDiv"></div>
+                    <button class="auth-btn" id="authBtn" style="display:none;">Sign out</button>
                 </div>
             </div>
 
@@ -696,13 +698,72 @@
     </div>
 
     <script>
-        // Logout button
+        // Initialize Google Sign-In
+        window.onload = function() {
+            google.accounts.id.initialize({
+                client_id: '{{ google_client_id }}',
+                callback: handleCredentialResponse
+            });
+            google.accounts.id.renderButton(
+                document.getElementById('signInDiv'),
+                { 
+                    theme: 'dark',
+                    size: 'large',
+                    text: 'signin_with'
+                }
+            );
+        };
+
+        function handleCredentialResponse(response) {
+            const token = response.credential;
+            fetch('/auth/google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential: token })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    localStorage.setItem('auth_token', data.token);
+                    localStorage.setItem('user_email', data.user.email);
+                    localStorage.setItem('user_plan', data.user.plan);
+                    document.getElementById('signInDiv').style.display = 'none';
+                    document.getElementById('authBtn').style.display = 'block';
+                    
+                    // Show upgrade button if free plan
+                    if (data.user.plan === 'free') {
+                        document.getElementById('upgradeBtn').style.display = 'block';
+                    }
+                    
+                    alert('Signed in as ' + data.user.email);
+                }
+            })
+            .catch(err => console.error('Auth error:', err));
+        }
+
+        // Auth button (sign out)
         document.getElementById('authBtn').addEventListener('click', () => {
-            fetch('/auth/logout', { method: 'POST' })
-                .finally(() => {
-                    window.location.href = '/login';
-                });
+            fetch('/auth/logout', { method: 'POST' }).then(() => {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_email');
+                document.getElementById('signInDiv').style.display = 'block';
+                document.getElementById('authBtn').style.display = 'none';
+                google.accounts.id.renderButton(
+                    document.getElementById('signInDiv'),
+                    { 
+                        theme: 'dark',
+                        size: 'large',
+                        text: 'signin_with'
+                    }
+                );
+            });
         });
+
+        // Check if already signed in
+        if (localStorage.getItem('auth_token')) {
+            document.getElementById('signInDiv').style.display = 'none';
+            document.getElementById('authBtn').style.display = 'block';
+        }
 
         // Theme Toggle
         const darkBtn = document.getElementById('darkBtn');
@@ -806,13 +867,6 @@
             
             localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
             renderSavedOutputs();
-
-            // Persist to server-side history (behind login code).
-            fetch('/api/history/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, content })
-            }).catch(() => {});
         };
 
         window.loadOutput = function(idx) {
@@ -895,7 +949,7 @@
         });
 
         // QA TAB - WITH CONVERSATION MEMORY
-        let qaHistory = [];
+        let qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history')) || [];
 
         document.getElementById('askBtn').addEventListener('click', async () => {
             const question = document.getElementById('clinicalQuestion').value.trim();
@@ -981,7 +1035,6 @@
             this.style.height = Math.min(this.scrollHeight, 400) + 'px';
         });
 
-
         // ENTER KEY HANDLERS - Enter to submit, Shift+Enter for new line
         document.getElementById('clinicalInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -996,7 +1049,6 @@
                 document.getElementById('askBtn').click();
             }
         });
-
 
         // Check user plan and show upgrade button
         async function checkUserPlan() {
@@ -1039,35 +1091,8 @@
         // Check plan on page load
         checkUserPlan();
 
-
-        async function hydrateFromServerHistory() {
-            try {
-                const res = await fetch('/api/history/list');
-                const data = await res.json();
-                const items = data.items || [];
-                const nowLabel = new Date().toLocaleString();
-
-                savedOutputs = items.map((item) => ({
-                    title: `${item.item_type === 'question' ? '❓' : '📝'} ${item.created_at || nowLabel}`,
-                    content: item.content,
-                    type: item.item_type === 'question' ? 'question' : 'note',
-                }));
-                localStorage.setItem('vividmedi_saved_outputs', JSON.stringify(savedOutputs));
-
-                qaHistory = items
-                    .filter((x) => x.item_type === 'question')
-                    .map((x) => ({ question: '[Saved question]', answer: x.content }))
-                    .slice(0, 10);
-            } catch (err) {
-                console.warn('Could not load server history', err);
-                qaHistory = JSON.parse(localStorage.getItem('vividmedi_qa_history')) || [];
-            }
-        }
-
         // Initialize
-        hydrateFromServerHistory().finally(() => {
-            renderSavedOutputs();
-        });
+        renderSavedOutputs();
     </script>
 </body>
 </html>
