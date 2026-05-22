@@ -48,6 +48,43 @@
     ].join("");
   }
 
+  function installClinicalDocumentationStandards() {
+    if (window.__vividClinicalStandardsInstalled || typeof window.fetch !== "function") return;
+    window.__vividClinicalStandardsInstalled = true;
+    const originalFetch = window.fetch.bind(window);
+
+    window.fetch = function vividStandardsFetch(input, init) {
+      const url = typeof input === "string" ? input : input?.url;
+      const options = init ? { ...init } : init;
+
+      if (url === "/convert-notes" && options?.body) {
+        try {
+          const payload = JSON.parse(options.body);
+          if (payload?.clinical_data && !payload.clinical_data.includes("AI documentation quality instructions")) {
+            const selectedConsultType = payload.consult_type || document.getElementById("consultType")?.value || "selected consult type";
+            payload.clinical_data = [
+              "AI documentation quality instructions (do not reproduce this instruction block in the final note):",
+              `- The clinician-selected consult type is: ${selectedConsultType}. Use it as the authoritative frame. Do not choose a different consult type.`,
+              "- Optimise the output within that selected type for Australian medical documentation standards.",
+              "- Make the note clinically robust, concise, defensible, and useful for continuity of care.",
+              "- Preserve documented facts, important positives/negatives, uncertainty, risks, medication details, contraindications, monitoring, follow-up, and safety-netting.",
+              "- Where the selected type or content relates to DVA, allied health, renewal, veteran care, weight management scripts, or referral justification, write to an audit-ready DVA documentation standard without inventing accepted conditions or entitlement details.",
+              "- Use clear headings, professional formatting, Australian spelling, and write 'Not documented' where clinically important information is missing.",
+              "",
+              "Clinical data:",
+              payload.clinical_data
+            ].join("\n");
+            options.body = JSON.stringify(payload);
+          }
+        } catch {
+          return originalFetch(input, init);
+        }
+      }
+
+      return originalFetch(input, options);
+    };
+  }
+
   function appointmentById(appointmentGuid) {
     return appointments.find((appointment) => appointment.appointmentGuid === appointmentGuid);
   }
@@ -287,6 +324,7 @@
   }
 
   function initAppointmentsSection() {
+    installClinicalDocumentationStandards();
     applyHeaderBranding();
     if (!storage || !service || !document.getElementById("appointmentsSection")) return;
     appointments = storage.loadAppointmentsFromStorage();
