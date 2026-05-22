@@ -375,6 +375,10 @@ html[data-stealth="on"] .appointments-icon-btn {
   border-color: #d0d0d0;
 }
 
+html[data-theme="day"] .app-brand-tagline {
+  color: var(--muted);
+}
+
 html[data-stealth="on"] .app-brand-name {
   color: #333;
 }
