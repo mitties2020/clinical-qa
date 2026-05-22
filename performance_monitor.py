@@ -7,6 +7,11 @@ from datetime import datetime
 from functools import wraps
 from collections import defaultdict
 
+try:
+    import clinical_prompt_guard  # noqa: F401
+except Exception:
+    clinical_prompt_guard = None
+
 class PerformanceMonitor:
     def __init__(self):
         self.metrics = defaultdict(list)
