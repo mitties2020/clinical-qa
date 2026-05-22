@@ -96,16 +96,20 @@
       return;
     }
 
+    const selectedConsultType = document.getElementById("consultType")?.value || "selected consult type";
     document.getElementById("consultNotesTab")?.click();
     clinicalInput.value = [
       `Patient: ${appointment.patientName || "Unknown patient"}`,
-      `Appointment type: ${appointment.appointmentType || "-"}`,
-      `WA time: ${appointment.startTimeWA || "-"}`,
+      `Age: ${appointment.age === null || appointment.age === undefined ? "Not documented" : appointment.age}`,
+      `Mobile: ${appointment.mobilePhone || "Not documented"}`,
+      `MediRecords appointment type: ${appointment.appointmentType || "Not documented"}`,
+      `WA appointment time: ${appointment.startTimeWA || "Not documented"}`,
       "",
+      "Clinical notes / dictation:",
       note
     ].join("\n");
     clinicalInput.dispatchEvent(new Event("input", { bubbles: true }));
-    setStatus("Appointment notes copied to the analyser.");
+    setStatus(`Appointment notes sent for analysis using your selected consult type: ${selectedConsultType}.`);
     document.getElementById("convertBtn")?.click();
   }
 
@@ -118,7 +122,7 @@
 
     row.appendChild(makeEl("span", "", appointment.startTimeWA || ""));
     row.appendChild(makeEl("span", "", appointment.patientName || "Unknown patient"));
-    row.appendChild(makeEl("span", "", ">"));
+    row.appendChild(makeEl("span", "appointment-toggle-icon", ">"));
     return row;
   }
 
@@ -140,9 +144,11 @@
     const toggle = makeEl("button", "appointment-card-toggle");
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-label", `Collapse appointment for ${appointment.patientName}`);
     toggle.addEventListener("click", () => toggleAppointment(appointment.appointmentGuid));
     toggle.appendChild(makeEl("span", "appointment-card-time", appointment.startTimeWA || ""));
     toggle.appendChild(makeEl("strong", "appointment-card-name", appointment.patientName || "Unknown patient"));
+    toggle.appendChild(makeEl("span", "appointment-toggle-icon appointment-toggle-icon-open", ">"));
 
     const deleteButton = makeEl("button", "appointment-delete");
     deleteButton.type = "button";
