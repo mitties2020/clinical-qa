@@ -65,11 +65,15 @@
             payload.clinical_data = [
               "AI documentation quality instructions (do not reproduce this instruction block in the final note):",
               `- The clinician-selected consult type is: ${selectedConsultType}. Use it as the authoritative frame. Do not choose a different consult type.`,
+              "- Plain text only. Do not use Markdown, asterisks, bold markers, or decorative symbols in the final note.",
+              "- Use plain section heading lines only. The app will visually bold headings.",
               "- Optimise the output within that selected type for Australian medical documentation standards.",
               "- Make the note clinically robust, concise, defensible, and useful for continuity of care.",
-              "- Preserve documented facts, important positives/negatives, uncertainty, risks, medication details, contraindications, monitoring, follow-up, and safety-netting.",
+              "- Preserve documented facts, important positives and negatives, uncertainty, risks, medication details, contraindications, monitoring needs, and follow-up needs where they are clinically relevant.",
+              "- Include Monitoring, Follow-up, Safety Netting, and Red Flags only when clinically relevant to the selected consult type, patient risk, medications or procedures, diagnostic uncertainty, or documented clinician concern.",
+              "- Do not force safety-netting or red-flag sections into low-risk administrative, renewal, script, referral, or documentation-only notes unless clinically warranted.",
               "- Where the selected type or content relates to DVA, allied health, renewal, veteran care, weight management scripts, or referral justification, write to an audit-ready DVA documentation standard without inventing accepted conditions or entitlement details.",
-              "- Use clear headings, professional formatting, Australian spelling, and write 'Not documented' where clinically important information is missing.",
+              "- Write 'Not documented' where clinically important information is missing.",
               "",
               "Clinical data:",
               payload.clinical_data
@@ -83,6 +87,127 @@
 
       return originalFetch(input, options);
     };
+  }
+
+  const CLINICAL_OUTPUT_HEADINGS = new Set([
+    "summary",
+    "assessment",
+    "diagnosis",
+    "diagnoses",
+    "investigations",
+    "treatment",
+    "plan",
+    "management plan",
+    "monitoring",
+    "follow-up",
+    "follow up",
+    "follow-up & safety netting",
+    "follow up & safety netting",
+    "safety netting",
+    "red flags",
+    "references",
+    "history",
+    "examination",
+    "medications",
+    "allergies",
+    "impression",
+    "rationale",
+    "dva rationale",
+    "referral rationale",
+    "audit readiness",
+    "missing information"
+  ]);
+
+  function cleanClinicalOutputText(value) {
+    return String(value || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/^\s*\*\s+/gm, "- ")
+      .replace(/\*\*([^\n]+?)\*\*/g, "$1")
+      .replace(/\*/g, "")
+      .replace(/[ \t]+$/gm, "")
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !/^here is (the )?(structured )?clinical note/i.test(trimmed)
+          && !/^based on (the )?(raw dictation|provided)/i.test(trimmed);
+      })
+      .join("\n")
+      .trim();
+  }
+
+  function isClinicalHeading(line) {
+    const normalized = String(line || "")
+      .trim()
+      .replace(/:$/, "")
+      .toLowerCase();
+    return CLINICAL_OUTPUT_HEADINGS.has(normalized);
+  }
+
+  function renderClinicalOutputElement(output) {
+    if (!output || output.dataset.vividFormatting === "1") return;
+    const current = output.textContent || "";
+    const trimmed = current.trim();
+    if (!trimmed || trimmed === "Generating..." || trimmed === "Output will appear here..." || trimmed === "Answer will appear here...") return;
+
+    const cleaned = cleanClinicalOutputText(current);
+    if (!cleaned || output.dataset.vividFormattedSource === cleaned) return;
+
+    output.dataset.vividFormatting = "1";
+    output.dataset.vividFormattedSource = cleaned;
+    clearNode(output);
+
+    const fragment = document.createDocumentFragment();
+    cleaned.split("\n").forEach((line, index, lines) => {
+      const row = document.createElement("div");
+      row.className = isClinicalHeading(line) ? "clinical-output-heading" : "clinical-output-line";
+      row.textContent = line;
+      fragment.appendChild(row);
+      if (index < lines.length - 1) fragment.appendChild(document.createTextNode("\n"));
+    });
+    output.appendChild(fragment);
+    output.dataset.vividFormatting = "0";
+  }
+
+  function installClinicalOutputFormatter() {
+    if (window.__vividClinicalOutputFormatterInstalled) return;
+    window.__vividClinicalOutputFormatterInstalled = true;
+
+    if (!document.getElementById("vivid-clinical-output-style")) {
+      const style = document.createElement("style");
+      style.id = "vivid-clinical-output-style";
+      style.textContent = [
+        ".clinical-output-heading{font-weight:700;margin:10px 0 4px;}",
+        ".clinical-output-line{font-weight:400;margin:0;white-space:pre-wrap;}",
+        ".clinical-output-line:empty{min-height:.85em;}"
+      ].join("");
+      document.head.appendChild(style);
+    }
+
+    const attach = () => {
+      const output = document.getElementById("outputBox");
+      if (output) {
+        renderClinicalOutputElement(output);
+        new MutationObserver(() => renderClinicalOutputElement(output)).observe(output, {
+          childList: true,
+          characterData: true,
+          subtree: true
+        });
+      }
+
+      const savedNotes = document.getElementById("savedNotesList");
+      if (savedNotes) {
+        savedNotes.querySelectorAll(".saved-note-text").forEach(renderClinicalOutputElement);
+        new MutationObserver(() => {
+          savedNotes.querySelectorAll(".saved-note-text").forEach(renderClinicalOutputElement);
+        }).observe(savedNotes, { childList: true, subtree: true });
+      }
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", attach, { once: true });
+    } else {
+      attach();
+    }
   }
 
   function appointmentById(appointmentGuid) {
@@ -325,6 +450,7 @@
 
   function initAppointmentsSection() {
     installClinicalDocumentationStandards();
+    installClinicalOutputFormatter();
     applyHeaderBranding();
     if (!storage || !service || !document.getElementById("appointmentsSection")) return;
     appointments = storage.loadAppointmentsFromStorage();
