@@ -1,3 +1,63 @@
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-brand-mark {
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border: 3px solid #24d5c0;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 42%, #26384d 0%, #162838 66%, #081622 100%);
+  box-shadow: 0 0 0 2px rgba(36, 213, 192, 0.24), 0 0 20px rgba(37, 174, 228, 0.38), inset 0 0 18px rgba(2, 8, 16, 0.78);
+}
+
+.app-brand-mark::before,
+.app-brand-mark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  background: #f7fff8;
+  box-shadow: 0 0 10px rgba(110, 255, 214, 0.9);
+  transform: translate(-50%, -50%);
+}
+
+.app-brand-mark::before {
+  width: 28px;
+  height: 8px;
+}
+
+.app-brand-mark::after {
+  width: 8px;
+  height: 28px;
+}
+
+.app-brand-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-brand-name {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.1px;
+  line-height: 1;
+}
+
+.app-brand-tagline {
+  color: #b9d4ff;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .saved-outputs-sidebar {
   display: flex;
   flex-direction: column;
@@ -315,7 +375,32 @@ html[data-stealth="on"] .appointments-icon-btn {
   border-color: #d0d0d0;
 }
 
+html[data-stealth="on"] .app-brand-name {
+  color: #333;
+}
+
+html[data-stealth="on"] .app-brand-tagline {
+  color: #555;
+}
+
+html[data-stealth="on"] .app-brand-mark {
+  box-shadow: none;
+}
+
 @media (max-width: 1100px) {
+  .app-brand-name {
+    font-size: 20px;
+  }
+
+  .app-brand-tagline {
+    font-size: 12px;
+  }
+
+  .app-brand-mark {
+    width: 42px;
+    height: 42px;
+  }
+
   .appointments-header {
     align-items: flex-start;
     flex-direction: column;
