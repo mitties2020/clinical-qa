@@ -33,6 +33,21 @@
     return el;
   }
 
+  function applyHeaderBranding() {
+    const brand = document.getElementById("logoClick");
+    if (!brand) return;
+    brand.removeAttribute("style");
+    brand.className = "app-brand";
+    brand.setAttribute("aria-label", "Vivid Medi Clinical Documentation Aid");
+    brand.innerHTML = [
+      '<span class="app-brand-mark" aria-hidden="true"></span>',
+      '<span class="app-brand-copy">',
+      '<span class="app-brand-name">Vivid Medi</span>',
+      '<span class="app-brand-tagline">Clinical Documentation Aid</span>',
+      "</span>"
+    ].join("");
+  }
+
   function appointmentById(appointmentGuid) {
     return appointments.find((appointment) => appointment.appointmentGuid === appointmentGuid);
   }
@@ -266,6 +281,7 @@
   }
 
   function initAppointmentsSection() {
+    applyHeaderBranding();
     if (!storage || !service || !document.getElementById("appointmentsSection")) return;
     appointments = storage.loadAppointmentsFromStorage();
     bindAppointmentUI();
