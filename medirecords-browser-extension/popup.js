@@ -53,7 +53,7 @@ async function syncCapture() {
   const response = await fetch(endpointInput.value.trim(), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}`, "X-VividMedi-Sync-Token": token } : {}) },
-    body: JSON.stringify({ source: "browser-extension", capturedAt: latestCapture.capturedAt, sourceUrl: latestCapture.sourceUrl, appointments: latestCapture.appointments }),
+    body: JSON.stringify({ source: "browser-extension", syncToken: token, capturedAt: latestCapture.capturedAt, sourceUrl: latestCapture.sourceUrl, appointments: latestCapture.appointments }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.ok) throw new Error(payload.error || `Sync failed with status ${response.status}`);
