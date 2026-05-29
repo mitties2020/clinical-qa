@@ -1,0 +1,8 @@
+body { width: 360px; margin: 0; font-family: Arial, sans-serif; color: #17202a; background: #f7f8fa; }
+main { padding: 14px; }
+h1 { margin: 0 0 12px; font-size: 17px; }
+label { display: block; margin: 10px 0; font-size: 12px; font-weight: 700; }
+input { box-sizing: border-box; width: 100%; margin-top: 5px; padding: 8px; border: 1px solid #c7cdd4; border-radius: 6px; font: inherit; }
+button { width: 100%; margin: 4px 0; padding: 9px 10px; border: 0; border-radius: 6px; background: #145c9e; color: white; font-weight: 700; cursor: pointer; }
+#status { min-height: 32px; margin: 8px 0; font-size: 12px; line-height: 1.35; }
+pre { max-height: 150px; overflow: auto; padding: 8px; border-radius: 6px; background: #fff; border: 1px solid #d7dce2; font-size: 11px; white-space: pre-wrap; }
