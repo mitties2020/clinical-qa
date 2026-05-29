@@ -60,6 +60,20 @@ async function syncCapture() {
   setStatus(`Synced ${payload.appointments || latestCapture.appointments.length} appointments to VividMedi.`);
 }
 
+async function testToken() {
+  await saveSettings();
+  const token = tokenInput.value.trim();
+  const response = await fetch(`${endpointInput.value.trim().replace(/\/$/, "")}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}`, "X-VividMedi-Sync-Token": token } : {}) },
+    body: JSON.stringify({ syncToken: token }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!payload.tokenConfigured) throw new Error("Render has no EXTENSION_SYNC_TOKEN configured.");
+  if (!payload.tokenAccepted) throw new Error("Token does not match Render. Re-copy the exact Render value into this extension.");
+  setStatus("Token accepted by VividMedi. Sync can proceed.");
+}
+
 document.getElementById("capture").addEventListener("click", async () => {
   try {
     setStatus("Capturing from this MediRecords tab...");
@@ -68,6 +82,10 @@ document.getElementById("capture").addEventListener("click", async () => {
   } catch (error) {
     setStatus(`Error: ${error.message}`);
   }
+});
+
+document.getElementById("test").addEventListener("click", async () => {
+  try { setStatus("Testing token..."); await testToken(); } catch (error) { setStatus(`Error: ${error.message}`); }
 });
 
 document.getElementById("sync").addEventListener("click", async () => {

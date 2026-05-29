@@ -774,6 +774,16 @@ def api_medirecords_sync_status():
     return jsonify({"ok": True, "tokenConfigured": bool(EXTENSION_SYNC_TOKEN)})
 
 
+@app.post("/api/medirecords-sync/status")
+def api_medirecords_sync_status_check():
+    payload = request.get_json(silent=True) or {}
+    return jsonify({
+        "ok": True,
+        "tokenConfigured": bool(EXTENSION_SYNC_TOKEN),
+        "tokenAccepted": extension_sync_authorized(payload),
+    })
+
+
 @app.get("/api/medirecords-sync/latest")
 @require_auth
 def api_medirecords_sync_latest():
