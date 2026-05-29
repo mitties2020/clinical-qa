@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>VividMedi Sync</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <h1>VividMedi MediRecords Sync</h1>
+      <label>VividMedi sync endpoint <input id="endpoint" type="url" value="https://vividmedi.com/api/medirecords-sync"></label>
+      <label>VividMedi API key / bearer token <input id="token" type="password" autocomplete="off"></label>
+      <button id="capture">Capture appointment JSON</button>
+      <button id="sync">Sync to VividMedi</button>
+      <button id="copy">Copy JSON</button>
+      <p id="status">Open the MediRecords diary page, reload it, then capture.</p>
+      <pre id="summary"></pre>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

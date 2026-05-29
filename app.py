@@ -147,6 +147,8 @@ def extension_sync_authorized() -> bool:
         return False
     header = request.headers.get("Authorization", "")
     token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    if not token:
+        token = request.headers.get("X-VividMedi-Sync-Token", "").strip()
     return token == EXTENSION_SYNC_TOKEN
 
 
