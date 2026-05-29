@@ -259,13 +259,27 @@
     }
 
     const selectedConsultType = document.getElementById("consultType")?.value || "selected consult type";
+    const weightManagement = appointment.weightManagement || {};
+    const medicationLines = formatMedicationHistory(weightManagement.medicationHistory);
+    const trendLines = formatWeightTrend(weightManagement.trend);
     document.getElementById("consultNotesTab")?.click();
     clinicalInput.value = [
       `Patient: ${appointment.patientName || "Unknown patient"}`,
       `Age: ${appointment.age === null || appointment.age === undefined ? "Not documented" : appointment.age}`,
+      `DOB: ${formatDobFromAppointment(appointment) || "Not documented"}`,
       `Mobile: ${appointment.mobilePhone || "Not documented"}`,
+      `DVA number: ${appointment.dvaNo || "Not documented"}`,
+      `DVA card: ${appointment.dvaCardColour || "Not documented"}`,
+      `Accepted DVA conditions: ${formatAcceptedConditions(appointment.acceptedConditions) || "Not documented"}`,
       `MediRecords appointment type: ${appointment.appointmentType || "Not documented"}`,
       `WA appointment time: ${appointment.startTimeWA || "Not documented"}`,
+      "",
+      "Weight management snapshot:",
+      `Most recent medication: ${formatLatestMedication(weightManagement) || "Not documented"}`,
+      `Medication history: ${medicationLines || "Not documented"}`,
+      `Last documented weight: ${weightManagement.latestWeight || "Not documented"}`,
+      `Last documented BMI: ${weightManagement.latestBmi || "Not documented"}`,
+      `Weight/BMI trend: ${trendLines || "Not documented"}`,
       "",
       "Clinical notes / dictation:",
       note
@@ -293,6 +307,63 @@
     row.appendChild(makeEl("span", "appointment-detail-label", label));
     row.appendChild(makeEl("span", "appointment-detail-value", value || "-"));
     return row;
+  }
+
+  function formatDobFromAppointment(appointment) {
+    const dob = appointment.dob || appointment.dateOfBirth;
+    if (!dob) return "";
+    const date = new Date(Number(dob));
+    if (Number.isNaN(date.getTime())) return String(dob);
+    return new Intl.DateTimeFormat("en-AU", {
+      timeZone: "Australia/Perth",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }).format(date);
+  }
+
+  function formatAcceptedConditions(value) {
+    return Array.isArray(value) ? value.filter(Boolean).join("; ") : String(value || "").trim();
+  }
+
+  function formatMedicationItem(item) {
+    if (!item) return "";
+    if (typeof item === "string") return item.trim();
+    const name = item.name || item.medication || item.drug || item.text || "";
+    const dose = item.dose || item.strength || "";
+    const date = item.date || item.documentedAt || item.noteDate || "";
+    return [name, dose, date ? `(${date})` : ""].map((part) => String(part || "").trim()).filter(Boolean).join(" ");
+  }
+
+  function formatMedicationHistory(value) {
+    return Array.isArray(value) ? value.map(formatMedicationItem).filter(Boolean).join("; ") : "";
+  }
+
+  function formatLatestMedication(weightManagement) {
+    if (!weightManagement) return "";
+    const latest = weightManagement.latestMedication || weightManagement.currentMedication;
+    if (latest) return formatMedicationItem(latest);
+    return Array.isArray(weightManagement.medicationHistory) && weightManagement.medicationHistory.length
+      ? formatMedicationItem(weightManagement.medicationHistory[0])
+      : "";
+  }
+
+  function formatTrendItem(item) {
+    if (!item) return "";
+    if (typeof item === "string") return item.trim();
+    const date = item.date || item.documentedAt || item.noteDate || "";
+    const weight = item.weight || item.weightKg || "";
+    const bmi = item.bmi || item.BMI || "";
+    if (item.text) return item.text;
+    return [
+      date,
+      weight ? `${weight} kg` : "",
+      bmi ? `BMI ${bmi}` : ""
+    ].map((part) => String(part || "").trim()).filter(Boolean).join(" - ");
+  }
+
+  function formatWeightTrend(value) {
+    return Array.isArray(value) ? value.map(formatTrendItem).filter(Boolean).join(" -> ") : "";
   }
 
   function safeDomId(value) {
@@ -329,6 +400,13 @@
     details.appendChild(renderDetail("Type", appointment.appointmentType));
     details.appendChild(renderDetail("Age", appointment.age === null || appointment.age === undefined ? "" : String(appointment.age)));
     details.appendChild(renderDetail("Mobile", appointment.mobilePhone));
+    details.appendChild(renderDetail("DVA", [appointment.dvaCardColour, appointment.dvaNo].filter(Boolean).join(" ")));
+    details.appendChild(renderDetail("Conds", formatAcceptedConditions(appointment.acceptedConditions)));
+    details.appendChild(renderDetail("Med", formatLatestMedication(appointment.weightManagement || {})));
+    details.appendChild(renderDetail("Wt/BMI", [
+      appointment.weightManagement?.latestWeight ? `${appointment.weightManagement.latestWeight} kg` : "",
+      appointment.weightManagement?.latestBmi ? `BMI ${appointment.weightManagement.latestBmi}` : ""
+    ].filter(Boolean).join(" / ")));
     details.appendChild(renderDetail("WA Time", appointment.startTimeWA ? `${appointment.startTimeWA} AWST` : ""));
     card.appendChild(details);
 
@@ -423,7 +501,7 @@
     setStatus("Syncing appointments...");
 
     try {
-      const incoming = await service.fetchTodaysAppointmentsFromMediRecords();
+      const incoming = await fetchLatestExtensionSync();
       appointments = service.mergeAppointments(appointments, incoming);
       saveNow();
       renderAppointments();
@@ -433,6 +511,27 @@
     } finally {
       if (syncButton) syncButton.disabled = false;
     }
+  }
+
+  async function fetchLatestExtensionSync() {
+    try {
+      const response = await fetch("/api/medirecords-sync/latest", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const payload = data.payload || data;
+        const rawAppointments = service.extractAppointmentArrayFromPayload(payload);
+        let incoming = service.normaliseMediRecordsAppointments(rawAppointments);
+        incoming = service.mergePatientSnapshots(incoming, payload.patients || payload.patientSnapshots || []);
+        return incoming;
+      }
+    } catch {
+      // Fall back to the legacy direct backend fetch below.
+    }
+    return service.fetchTodaysAppointmentsFromMediRecords();
   }
 
   function bindAppointmentUI() {

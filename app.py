@@ -5,6 +5,7 @@ import tempfile
 import threading
 import subprocess
 import sqlite3
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from uuid import uuid4
@@ -38,6 +39,7 @@ DEEPSEEK_URL = (os.getenv("DEEPSEEK_URL") or "https://api.deepseek.com/v1/chat/c
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 AUTH_CODE = (os.getenv("AUTH_CODE") or "").strip()
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
+EXTENSION_SYNC_TOKEN = (os.getenv("EXTENSION_SYNC_TOKEN") or "").strip()
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
@@ -89,6 +91,17 @@ def init_history_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS medirecords_sync_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_key TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'extension',
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -127,6 +140,48 @@ def load_history(limit: int = 200):
             (session_user_key(), limit),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def extension_sync_authorized() -> bool:
+    if not EXTENSION_SYNC_TOKEN:
+        return False
+    header = request.headers.get("Authorization", "")
+    token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+    return token == EXTENSION_SYNC_TOKEN
+
+
+def save_medirecords_sync(payload: dict, source: str = "extension"):
+    with db_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO medirecords_sync_entries (user_key, payload, source, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("extension", json.dumps(payload), source, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+
+
+def latest_medirecords_sync():
+    with db_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT id, payload, source, created_at
+            FROM medirecords_sync_entries
+            WHERE user_key = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            ("extension",),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": row["id"],
+        "payload": json.loads(row["payload"]),
+        "source": row["source"],
+        "created_at": row["created_at"],
+    }
 
 
 init_history_db()
@@ -676,6 +731,47 @@ def transcribe():
 @require_auth
 def api_history_list():
     return jsonify({"items": load_history()})
+
+
+@app.post("/api/medirecords-sync")
+def api_medirecords_sync_save():
+    if not extension_sync_authorized():
+        return jsonify({"ok": False, "error": "Unauthorized or EXTENSION_SYNC_TOKEN is not configured"}), 401
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"ok": False, "error": "Expected JSON payload"}), 400
+
+    if isinstance(payload, list):
+        payload = {"appointments": payload}
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "error": "Payload must be an object or appointment array"}), 400
+
+    appointments = payload.get("appointments")
+    if appointments is None and "patients" not in payload:
+        appointments = payload.get("items") or payload.get("data") or payload.get("results")
+        if appointments is not None:
+            payload["appointments"] = appointments
+
+    if appointments is not None and not isinstance(appointments, list):
+        return jsonify({"ok": False, "error": "appointments must be an array"}), 400
+
+    source = str(payload.get("source") or "extension")[:80]
+    save_medirecords_sync(payload, source=source)
+    return jsonify({
+        "ok": True,
+        "appointments": len(appointments or []),
+        "patients": len(payload.get("patients") or []),
+    })
+
+
+@app.get("/api/medirecords-sync/latest")
+@require_auth
+def api_medirecords_sync_latest():
+    latest = latest_medirecords_sync()
+    if latest is None:
+        return jsonify({"ok": False, "error": "No MediRecords sync payload found"}), 404
+    return jsonify({"ok": True, **latest})
 
 
 
