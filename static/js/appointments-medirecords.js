@@ -116,6 +116,30 @@
     ].map((part) => String(part || "").trim()).filter(Boolean).join("-");
   }
 
+  function normaliseTextList(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item || "").trim()).filter(Boolean);
+    }
+    if (value === null || value === undefined || value === "") return [];
+    return String(value)
+      .split(/\n|;|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function normaliseWeightManagement(raw) {
+    const source = rawValue(raw, ["weightManagement", "WeightManagement", "weight_management"]) || {};
+    const medicationHistory = rawValue(source, ["medicationHistory", "medications", "MedicationHistory"]) || rawValue(raw, ["medicationHistory", "medications"]) || [];
+    const trend = rawValue(source, ["trend", "weightTrend", "WeightTrend"]) || rawValue(raw, ["weightTrend", "bmiTrend"]) || [];
+    return {
+      medicationHistory: Array.isArray(medicationHistory) ? medicationHistory : normaliseTextList(medicationHistory).map((text) => ({ text })),
+      latestMedication: rawValue(source, ["latestMedication", "currentMedication"]) || rawValue(raw, ["latestMedication", "currentMedication"]) || null,
+      latestWeight: rawValue(source, ["latestWeight", "weight"]) || rawValue(raw, ["latestWeight", "weight"]) || "",
+      latestBmi: rawValue(source, ["latestBmi", "latestBMI", "bmi", "BMI"]) || rawValue(raw, ["latestBmi", "latestBMI", "bmi", "BMI"]) || "",
+      trend: Array.isArray(trend) ? trend : normaliseTextList(trend).map((text) => ({ text }))
+    };
+  }
+
   function normaliseMediRecordsAppointment(raw) {
     const sourceTimeZone = rawValue(raw, ["canonicalId", "CanonicalId", "timezone", "TimeZone"]) || "Australia/Brisbane";
     const startTimeOriginal = rawValue(raw, ["kendoStartTime", "KendoStartTime", "startTimeOriginal", "StartTimeOriginal", "start", "Start"]) || "";
@@ -128,8 +152,13 @@
       appointmentGuid,
       patientGuid: rawValue(raw, ["patientGuid", "PatientGuid"]) || "",
       patientName: buildPatientName(raw),
+      dob: rawValue(raw, ["dob", "DOB", "dateOfBirth", "DateOfBirth"]) || null,
       age: calculateAgeFromMediRecordsDob(rawValue(raw, ["dob", "DOB", "dateOfBirth", "DateOfBirth"])),
       mobilePhone: rawValue(raw, ["mobilePhone", "MobilePhone", "mobile", "Mobile", "phone", "Phone"]) || "",
+      dvaNo: rawValue(raw, ["dvaNo", "DVANo", "dvaNumber", "DvaNumber", "veteranFileNumber"]) || "",
+      dvaCardColour: rawValue(raw, ["dvaCardColour", "dvaCardColor", "cardColour", "cardColor", "veteranCardColour", "veteranCardColor"]) || "",
+      acceptedConditions: normaliseTextList(rawValue(raw, ["acceptedConditions", "dvaAcceptedConditions", "DvaAcceptedConditions"])),
+      weightManagement: normaliseWeightManagement(raw),
       appointmentType: rawValue(raw, ["practiceAppointmentTypeName", "PracticeAppointmentTypeName", "appointmentType", "AppointmentType"]) || "",
       appointmentNote: rawValue(raw, ["appointmentNote", "AppointmentNote", "note", "Note"]) || "",
       startTimeOriginal,
@@ -265,6 +294,22 @@
     });
   }
 
+  function mergePatientSnapshots(appointments, patients) {
+    const snapshots = Array.isArray(patients) ? patients : [];
+    if (!snapshots.length) return appointments;
+    const byPatientGuid = new Map();
+    snapshots.forEach((snapshot) => {
+      const patientGuid = rawValue(snapshot, ["patientGuid", "PatientGuid", "id", "Id"]);
+      if (patientGuid) byPatientGuid.set(String(patientGuid), snapshot);
+    });
+    return appointments.map((appointment) => {
+      const snapshot = byPatientGuid.get(String(appointment.patientGuid || ""));
+      return snapshot
+        ? normaliseMediRecordsAppointment({ ...appointment, ...snapshot, appointmentGuid: appointment.appointmentGuid })
+        : appointment;
+    });
+  }
+
   function todayDateString() {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Australia/Perth",
@@ -303,6 +348,7 @@
     extractAppointmentArrayFromPayload,
     parseAppointmentPayloadText,
     mergeAppointments,
+    mergePatientSnapshots,
     todayDateString
   };
 })();
