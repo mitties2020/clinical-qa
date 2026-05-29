@@ -142,13 +142,15 @@ def load_history(limit: int = 200):
     return [dict(r) for r in rows]
 
 
-def extension_sync_authorized() -> bool:
+def extension_sync_authorized(payload=None) -> bool:
     if not EXTENSION_SYNC_TOKEN:
         return False
     header = request.headers.get("Authorization", "")
     token = header[7:].strip() if header.lower().startswith("bearer ") else ""
     if not token:
         token = request.headers.get("X-VividMedi-Sync-Token", "").strip()
+    if not token and isinstance(payload, dict):
+        token = str(payload.get("syncToken") or payload.get("token") or "").strip()
     return token == EXTENSION_SYNC_TOKEN
 
 
@@ -737,12 +739,12 @@ def api_history_list():
 
 @app.post("/api/medirecords-sync")
 def api_medirecords_sync_save():
-    if not extension_sync_authorized():
-        return jsonify({"ok": False, "error": "Unauthorized or EXTENSION_SYNC_TOKEN is not configured"}), 401
-
     payload = request.get_json(silent=True)
     if payload is None:
         return jsonify({"ok": False, "error": "Expected JSON payload"}), 400
+
+    if not extension_sync_authorized(payload):
+        return jsonify({"ok": False, "error": "Unauthorized or EXTENSION_SYNC_TOKEN is not configured"}), 401
 
     if isinstance(payload, list):
         payload = {"appointments": payload}
@@ -765,6 +767,11 @@ def api_medirecords_sync_save():
         "appointments": len(appointments or []),
         "patients": len(payload.get("patients") or []),
     })
+
+
+@app.get("/api/medirecords-sync/status")
+def api_medirecords_sync_status():
+    return jsonify({"ok": True, "tokenConfigured": bool(EXTENSION_SYNC_TOKEN)})
 
 
 @app.get("/api/medirecords-sync/latest")
