@@ -750,6 +750,8 @@ def api_medirecords_sync_save():
         payload = {"appointments": payload}
     if not isinstance(payload, dict):
         return jsonify({"ok": False, "error": "Payload must be an object or appointment array"}), 400
+    payload.pop("syncToken", None)
+    payload.pop("token", None)
 
     appointments = payload.get("appointments")
     if appointments is None and "patients" not in payload:

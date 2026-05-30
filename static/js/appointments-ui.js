@@ -352,7 +352,7 @@
     if (!item) return "";
     if (typeof item === "string") return item.trim();
     const date = item.date || item.documentedAt || item.noteDate || "";
-    const weight = item.weight || item.weightKg || "";
+    const weight = String(item.weight || item.weightKg || "").replace(/\s*kg\b/i, "");
     const bmi = item.bmi || item.BMI || "";
     if (item.text) return item.text;
     return [
@@ -364,6 +364,10 @@
 
   function formatWeightTrend(value) {
     return Array.isArray(value) ? value.map(formatTrendItem).filter(Boolean).join(" -> ") : "";
+  }
+
+  function formatLatestWeight(value) {
+    return String(value || "").replace(/\s*kg\b/i, "").trim();
   }
 
   function safeDomId(value) {
@@ -404,7 +408,7 @@
     details.appendChild(renderDetail("Conds", formatAcceptedConditions(appointment.acceptedConditions)));
     details.appendChild(renderDetail("Med", formatLatestMedication(appointment.weightManagement || {})));
     details.appendChild(renderDetail("Wt/BMI", [
-      appointment.weightManagement?.latestWeight ? `${appointment.weightManagement.latestWeight} kg` : "",
+      appointment.weightManagement?.latestWeight ? `${formatLatestWeight(appointment.weightManagement.latestWeight)} kg` : "",
       appointment.weightManagement?.latestBmi ? `BMI ${appointment.weightManagement.latestBmi}` : ""
     ].filter(Boolean).join(" / ")));
     details.appendChild(renderDetail("WA Time", appointment.startTimeWA ? `${appointment.startTimeWA} AWST` : ""));
@@ -523,8 +527,15 @@
       if (response.ok) {
         const data = await response.json();
         const payload = data.payload || data;
-        const rawAppointments = service.extractAppointmentArrayFromPayload(payload);
-        let incoming = service.normaliseMediRecordsAppointments(rawAppointments);
+        let rawAppointments = [];
+        try {
+          rawAppointments = service.extractAppointmentArrayFromPayload(payload);
+        } catch {
+          rawAppointments = [];
+        }
+        let incoming = rawAppointments.length
+          ? service.normaliseMediRecordsAppointments(rawAppointments)
+          : service.appointmentsFromPatientSnapshots(payload.patients || payload.patientSnapshots || []);
         incoming = service.mergePatientSnapshots(incoming, payload.patients || payload.patientSnapshots || []);
         return incoming;
       }
