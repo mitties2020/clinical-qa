@@ -193,8 +193,8 @@ function setTranscriptStatus(status){const el=document.getElementById("transcrip
 function appendTranscriptToConsultInput(text){const input=document.getElementById("clinicalInput");if(!input)return;const clean=(text||"").trim();if(!clean)return;const spacer=input.value&&![...input.value].slice(-2).join("").includes("\n\n")?"\n\n":input.value?"\n":"";input.value=`${input.value}${spacer}${clean}`;input.dispatchEvent(new Event("input",{bubbles:true}));}
 function connectTranscriptSocket(){const configured=(window.TRANSCRIPT_WS_URL||"").trim();const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");const suppressAuto=localStorage.getItem("vivid_transcript_ws_unavailable")==="1";if(!wsUrl||(!configured&&suppressAuto)){setTranscriptStatus("stopped");return;}if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){console.warn("Transcript WebSocket tunnel URL blocked by default. Set window.ALLOW_TUNNEL_WS=true to override.");setTranscriptStatus("stopped");return;}try{const socket=new WebSocket(wsUrl);socket.addEventListener("open",()=>{localStorage.removeItem("vivid_transcript_ws_unavailable");setTranscriptStatus("connected");});socket.addEventListener("close",()=>setTranscriptStatus("stopped"));socket.addEventListener("error",()=>{if(!configured){localStorage.setItem("vivid_transcript_ws_unavailable","1");}setTranscriptStatus("stopped");});socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});}catch{setTranscriptStatus("stopped");}}
 </script>
-<script src="/static/js/appointments-storage.js"></script>
-<script src="/static/js/appointments-medirecords.js"></script>
-<script src="/static/js/appointments-ui.js"></script>
+<script src="/static/js/appointments-storage.js?v=20260530-2"></script>
+<script src="/static/js/appointments-medirecords.js?v=20260530-2"></script>
+<script src="/static/js/appointments-ui.js?v=20260530-2"></script>
 </body>
 </html>
