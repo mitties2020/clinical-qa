@@ -129,13 +129,15 @@
 
   function normaliseWeightManagement(raw) {
     const source = rawValue(raw, ["weightManagement", "WeightManagement", "weight_management"]) || {};
-    const medicationHistory = rawValue(source, ["medicationHistory", "medications", "MedicationHistory"]) || rawValue(raw, ["medicationHistory", "medications"]) || [];
-    const trend = rawValue(source, ["trend", "weightTrend", "WeightTrend"]) || rawValue(raw, ["weightTrend", "bmiTrend"]) || [];
+    const medicationHistory = rawValue(source, ["medicationHistory", "medications", "MedicationHistory"]) || rawValue(raw, ["medicationHistory", "medications", "recentMedications"]) || [];
+    const trend = rawValue(source, ["trend", "weightTrend", "WeightTrend"]) || rawValue(raw, ["weightTrend", "bmiTrend", "recentWeights"]) || [];
+    const latestWeightEntry = Array.isArray(trend) && trend.length ? trend[0] : {};
+    const latestMedicationEntry = Array.isArray(medicationHistory) && medicationHistory.length ? medicationHistory[0] : null;
     return {
       medicationHistory: Array.isArray(medicationHistory) ? medicationHistory : normaliseTextList(medicationHistory).map((text) => ({ text })),
-      latestMedication: rawValue(source, ["latestMedication", "currentMedication"]) || rawValue(raw, ["latestMedication", "currentMedication"]) || null,
-      latestWeight: rawValue(source, ["latestWeight", "weight"]) || rawValue(raw, ["latestWeight", "weight"]) || "",
-      latestBmi: rawValue(source, ["latestBmi", "latestBMI", "bmi", "BMI"]) || rawValue(raw, ["latestBmi", "latestBMI", "bmi", "BMI"]) || "",
+      latestMedication: rawValue(source, ["latestMedication", "currentMedication"]) || rawValue(raw, ["latestMedication", "currentMedication"]) || latestMedicationEntry,
+      latestWeight: rawValue(source, ["latestWeight", "weight"]) || rawValue(raw, ["latestWeight", "weight"]) || rawValue(latestWeightEntry, ["weight", "weightKg"]) || "",
+      latestBmi: rawValue(source, ["latestBmi", "latestBMI", "bmi", "BMI"]) || rawValue(raw, ["latestBmi", "latestBMI", "bmi", "BMI"]) || rawValue(latestWeightEntry, ["bmi", "BMI"]) || "",
       trend: Array.isArray(trend) ? trend : normaliseTextList(trend).map((text) => ({ text }))
     };
   }
@@ -153,16 +155,16 @@
       patientGuid: rawValue(raw, ["patientGuid", "PatientGuid"]) || "",
       patientName: buildPatientName(raw),
       dob: rawValue(raw, ["dob", "DOB", "dateOfBirth", "DateOfBirth"]) || null,
-      age: calculateAgeFromMediRecordsDob(rawValue(raw, ["dob", "DOB", "dateOfBirth", "DateOfBirth"])),
+      age: calculateAgeFromMediRecordsDob(rawValue(raw, ["dob", "DOB", "dateOfBirth", "DateOfBirth"])) ?? rawValue(raw, ["age", "Age"]) ?? null,
       mobilePhone: rawValue(raw, ["mobilePhone", "MobilePhone", "mobile", "Mobile", "phone", "Phone"]) || "",
-      dvaNo: rawValue(raw, ["dvaNo", "DVANo", "dvaNumber", "DvaNumber", "veteranFileNumber"]) || "",
-      dvaCardColour: rawValue(raw, ["dvaCardColour", "dvaCardColor", "cardColour", "cardColor", "veteranCardColour", "veteranCardColor"]) || "",
-      acceptedConditions: normaliseTextList(rawValue(raw, ["acceptedConditions", "dvaAcceptedConditions", "DvaAcceptedConditions"])),
+      dvaNo: rawValue(raw, ["dvaNo", "DVANo", "dvaNumber", "DvaNumber", "veteranFileNumber"]) || rawValue(rawValue(raw, ["dva", "DVA"]) || {}, ["number", "dvaNo"]) || "",
+      dvaCardColour: rawValue(raw, ["dvaCardColour", "dvaCardColor", "cardColour", "cardColor", "veteranCardColour", "veteranCardColor"]) || rawValue(rawValue(raw, ["dva", "DVA"]) || {}, ["cardType", "cardColour", "cardColor"]) || "",
+      acceptedConditions: normaliseTextList(rawValue(raw, ["acceptedConditions", "dvaAcceptedConditions", "DvaAcceptedConditions"]) || rawValue(rawValue(raw, ["dva", "DVA"]) || {}, ["conditions", "acceptedConditions"])),
       weightManagement: normaliseWeightManagement(raw),
       appointmentType: rawValue(raw, ["practiceAppointmentTypeName", "PracticeAppointmentTypeName", "appointmentType", "AppointmentType"]) || "",
       appointmentNote: rawValue(raw, ["appointmentNote", "AppointmentNote", "note", "Note"]) || "",
       startTimeOriginal,
-      startTimeWA: formatTimeInPerth(startDate),
+      startTimeWA: formatTimeInPerth(startDate) || rawValue(raw, ["startTimeWA", "appointmentWA"]) || "",
       endTimeWA: formatTimeInPerth(endDate),
       startTimeUtc: startDate ? startDate.toISOString() : "",
       endTimeUtc: endDate ? endDate.toISOString() : "",
@@ -310,6 +312,24 @@
     });
   }
 
+  function appointmentsFromPatientSnapshots(patients) {
+    const snapshots = Array.isArray(patients) ? patients : [];
+    return snapshots
+      .filter((snapshot) => snapshot && typeof snapshot === "object")
+      .map((snapshot) => normaliseMediRecordsAppointment({
+        ...snapshot,
+        appointmentGuid: rawValue(snapshot, ["appointmentGuid"]) || rawValue(snapshot, ["patientGuid"]) || fallbackAppointmentGuid(snapshot),
+        patientGuid: rawValue(snapshot, ["patientGuid"]) || "",
+        firstName: rawValue(snapshot, ["firstName"]) || "",
+        lastName: rawValue(snapshot, ["lastName"]) || "",
+        mobilePhone: rawValue(snapshot, ["mobile", "mobilePhone"]) || "",
+        practiceAppointmentTypeName: rawValue(snapshot, ["appointmentType"]) || "",
+        kendoStartTime: rawValue(snapshot, ["appointmentSourceTime"]) || "",
+        startTimeWA: rawValue(snapshot, ["appointmentWA"]) || ""
+      }))
+      .filter((appointment) => appointment.appointmentGuid);
+  }
+
   function todayDateString() {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Australia/Perth",
@@ -349,6 +369,7 @@
     parseAppointmentPayloadText,
     mergeAppointments,
     mergePatientSnapshots,
+    appointmentsFromPatientSnapshots,
     todayDateString
   };
 })();
