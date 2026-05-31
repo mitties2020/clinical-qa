@@ -75,6 +75,7 @@
               "- Do not force safety-netting or red-flag sections into low-risk administrative, renewal, script, referral, or documentation-only notes unless clinically warranted.",
               "- For Weight loss initial consult, use the organisation-style initial weight-management note: telehealth/ID verification, patient profile, DVA context if documented, PMHx, medications, weight-management history, counselling, opportunity for questions, assessment, plan, safety-netting, observations, and current medication line.",
               "- For Weight loss follow-up, use the organisation-style script-renewal/weight-management review note: consult type, clinician/mode, ID verification, reason, medical conditions, anthropometrics, current treatment, progress, side effects, assessment, plan, safety-netting, and current medication line.",
+              "- For VAPAC weight loss application, write a formal DVA VAPAC application letter for RPBS funding/continuation, include missing critical information at the bottom, and do not output a routine clinical note.",
               "- Where the selected type or content relates to DVA, allied health, renewal, veteran care, weight management scripts, or referral justification, write to an audit-ready DVA documentation standard without inventing accepted conditions or entitlement details.",
               "- Write 'Not documented' where clinically important information is missing.",
               "",

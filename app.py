@@ -396,6 +396,7 @@ HANDOVER_SYSTEM_PROMPT = (
 CONSULT_TYPE_INSTRUCTIONS = {
     "weight loss initial consult": "Use the organisation's initial weight-management consult style. Focus on ID check, telehealth mode, DVA/card context where documented, obesity/metabolic history, comorbidities, current and prior weight-loss medicines, contraindications, counselling, consent/opportunity for questions, baseline observations, starting plan, follow-up, safety-netting, and current medication line.",
     "weight loss follow-up": "Use the organisation's weight-management review/script-renewal style. Focus on response to treatment, adverse effects, tolerability, adherence, current dose, requested dose change/script renewal, BMI/weight trajectory, comorbidities, escalation rationale, dietitian/lifestyle measures, safety-netting, follow-up, and current medication line.",
+    "vapac weight loss application": "Write a formal DVA VAPAC application letter for RPBS funding or continuation of weight-loss pharmacotherapy. Focus on patient identifiers, DVA card/file details, accepted conditions/comorbidities, anthropometrics, prior response, 5% weight-loss status, medication history, requested medication/regimen, clinical justification, monitoring, evidence, and missing critical information.",
     "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
     "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
@@ -474,11 +475,75 @@ WEIGHT_LOSS_FOLLOWUP_NOTE_STRUCTURE = (
     "- Include a Current Medication line in prescribing-platform style when a drug/dose is documented. If exact formulation/directions are missing, write 'Exact prescribing line: Not documented'."
 )
 
+VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE = (
+    "Use this exact practical letter style for VAPAC weight-loss pharmacotherapy applications. Plain text only. "
+    "Keep it copy-paste ready. Do not use Markdown, tables with pipes, or decorative symbols.\n"
+    "Use today's date: {today_date}.\n\n"
+    "Heading/order:\n"
+    "Apex Rx 447 Upper Edward Street\n"
+    "Spring Hill, QLD 4000\n"
+    "Ph: 1300273979\n"
+    "Fax: 0739168300\n"
+    "E: contact@apexrx.com.au\n\n"
+    "Department of Veterans' Affairs - Application for Funding of Weight Loss Pharmacotherapy Veterans' Affairs Pharmaceutical Advisory Centre (VAPAC)\n\n"
+    "{today_date}\n\n"
+    "Dear Sirs/ Madams\n\n"
+    "<Patient title/name>\n"
+    "<DOB>\n"
+    "<DVA card type and DVA/file number>\n\n"
+    "Starting Weight:\n"
+    "Current Weight:\n"
+    "Height:\n"
+    "BMI:\n"
+    "Accepted Conditions / Comorbidities:\n\n"
+    "Clinical Summary (Reason for request):\n\n"
+    "Current Medication (Generic/ Brand name/ Dose):\n\n"
+    "Medication History:\n"
+    "Product Name    Dosage    Frequency\n"
+    "<convert any pasted medication history into simple aligned plain text rows>\n\n"
+    "Requested Medication:\n"
+    "Proposed dose and regimen:\n\n"
+    "Intended as a maintenance dose, with ongoing clinical review and dose adjustment if required\n"
+    "Continued alongside lifestyle measures, dietitian input, and physical activity\n"
+    "Planned duration: Ongoing treatment for 4 months, subject to review.\n\n"
+    "Monitoring and review:\n"
+    "BMI will be used as the primary objective marker for response, with assessment at regular follow-up intervals. "
+    "Adjunctive lifestyle measures, including regular exercise and dietitian reviews, will continue. Regular engagement "
+    "with the doctor for reviews also acts as a form of check-in and behaviour activation, where the doctor can also "
+    "provide informal psychological and medical support in the form of reassurance. It also gives the opportunity for "
+    "the doctor to further explore underlying causes for weight gain where clinically relevant, including undiagnosed "
+    "ADHD or other contributors that may only become apparent after longitudinal assessment.\n\n"
+    "Evidence Supporting Efficacy\n"
+    "The following peer-reviewed studies provide evidence supporting the efficacy of once-weekly GLP-1/GIP receptor agonist therapy in adults with overweight or obesity: "
+    "'Tirzepatide Once Weekly for the Treatment of Obesity' - New England Journal of Medicine (2022). "
+    "'Once-Weekly Semaglutide in Adults with Overweight or Obesity' - New England Journal of Medicine (2021).\n\n"
+    "Summary\n"
+    "In participants with overweight or obesity, both tirzepatide and semaglutide, administered once weekly alongside lifestyle interventions, were associated with sustained, clinically significant reductions in body weight and improvements in cardiometabolic markers compared to placebo.\n\n"
+    "We request a 4 month prescription of medication.\n\n"
+    "Additional Notes\n\n"
+    "Conclusion\n"
+    "This application is made under RPBS arrangements for consideration by the Department of Veterans' Affairs (VAPAC). "
+    "The requested treatment is clinically appropriate for this patient's presentation and comorbidity profile, with supporting evidence for efficacy and safety.\n\n"
+    "Dr Michael Addis\n"
+    "665437AX\n"
+    "contact@apex.au\n\n"
+    "Critical information missing / issues to address:\n"
+    "- <list missing or contradictory items, or write 'No critical missing information identified from the supplied input.'>\n\n"
+    "Content requirements:\n"
+    "- Preserve supplied patient identifiers, DVA card type, file number, DOB, dates, medications, doses and prior notes accurately.\n"
+    "- Calculate BMI if height and current weight are supplied. Calculate percentage weight loss if starting and current weight are supplied.\n"
+    "- Explicitly state whether the patient meets or fails the 5% weight-loss continuation threshold when data permits.\n"
+    "- For White Card holders, explicitly link the request to accepted conditions/comorbidities where supplied. If this link is unclear, flag it as critical missing information.\n"
+    "- If continuation is requested despite less than 5% weight loss, include a reasoned written-application justification based only on supplied facts: clinical benefits, functional gains, barriers, dose titration, interruptions, tolerability, comorbidity improvement, or risk of harm if ceased.\n"
+    "- Do not invent accepted conditions, specialist support, renal/hepatic status, pathology, or medication response. If absent, state it is not documented and flag if important."
+)
+
 
 def build_consult_prompt_context(consult_type: str) -> str:
     normalized = (consult_type or "").strip().lower()
     chosen_type = normalized or "general consultation note"
     guidance = CONSULT_TYPE_INSTRUCTIONS.get(chosen_type, CONSULT_TYPE_INSTRUCTIONS["general consultation note"])
+    today_date = datetime.now(ZoneInfo("Australia/Perth")).strftime("%d/%m/%Y")
     if chosen_type == "weight loss initial consult":
         return (
             f"Consult type selected: {chosen_type}.\n"
@@ -500,6 +565,17 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "the clinician's work platform, not an academic report. Use short lines and clinically useful headings. "
             "Add missing documentation prompts as 'Not documented' where important for DVA/AHPRA defensibility, "
             "without bloating the note."
+        )
+
+    if chosen_type == "vapac weight loss application":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n\n"
+            f"{VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE.format(today_date=today_date)}\n\n"
+            "Organisation workflow priority:\n"
+            "The final output is a formal application letter to VAPAC, not a routine consult note. "
+            "Use the supplied pasted information to populate the letter. Keep it professional, concise and defensible. "
+            "At the bottom, always include a Critical information missing / issues to address section."
         )
 
     if chosen_type == "emergency department note":

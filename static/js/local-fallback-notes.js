@@ -157,9 +157,141 @@
     return `${drug} Subcutaneous Solution Pen-injector ${dose ? `${formatNumber(dose, 2)} mg` : "dose not documented"}, inject weekly, Once a week, , As directed`;
   }
 
+  function todayAu() {
+    return new Intl.DateTimeFormat("en-AU", {
+      timeZone: "Australia/Perth",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }).format(new Date());
+  }
+
+  function extractLine(raw, patterns) {
+    const text = String(raw || "");
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) return match[1].trim();
+    }
+    return "";
+  }
+
+  function percentWeightLoss(facts) {
+    if (!facts.previousWeight || !facts.currentWeight) return null;
+    return ((facts.previousWeight - facts.currentWeight) / facts.previousWeight) * 100;
+  }
+
+  function criticalVapacIssues(raw, facts) {
+    const lower = String(raw || "").toLowerCase();
+    const issues = [];
+    if (!extractLine(raw, [/(?:patient|name)\s*[:\-]\s*([^\n]+)/i]) && !/\bmr\.|\bmrs\.|\bms\.|\bmiss\b/i.test(raw)) issues.push("Patient full name/title not clearly documented.");
+    if (!/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(raw) && !/dob|date of birth/i.test(raw)) issues.push("DOB not clearly documented.");
+    if (!/gold|white|dva|vsm|file|card/i.test(raw)) issues.push("DVA card type and/or DVA file number not clearly documented.");
+    if (!facts.previousWeight) issues.push("Starting weight not clearly documented.");
+    if (!facts.currentWeight) issues.push("Current weight not clearly documented.");
+    if (!facts.heightCm) issues.push("Height not clearly documented, so BMI cannot be verified.");
+    if (!/accepted conditions?|comorbid|oa|osa|hypertension|htn|diabetes|dm|pain|back|knee|ankle|mental health|ptsd/i.test(raw)) issues.push("Accepted conditions / relevant comorbidities not clearly documented.");
+    if (!facts.medicine && !/tirzepatide|semaglutide|mounjaro|wegovy|ozempic/i.test(lower)) issues.push("Requested medication not clearly documented.");
+    if (!facts.plannedDose && !/requested|proposed|maintenance|continue|continuation/i.test(lower)) issues.push("Requested dose/regimen not clearly documented.");
+    if (!facts.hasDietician) issues.push("Dietitian/dietician engagement not clearly documented.");
+    if (percentWeightLoss(facts) !== null && percentWeightLoss(facts) < 5) issues.push(`Weight loss is ${formatNumber(percentWeightLoss(facts), 1)}%, below the commonly cited 5% continuation threshold; written justification should address clinical benefits/barriers.`);
+    return issues;
+  }
+
+  function vapacApplication(raw, facts) {
+    const issues = criticalVapacIssues(raw, facts);
+    const loss = percentWeightLoss(facts);
+    const patientName = extractLine(raw, [/(?:patient|name)\s*[:\-]\s*([^\n]+)/i])
+      || String(raw || "").match(/\b(?:Mr|Mrs|Ms|Miss|Dr)\.?\s+[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)+/)?.[0]
+      || "Patient name: Not documented";
+    const dob = extractLine(raw, [/(?:dob|date of birth)\s*[:\-]\s*([^\n]+)/i])
+      || String(raw || "").match(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/)?.[0]
+      || "DOB: Not documented";
+    const dva = extractLine(raw, [/(?:dva|card|file)\s*[:\-]\s*([^\n]+)/i])
+      || String(raw || "").match(/\b(?:Gold|White)\b\s*[-:]?\s*[A-Z]{2,}\d+/i)?.[0]
+      || "DVA card/file: Not documented";
+    const requestedMed = facts.medicine ? `${facts.medicine}${facts.generic ? ` (${facts.generic})` : ""}` : "Not documented";
+    const requestedDose = facts.plannedDose || facts.currentDose
+      ? `${formatNumber(facts.plannedDose || facts.currentDose, 2)} mg once weekly`
+      : "Not documented";
+
+    return [
+      "Apex Rx 447 Upper Edward Street",
+      "Spring Hill, QLD 4000",
+      "Ph: 1300273979",
+      "Fax: 0739168300",
+      "E: contact@apexrx.com.au",
+      "",
+      "Department of Veterans' Affairs - Application for Funding of Weight Loss Pharmacotherapy Veterans' Affairs Pharmaceutical Advisory Centre (VAPAC)",
+      "",
+      todayAu(),
+      "",
+      "Dear Sirs/ Madams",
+      "",
+      patientName,
+      dob,
+      dva,
+      "",
+      `Starting Weight: ${facts.previousWeight ? `${formatNumber(facts.previousWeight, 1)} kg` : "Not documented"}`,
+      `Current Weight: ${facts.currentWeight ? `${formatNumber(facts.currentWeight, 1)} kg` : "Not documented"}`,
+      `Height: ${facts.heightCm ? `${formatNumber(facts.heightCm, 1)} cm` : "Not documented"}`,
+      `BMI: ${facts.bmi ? `~${formatNumber(facts.bmi, 1)} kg/m2 (${bmiCategory(facts.bmi)})` : "Not documented"}`,
+      "Accepted Conditions / Comorbidities:",
+      extractLine(raw, [/(?:accepted conditions?|comorbidities|comorbid conditions)\s*[:\-]?\s*([^\n]+)/i]) || "Not documented",
+      "",
+      "Clinical Summary (Reason for request):",
+      loss !== null ? `Documented weight change is ${formatNumber(loss, 1)}% from starting weight.` : "Percentage weight loss cannot be calculated from the supplied data.",
+      raw,
+      "",
+      "Current Medication (Generic/ Brand name/ Dose):",
+      requestedMed === "Not documented" ? "Not documented" : `${requestedMed} ${requestedDose}`,
+      "",
+      "Medication History:",
+      "Product Name    Dosage    Frequency",
+      "See supplied medication history below / above. Convert pasted prescribing history into rows in the live AI output.",
+      "",
+      "Requested Medication:",
+      requestedMed,
+      "",
+      "Proposed dose and regimen:",
+      requestedDose,
+      "",
+      "Intended as a maintenance dose, with ongoing clinical review and dose adjustment if required",
+      "Continued alongside lifestyle measures, dietitian input, and physical activity",
+      "Planned duration: Ongoing treatment for 4 months, subject to review.",
+      "",
+      "Monitoring and review:",
+      "BMI will be used as the primary objective marker for response, with assessment at regular follow-up intervals. Adjunctive lifestyle measures, including regular exercise and dietitian reviews, will continue. Regular engagement with the doctor for reviews also acts as a form of check-in and behaviour activation, where the doctor can also provide informal psychological and medical support in the form of reassurance.",
+      "",
+      "Evidence Supporting Efficacy",
+      "The following peer-reviewed studies provide evidence supporting the efficacy of once-weekly GLP-1/GIP receptor agonist therapy in adults with overweight or obesity: 'Tirzepatide Once Weekly for the Treatment of Obesity' - New England Journal of Medicine (2022). 'Once-Weekly Semaglutide in Adults with Overweight or Obesity' - New England Journal of Medicine (2021).",
+      "",
+      "Summary",
+      "In participants with overweight or obesity, both tirzepatide and semaglutide, administered once weekly alongside lifestyle interventions, were associated with sustained, clinically significant reductions in body weight and improvements in cardiometabolic markers compared to placebo.",
+      "",
+      "We request a 4 month prescription of medication.",
+      "",
+      "Additional Notes",
+      "Renal/hepatic status: Not documented unless supplied above.",
+      "",
+      "Conclusion",
+      "This application is made under RPBS arrangements for consideration by the Department of Veterans' Affairs (VAPAC). The requested treatment is clinically appropriate for this patient's presentation and comorbidity profile, with supporting evidence for efficacy and safety.",
+      "",
+      "Dr Michael Addis",
+      "665437AX",
+      "contact@apex.au",
+      "",
+      "Critical information missing / issues to address:",
+      ...(issues.length ? issues.map((issue) => `- ${issue}`) : ["- No critical missing information identified from the supplied input."])
+    ].join("\n");
+  }
+
   window.buildLocalFallbackNote = function buildLocalFallbackNote(type, raw) {
     const lower = String(type || "").toLowerCase();
     const facts = extractWeightLossFacts(raw);
+    if (lower === "vapac weight loss application") {
+      return vapacApplication(raw, facts);
+    }
+
     if (lower === "weight loss follow-up") {
       return [
         `Consult Type: Script Renewal - Weight Management${facts.medicine ? ` (${facts.medicine})` : ""}`,
