@@ -373,6 +373,10 @@ CONSULT_NOTE_SYSTEM_PROMPT = (
     "Optimise for clinical utility: concise, specific, and action-oriented.\n"
     "Carry forward key positives/negatives and unresolved risks when present in input.\n"
     "When details are missing, write 'Not documented' instead of guessing.\n\n"
+    "Where consult-type instructions provide an exact organisation-specific structure, "
+    "use that structure instead of the default headings.\n"
+    "For DVA/AHPRA-sensitive notes, make the documentation defensible and audit-ready, "
+    "but do not claim compliance is guaranteed.\n\n"
     "Do not include References or Red Flags sections unless the clinician explicitly asks for them.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\n"
@@ -390,8 +394,8 @@ HANDOVER_SYSTEM_PROMPT = (
 )
 
 CONSULT_TYPE_INSTRUCTIONS = {
-    "weight loss initial consult": "Focus on baseline obesity/metabolic history, contraindications, goals, and initial management plan.",
-    "weight loss follow-up": "Focus on response to treatment, adverse effects, adherence, dose changes, and next-step plan.",
+    "weight loss initial consult": "Use the organisation's initial weight-management consult style. Focus on ID check, telehealth mode, DVA/card context where documented, obesity/metabolic history, comorbidities, current and prior weight-loss medicines, contraindications, counselling, consent/opportunity for questions, baseline observations, starting plan, follow-up, safety-netting, and current medication line.",
+    "weight loss follow-up": "Use the organisation's weight-management review/script-renewal style. Focus on response to treatment, adverse effects, tolerability, adherence, current dose, requested dose change/script renewal, BMI/weight trajectory, comorbidities, escalation rationale, dietitian/lifestyle measures, safety-netting, follow-up, and current medication line.",
     "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
     "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
@@ -406,11 +410,98 @@ CONSULT_TYPE_INSTRUCTIONS = {
     "general consultation note": "Use a comprehensive general consultation note structure suitable for routine primary care.",
 }
 
+WEIGHT_LOSS_INITIAL_NOTE_STRUCTURE = (
+    "Use this exact practical note style for Weight loss initial consult. Plain text only. "
+    "Keep it copy-paste ready for the work platform. Do not use Markdown.\n"
+    "Heading/order:\n"
+    "Telehealth consult\n"
+    "ID Verification\n"
+    "Patient profile\n"
+    "DVA / entitlement context\n"
+    "Past medical history\n"
+    "Medications\n"
+    "Weight management history\n"
+    "Current issue / reason for consult\n"
+    "Counselling\n"
+    "Opportunity to ask questions\n"
+    "Assessment\n"
+    "Plan\n"
+    "Safety Netting\n"
+    "Observation\n"
+    "Current Medication\n\n"
+    "Content requirements:\n"
+    "- Use 'Telehealth consult' unless the input clearly says the consult was in-person or another mode.\n"
+    "- Include '3 points of ID confirmed' or the specific ID details documented. If not documented, write 'ID verification: Not documented'.\n"
+    "- Include age/sex if documented, DVA card colour/accepted conditions if documented, PMHx, medicines, current GLP-1/GIP or other weight-loss medicine, plateau or reason for switch if documented.\n"
+    "- Include counselling for tirzepatide/Mounjaro when relevant: once-weekly subcutaneous injection, GLP-1/GIP mechanism, appetite/satiety, insulin sensitivity/metabolic effect, common GI side effects, storage/refrigeration, pen/needle administration, and variable/manageable side effects.\n"
+    "- Include contraindications or cautions only if documented. If key contraindication screening is absent, note 'Contraindication screening: Not documented'.\n"
+    "- Include patient questions/consent to proceed if documented; otherwise state 'Opportunity to ask questions: Not documented'.\n"
+    "- Include baseline weight/height/BMI under Observation when available.\n"
+    "- Include a specific starting plan, usually Mounjaro/tirzepatide 2.5 mg weekly if documented or clinically indicated by input, without inventing if unclear.\n"
+    "- Include follow-up timing, usually 4 weeks or sooner if concerns when documented/appropriate.\n"
+    "- Include a Current Medication line in prescribing-platform style when a drug/dose is documented. If exact formulation/directions are missing, write 'Exact prescribing line: Not documented'."
+)
+
+WEIGHT_LOSS_FOLLOWUP_NOTE_STRUCTURE = (
+    "Use this exact practical note style for Weight loss follow-up, including script-renewal/dose-adjustment reviews. Plain text only. "
+    "Keep it copy-paste ready for the work platform. Do not use Markdown.\n"
+    "Heading/order:\n"
+    "Consult Type: Script Renewal - Weight Management (<medicine if documented>)\n"
+    "Clinician\n"
+    "Mode\n"
+    "ID Verification\n"
+    "Reason for Consult\n"
+    "Medical conditions\n"
+    "Anthropometrics\n"
+    "Current Treatment\n"
+    "Progress Since Last Review\n"
+    "Side Effects\n"
+    "Assessment\n"
+    "Plan\n"
+    "Safety Netting\n"
+    "Current Medication\n\n"
+    "Content requirements:\n"
+    "- Use the medicine name from the input, e.g. Mounjaro/tirzepatide/Ozempic/semaglutide. If not documented, write 'medicine not documented'.\n"
+    "- Include clinician only if documented; otherwise 'Clinician: Not documented'.\n"
+    "- Use 'Mode: Telehealth' unless the input clearly says the consult was in-person or another mode.\n"
+    "- Include ID verification using full name, DOB and residential address if documented; otherwise write what was confirmed or 'Not documented'.\n"
+    "- Include comorbidities/accepted DVA conditions exactly as provided, including OA, OSA, HTN, DM, AF, chronic pain issues, etc. Do not add diagnoses.\n"
+    "- Include current weight, height and BMI when available; calculate BMI only if weight and height are available, mark as approximate.\n"
+    "- Include current medication and previous/current dose, response, appetite suppression, weight loss/plateau, lifestyle/dietitian input, tolerability, and negative GI/red-flag symptoms when documented.\n"
+    "- Assessment should explicitly justify continuing treatment and dose escalation/renewal only when the input supports it: response, BMI/clinical indication, tolerability, no significant adverse effects, ongoing obesity/metabolic risk.\n"
+    "- Plan should include exact dose change/script issue when documented, diet/hydration/lifestyle reinforcement, and review timing.\n"
+    "- Safety Netting should include stopping injections and seeking urgent care for persistent vomiting, severe abdominal pain especially RUQ, pancreatitis/gallbladder symptoms, or other concerning adverse effects when relevant.\n"
+    "- Include a Current Medication line in prescribing-platform style when a drug/dose is documented. If exact formulation/directions are missing, write 'Exact prescribing line: Not documented'."
+)
+
 
 def build_consult_prompt_context(consult_type: str) -> str:
     normalized = (consult_type or "").strip().lower()
     chosen_type = normalized or "general consultation note"
     guidance = CONSULT_TYPE_INSTRUCTIONS.get(chosen_type, CONSULT_TYPE_INSTRUCTIONS["general consultation note"])
+    if chosen_type == "weight loss initial consult":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n\n"
+            f"{WEIGHT_LOSS_INITIAL_NOTE_STRUCTURE}\n\n"
+            "Organisation workflow priority:\n"
+            "The final note should read like a clinician's work-platform note, not an academic report. "
+            "Use short lines and clinically useful headings. Add missing documentation prompts as 'Not documented' "
+            "where important for DVA/AHPRA defensibility, without bloating the note."
+        )
+
+    if chosen_type == "weight loss follow-up":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n\n"
+            f"{WEIGHT_LOSS_FOLLOWUP_NOTE_STRUCTURE}\n\n"
+            "Organisation workflow priority:\n"
+            "The final note should read like a script-renewal/weight-management review note suitable for copying into "
+            "the clinician's work platform, not an academic report. Use short lines and clinically useful headings. "
+            "Add missing documentation prompts as 'Not documented' where important for DVA/AHPRA defensibility, "
+            "without bloating the note."
+        )
+
     if chosen_type == "emergency department note":
         return (
             f"Consult type selected: {chosen_type}.\n"

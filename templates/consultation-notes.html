@@ -387,6 +387,101 @@ function buildClinicalPayload(raw,type){
     raw
   ].join("\n");
 }
+function buildLocalFallbackNote(type,raw){
+  const lower=String(type||"").toLowerCase();
+  if(lower==="weight loss follow-up"){
+    return [
+      "Consult Type: Script Renewal - Weight Management",
+      "Clinician: Not documented",
+      "Mode: Telehealth",
+      "",
+      "ID Verification",
+      "Not documented",
+      "",
+      "Reason for Consult",
+      "Weight management review / script renewal.",
+      "",
+      "Medical conditions",
+      "Not documented",
+      "",
+      "Anthropometrics",
+      "Current weight: Not documented",
+      "Height: Not documented",
+      "BMI: Not documented",
+      "",
+      "Current Treatment",
+      "Medication and current dose: Not documented",
+      "",
+      "Progress Since Last Review",
+      raw,
+      "",
+      "Side Effects",
+      "Not documented",
+      "",
+      "Assessment",
+      "Weight management review completed. Treatment response, tolerability, BMI/weight trend, and dose escalation rationale require clinician confirmation from the consult details above.",
+      "",
+      "Plan",
+      "Dose/script plan: Not documented",
+      "Reinforce high-protein diet, hydration, and ongoing lifestyle measures where appropriate.",
+      "Follow-up timing: Not documented",
+      "",
+      "Safety Netting",
+      "Advise patient to stop injections and seek urgent care for persistent vomiting, severe abdominal pain especially right upper quadrant, or symptoms suggestive of pancreatitis/gallbladder pathology.",
+      "",
+      "Current Medication",
+      "Exact prescribing line: Not documented"
+    ].join("\n");
+  }
+  if(lower==="weight loss initial consult"){
+    return [
+      "Telehealth consult",
+      "",
+      "ID Verification",
+      "Not documented",
+      "",
+      "Patient profile",
+      "Not documented",
+      "",
+      "DVA / entitlement context",
+      "Not documented",
+      "",
+      "Past medical history",
+      "Not documented",
+      "",
+      "Medications",
+      "Not documented",
+      "",
+      "Weight management history",
+      raw,
+      "",
+      "Counselling",
+      "Counselled on Mounjaro (tirzepatide) where clinically appropriate: once-weekly self-administered subcutaneous injection, GLP-1/GIP agonist mechanism, appetite/satiety effect, metabolic effect, potential GI side effects, pen/needle administration, and refrigeration/storage requirements.",
+      "",
+      "Opportunity to ask questions",
+      "Not documented",
+      "",
+      "Assessment",
+      "Initial weight management consultation completed. Suitability, contraindication screening, baseline observations, and treatment choice require clinician confirmation from the consult details above.",
+      "",
+      "Plan",
+      "Weight-management medication plan: Not documented",
+      "Review in 4 weeks or sooner if concerns, if clinically appropriate.",
+      "",
+      "Safety Netting",
+      "Advise patient to stop injections and seek urgent care for persistent vomiting, severe abdominal pain especially right upper quadrant, or symptoms suggestive of pancreatitis/gallbladder pathology.",
+      "",
+      "Observation",
+      "Weight: Not documented",
+      "Height: Not documented",
+      "BMI: Not documented",
+      "",
+      "Current Medication",
+      "Exact prescribing line: Not documented"
+    ].join("\n");
+  }
+  return `Consult type: ${type}\n\nClinical note:\n${raw}\n\nAssessment:\n[Draft assessment generated from input.]\n\nPlan:\n[Draft plan generated from input.]`;
+}
 async function generateOutput(consultTypeArg){
   const input=document.getElementById("clinicalInput");
   const output=document.getElementById("outputBox");
@@ -400,7 +495,7 @@ async function generateOutput(consultTypeArg){
     const data=await res.json();
     output.textContent=data.clinical_notes||data.output||"No output generated.";
   }catch{
-    output.textContent=`Consult type: ${type}\n\nClinical note:\n${raw}\n\nAssessment:\n[Draft assessment generated from input.]\n\nPlan:\n[Draft plan generated from input.]`;
+    output.textContent=buildLocalFallbackNote(type,raw);
   }
 }
 function clearForm(){
@@ -640,5 +735,6 @@ function connectTranscriptSocket(){
   }
 }
 </script>
+<script src="/static/js/local-fallback-notes.js?v=20260601-1"></script>
 </body>
 </html>

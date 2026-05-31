@@ -73,6 +73,8 @@
               "- Preserve documented facts, important positives and negatives, uncertainty, risks, medication details, contraindications, monitoring needs, and follow-up needs where they are clinically relevant.",
               "- Include Monitoring, Follow-up, Safety Netting, and Red Flags only when clinically relevant to the selected consult type, patient risk, medications or procedures, diagnostic uncertainty, or documented clinician concern.",
               "- Do not force safety-netting or red-flag sections into low-risk administrative, renewal, script, referral, or documentation-only notes unless clinically warranted.",
+              "- For Weight loss initial consult, use the organisation-style initial weight-management note: telehealth/ID verification, patient profile, DVA context if documented, PMHx, medications, weight-management history, counselling, opportunity for questions, assessment, plan, safety-netting, observations, and current medication line.",
+              "- For Weight loss follow-up, use the organisation-style script-renewal/weight-management review note: consult type, clinician/mode, ID verification, reason, medical conditions, anthropometrics, current treatment, progress, side effects, assessment, plan, safety-netting, and current medication line.",
               "- Where the selected type or content relates to DVA, allied health, renewal, veteran care, weight management scripts, or referral justification, write to an audit-ready DVA documentation standard without inventing accepted conditions or entitlement details.",
               "- Write 'Not documented' where clinically important information is missing.",
               "",
@@ -221,6 +223,7 @@
     activeAppointmentGuid = appointmentGuid;
     appointment.isExpanded = !appointment.isExpanded;
     appointment.lastSavedAt = new Date().toISOString();
+    setMainConsultFromAppointment(appointment);
     saveNow();
     renderAppointments();
   }
@@ -231,6 +234,7 @@
     appointment.isDeleted = true;
     appointment.isExpanded = false;
     appointment.lastSavedAt = new Date().toISOString();
+    if (activeAppointmentGuid === appointmentGuid) clearMainAppointmentContext();
     saveNow();
     renderAppointments();
   }
@@ -242,6 +246,114 @@
     appointment.lastSavedAt = new Date().toISOString();
     if (statusEl) statusEl.innerHTML = "&#10003; Saved";
     saveSoon();
+  }
+
+  function appointmentSummaryLine(appointment) {
+    return [
+      appointment.appointmentType || "Existing patient consult",
+      appointment.age === null || appointment.age === undefined ? "" : `Age ${appointment.age}`,
+      appointment.mobilePhone || "",
+      appointment.startTimeWA ? `${appointment.startTimeWA} AWST` : ""
+    ].filter(Boolean).join(" | ");
+  }
+
+  function formatAppointmentClinicalInput(appointment) {
+    const weightManagement = appointment.weightManagement || {};
+    const medicationLines = formatMedicationHistory(weightManagement.medicationHistory);
+    const trendLines = formatWeightTrend(weightManagement.trend);
+    const appointmentNote = String(appointment.appointmentNote || "").trim();
+
+    return [
+      `Patient: ${appointment.patientName || "Unknown patient"}`,
+      `Age: ${appointment.age === null || appointment.age === undefined ? "Not documented" : appointment.age}`,
+      `DOB: ${formatDobFromAppointment(appointment) || "Not documented"}`,
+      `Mobile: ${appointment.mobilePhone || "Not documented"}`,
+      `DVA number: ${appointment.dvaNo || "Not documented"}`,
+      `DVA card: ${appointment.dvaCardColour || "Not documented"}`,
+      `Accepted DVA conditions: ${formatAcceptedConditions(appointment.acceptedConditions) || "Not documented"}`,
+      `MediRecords appointment type: ${appointment.appointmentType || "Not documented"}`,
+      `WA appointment time: ${appointment.startTimeWA || "Not documented"}`,
+      "",
+      "Weight management snapshot:",
+      `Most recent medication: ${formatLatestMedication(weightManagement) || "Not documented"}`,
+      `Medication history: ${medicationLines || "Not documented"}`,
+      `Last documented weight: ${weightManagement.latestWeight || "Not documented"}`,
+      `Last documented BMI: ${weightManagement.latestBmi || "Not documented"}`,
+      `Weight/BMI trend: ${trendLines || "Not documented"}`,
+      "",
+      "MediRecords note:",
+      appointmentNote || "Not documented",
+      "",
+      "Clinical notes / dictation:",
+      ""
+    ].join("\n");
+  }
+
+  function selectMatchingConsultType(appointment) {
+    const select = document.getElementById("consultType");
+    if (!select || !appointment.appointmentType) return;
+    const match = Array.from(select.options).find((option) => (
+      option.value.toLowerCase() === String(appointment.appointmentType).toLowerCase()
+    ));
+    if (!match) return;
+    select.value = match.value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function setMainConsultFromAppointment(appointment, forceInput) {
+    if (!appointment) return;
+    activeAppointmentGuid = appointment.appointmentGuid;
+    document.getElementById("consultNotesTab")?.click();
+    selectMatchingConsultType(appointment);
+
+    const phoneInput = document.getElementById("patientPhone");
+    if (phoneInput) phoneInput.value = appointment.mobilePhone || "";
+
+    const nameEl = document.getElementById("activePatientName");
+    const metaEl = document.getElementById("activePatientMeta");
+    if (nameEl) nameEl.textContent = appointment.patientName || "Unknown patient";
+    if (metaEl) metaEl.textContent = appointmentSummaryLine(appointment) || "Ready for consult";
+
+    const input = document.getElementById("clinicalInput");
+    if (input && (forceInput || !input.value.trim() || input.dataset.appointmentGuid !== appointment.appointmentGuid)) {
+      input.value = formatAppointmentClinicalInput(appointment);
+      input.dataset.appointmentGuid = appointment.appointmentGuid;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    setStatus(`${appointment.patientName || "Patient"} selected for consult.`);
+  }
+
+  function clearMainAppointmentContext() {
+    activeAppointmentGuid = null;
+    const nameEl = document.getElementById("activePatientName");
+    const metaEl = document.getElementById("activePatientMeta");
+    if (nameEl) nameEl.textContent = "No existing patient selected";
+    if (metaEl) metaEl.textContent = "Select a patient from the appointments list.";
+    const phoneInput = document.getElementById("patientPhone");
+    if (phoneInput) phoneInput.value = "";
+    const input = document.getElementById("clinicalInput");
+    if (input) delete input.dataset.appointmentGuid;
+  }
+
+  function buildAppointmentClinicalPayload(raw, consultType) {
+    const appointment = getActiveAppointment();
+    if (!appointment) return raw;
+    const hasPatientContext = /^Patient:/m.test(String(raw || ""));
+    if (hasPatientContext) return raw;
+    return [
+      formatAppointmentClinicalInput(appointment),
+      "",
+      `Selected consult type: ${consultType || document.getElementById("consultType")?.value || "Not documented"}`,
+      "",
+      "Additional clinical notes:",
+      raw
+    ].join("\n");
+  }
+
+  function refreshActiveAppointmentContext(forceInput) {
+    const appointment = getActiveAppointment();
+    if (appointment) setMainConsultFromAppointment(appointment, forceInput);
   }
 
   function analyseAppointmentNote(appointmentGuid) {
@@ -304,7 +416,7 @@
     appointment.isExpanded = false;
     appointment.isDone = true;
     appointment.lastSavedAt = new Date().toISOString();
-    if (activeAppointmentGuid === appointmentGuid) activeAppointmentGuid = null;
+    if (activeAppointmentGuid === appointmentGuid) clearMainAppointmentContext();
     saveNow();
     renderAppointments();
     setStatus("Completed appointment moved to Saved Outputs.");
@@ -436,28 +548,6 @@
     details.appendChild(renderDetail("WA Time", appointment.startTimeWA ? `${appointment.startTimeWA} AWST` : ""));
     card.appendChild(details);
 
-    const noteLabel = makeEl("label", "appointment-note-label", "Consult notes");
-    const noteId = `appointment-note-${safeDomId(appointment.appointmentGuid)}`;
-    noteLabel.setAttribute("for", noteId);
-    card.appendChild(noteLabel);
-
-    const textarea = makeEl("textarea");
-    textarea.id = noteId;
-    textarea.value = appointment.consultNote || "";
-    textarea.placeholder = "Paste or type consult notes here...";
-    const saveStatus = makeEl("div", "appointment-save-status");
-    saveStatus.innerHTML = "&#10003; Saved";
-    textarea.addEventListener("input", (event) => updateConsultNote(appointment.appointmentGuid, event.target.value, saveStatus));
-    card.appendChild(textarea);
-
-    const noteActions = makeEl("div", "appointment-note-actions");
-    const analyseButton = makeEl("button", "btn btn-primary appointment-analyse-btn", "Analyse notes");
-    analyseButton.type = "button";
-    analyseButton.addEventListener("click", () => analyseAppointmentNote(appointment.appointmentGuid));
-    noteActions.appendChild(analyseButton);
-    card.appendChild(noteActions);
-    card.appendChild(saveStatus);
-
     if (appointment.missingFromLatestSync) {
       card.appendChild(makeEl("div", "appointment-missing", "Not present in latest sync"));
     }
@@ -588,6 +678,7 @@
     appointments = storage.loadAppointmentsFromStorage();
     bindAppointmentUI();
     renderAppointments();
+    refreshActiveAppointmentContext();
     if (visibleAppointments().length) {
       setStatus(`${visibleAppointments().length} saved appointment${visibleAppointments().length === 1 ? "" : "s"}.`);
     } else {
@@ -607,6 +698,8 @@
     importAppointmentsFromText,
     analyseAppointmentNote,
     getActiveAppointment,
-    completeAppointment
+    completeAppointment,
+    refreshActiveAppointmentContext,
+    buildAppointmentClinicalPayload
   };
 })();
