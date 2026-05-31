@@ -533,6 +533,9 @@ VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE = (
     "- Preserve supplied patient identifiers, DVA card type, file number, DOB, dates, medications, doses and prior notes accurately.\n"
     "- Calculate BMI if height and current weight are supplied.\n"
     "- For VAPAC continuation, the 5% weight-loss requirement applies to the most recent approved funding interval, generally a 4-month interval / 4 pens. Use the baseline weight at the start of that current approval interval as the denominator, not the original treatment starting weight from earlier months unless that is also the interval baseline.\n"
+    "- Medication issue history can identify the approval interval. Treat relevant RPBS weight-loss medication issues (tirzepatide/Mounjaro, semaglutide/Ozempic/Wegovy) as funding pens. Sort issue dates chronologically from oldest to newest and group them into blocks of 4. The baseline date for the most recent completed/attempted interval is the first issue date in the latest 4-pen block.\n"
+    "- Example: if the pasted list has 8 weight-loss RPBS issues dated 29/10/2025, 18/11/2025, 23/12/2025, 25/01/2026, 15/02/2026, 15/03/2026, 06/04/2026, 27/04/2026, then the current interval baseline date is 15/02/2026. Do not use a later consult note date or the original 29/10/2025 start date for the 5% denominator.\n"
+    "- Use the weight recorded on or closest to that inferred interval baseline date as 'Starting Weight for Current Approval Interval'. If that weight is not supplied, flag it as missing even if older starting weights are available.\n"
     "- If multiple weights/dates are supplied, identify and use the weight at the start of the most recent funded approval interval and the current/authority-attempt weight. Mention older original starting weights only as background.\n"
     "- Explicitly state whether the patient meets or fails the 5% weight-loss continuation threshold for the most recent approval interval when data permits.\n"
     "- If the interval baseline weight is unclear, do not calculate the 5% continuation result from an older original starting weight; instead flag 'current approval interval baseline weight unclear' as critical missing information.\n"
@@ -580,8 +583,10 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "Use the supplied pasted information to populate the letter. Keep it professional, concise and defensible. "
             "For the 5% continuation rule, compare the current weight against the baseline weight for the most recent "
             "approved funding interval, generally the last 4 months / 4 pens, not the original treatment starting "
-            "weight from older approvals. At the bottom, always include a Critical information missing / issues to "
-            "address section."
+            "weight from older approvals. If a medication issue list is pasted, infer the current interval start by "
+            "sorting RPBS tirzepatide/semaglutide issue dates oldest-to-newest and grouping them into 4-pen blocks; "
+            "the first script in the latest 4-pen block anchors the interval baseline date. At the bottom, always "
+            "include a Critical information missing / issues to address section."
         )
 
     if chosen_type == "emergency department note":
