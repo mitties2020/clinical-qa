@@ -373,8 +373,9 @@ CONSULT_NOTE_SYSTEM_PROMPT = (
     "Optimise for clinical utility: concise, specific, and action-oriented.\n"
     "Carry forward key positives/negatives and unresolved risks when present in input.\n"
     "When details are missing, write 'Not documented' instead of guessing.\n\n"
+    "Do not include References or Red Flags sections unless the clinician explicitly asks for them.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
-    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n"
+    "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\n"
 )
 
 HANDOVER_SYSTEM_PROMPT = (
@@ -472,6 +473,12 @@ def index():
 @require_auth
 def consultation_notes():
     return render_template("consultation-notes.html")
+
+
+@app.get("/patient-list")
+@require_auth
+def patient_list():
+    return render_template("patient-list.html")
 
 
 @app.get("/dashboard")

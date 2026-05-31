@@ -3,198 +3,642 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VividMedi - Consultation Notes & Q&A</title>
+  <title>VividMedi - Generic Patient Consults</title>
   <style>
-    :root { --bg:#080d1a; --bg2:#131c2f; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; --accent2:#18a4b8; --ok:#35c9a0; }
+    :root { --bg:#080d1a; --bg2:#131c2f; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; --accent2:#18a4b8; --ok:#35c9a0; --danger:#f87171; }
     html[data-theme="night"] { --bg:#080d1a; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; }
     html[data-theme="day"] { --bg:#f5f7fb; --bg2:#e8eef8; --panel:#ffffff; --text:#111827; --muted:#4b5563; --line:#d1d5db; --accent:#2563eb; --accent2:#1490a3; }
+    *{box-sizing:border-box}
     html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
-    .parent-container{overflow:visible}
     .container{display:flex;height:100%}
-    .saved-outputs-sidebar{width:260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px)}
+    .sidebar{width:300px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+    .sidebar-section{border-bottom:1px solid var(--line);min-height:0}
+    .queue-section{flex:0 0 auto}
+    .saved-section{flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:0}
     .sidebar-header{padding:14px 16px;font-weight:700;border-bottom:1px solid var(--line)}
-    .saved-notes-list{padding:10px;overflow:auto;height:calc(100% - 55px)}
-    .saved-note-card{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#00000010}
-    .saved-note-header{padding:10px;display:flex;justify-content:space-between;cursor:pointer}
-    .saved-note-title{font-size:12px;color:var(--muted)} .saved-note-content{max-height:0;overflow:hidden;transition:.25s} .saved-note-content.open{max-height:420px}
-    .saved-note-text{font-size:12px;white-space:pre-wrap;padding:0 10px 10px;color:var(--text)} .saved-note-actions{display:flex;gap:6px;padding:0 10px 10px}
-    .saved-note-btn{flex:1;border:1px solid var(--line);background:transparent;color:var(--muted);padding:6px;border-radius:8px}
+    .sidebar-body{padding:10px}
+    .patient-form{display:grid;gap:8px}
+    .patient-form input,.consult-input,.patient-phone-input,select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;background:#0000001c;color:var(--text)}
+    select{min-height:42px;background:#111827;color:#ffffff}
+    select option{background:#111827;color:#ffffff}
+    .patient-form input::placeholder,textarea::placeholder{color:var(--muted)}
+    .patient-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .patient-list,.saved-notes-list{display:grid;gap:8px;overflow:auto}
+    .patient-list{max-height:230px;margin-top:10px}
+    .saved-notes-list{padding:10px;flex:1;min-height:0}
+    .patient-card,.saved-note-card{border:1px solid var(--line);border-radius:8px;background:#00000010;color:var(--text)}
+    .patient-card{display:grid;grid-template-columns:1fr 24px;gap:6px;align-items:start;padding:9px;text-align:left;cursor:pointer}
+    .patient-card.active{border-color:var(--accent);box-shadow:0 0 0 1px #25aee433}
+    .patient-card.active .patient-name{color:var(--accent)}
+    .patient-name,.saved-note-title{font-weight:700;font-size:13px}
+    .patient-meta,.saved-note-meta,.active-consult-meta{color:var(--muted);font-size:12px;line-height:1.35;margin-top:3px}
+    .icon-btn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:7px;min-width:24px;height:24px;cursor:pointer}
+    .icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .saved-note-header{width:100%;border:0;background:transparent;color:var(--text);display:flex;justify-content:space-between;gap:8px;text-align:left;padding:10px;cursor:pointer}
+    .saved-note-content{display:none;border-top:1px solid var(--line);padding:10px}
+    .saved-note-card.open .saved-note-content{display:block}
+    .saved-note-text{font-size:12px;white-space:pre-wrap;line-height:1.45;color:var(--text);max-height:300px;overflow:auto;margin-bottom:10px}
+    .saved-note-actions{display:grid;grid-template-columns:1fr 1fr 1fr 32px;gap:8px}
     .main-content{flex:1;display:flex;flex-direction:column;min-width:0}
-    .header{display:flex;justify-content:space-between;align-items:center;padding:18px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
-    .logo{font-size:28px;font-weight:800;letter-spacing:-.8px;background:linear-gradient(120deg,var(--accent2),var(--accent));-webkit-background-clip:text;color:transparent}
-    .page-title{font-weight:600;color:var(--muted)}
-    .vivid-logo{max-height:44px;max-width:240px;object-fit:contain}.brand-fallback{display:none;font-weight:700}.logo-missing .brand-fallback{display:block}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+    .header-left{display:flex;align-items:center;gap:18px;min-width:0}
+    .app-brand{display:flex;align-items:center;gap:12px;min-width:0}
+    .app-brand-mark{position:relative;flex:0 0 auto;width:46px;height:46px;border:3px solid #24d5c0;border-radius:999px;background:radial-gradient(circle at 50% 42%,#26384d 0%,#162838 66%,#081622 100%);box-shadow:0 0 0 2px rgba(36,213,192,.24),0 0 20px rgba(37,174,228,.38),inset 0 0 18px rgba(2,8,16,.78)}
+    .app-brand-mark::before,.app-brand-mark::after{content:"";position:absolute;left:50%;top:50%;border-radius:999px;background:#f7fff8;box-shadow:0 0 10px rgba(110,255,214,.9);transform:translate(-50%,-50%)}
+    .app-brand-mark::before{width:28px;height:8px}.app-brand-mark::after{width:8px;height:28px}
+    .app-brand-copy{display:grid;gap:3px;min-width:0}.app-brand-name{font-size:24px;font-weight:800;line-height:1}.app-brand-tagline{color:#b9d4ff;font-size:13px;white-space:nowrap}
+    .header-nav-btn,.auth-btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:700;text-decoration:none;white-space:nowrap}
+    .header-nav-btn{background:#00000010}.header-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
     .header-right{display:flex;align-items:center;gap:12px}
     .switch-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-    .switch-row input{display:none}
-    .slider{position:relative;width:38px;height:20px;border-radius:999px;background:#334155;cursor:pointer;display:inline-block}
+    .switch-row input{display:none}.slider{position:relative;width:38px;height:20px;border-radius:999px;background:#334155;cursor:pointer;display:inline-block}
     .slider::after{content:"";position:absolute;width:16px;height:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
-    .switch-row input:checked + .slider{background:#2563eb}
-    .switch-row input:checked + .slider::after{transform:translateX(18px)}
-    .auth-btn{padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600}
+    .switch-row input:checked + .slider{background:#2563eb}.switch-row input:checked + .slider::after{transform:translateX(18px)}
     .work-area{padding:24px;overflow:auto}
-    .tab-navigation{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-    .tab-btn{padding:12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--muted);font-weight:700;cursor:pointer}
-    .tab-btn.active{background:linear-gradient(120deg,#2e7acb2a,#18a4b82a);color:var(--text);border-color:#2f8ac9}
     .section-title{font-size:18px;font-weight:700;margin:8px 0 10px}
-    .controls-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-    select,textarea,.output-text{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:14px}
-    select,select option{background:#111827;color:#ffffff}
-    select{z-index:1000;position:relative}
-    html[data-theme="day"] select,html[data-theme="day"] select option,html[data-stealth="on"] select,html[data-stealth="on"] select option{background:#ffffff;color:#111111}
-    textarea,.output-text{background:#0000001c;color:var(--text)}
+    .active-consult-panel{border:1px solid var(--line);border-radius:12px;background:#00000012;padding:12px;margin-bottom:14px;display:grid;gap:12px}
+    .active-consult-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .active-consult-name{font-weight:800}
+    .controls-row{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:end}
+    .call-patient-panel{display:grid;grid-template-columns:minmax(220px,340px) auto;gap:10px;align-items:end;margin-bottom:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#00000012}
+    .call-patient-panel label,.controls-row label{display:block;margin-bottom:6px;font-size:12px;color:var(--muted)}
+    .call-patient-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .mode-navigation{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .mode-btn{padding:12px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--muted);font-weight:800;cursor:pointer}
+    .mode-btn.active{background:linear-gradient(120deg,#2e7acb2a,#18a4b82a);color:var(--text);border-color:#2f8ac9}
+    .tab-content{display:none}.tab-content.active{display:block}
     .input-output-grid,.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    .input-wrapper,.output-wrapper{padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);min-height:350px;display:flex;flex-direction:column;gap:10px}
-    textarea{min-height:260px;resize:vertical}
-    .output-text{min-height:260px;white-space:pre-wrap;line-height:1.55;overflow:auto}
-    .action-buttons{display:grid;grid-template-columns:repeat(2,minmax(120px,180px));gap:10px}
-    .btn{height:36px;border-radius:10px;border:1px solid #8ea3bf55;font-weight:600;cursor:pointer;font-size:13px}
+    .input-wrapper,.output-wrapper{padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-height:350px;display:flex;flex-direction:column;gap:10px}
+    textarea{min-height:260px;resize:vertical}.output-text{height:260px;min-height:260px;max-height:260px;white-space:pre-wrap;line-height:1.55;overflow:auto}
+    .action-buttons{display:grid;grid-template-columns:repeat(3,minmax(110px,170px));gap:10px}
+    .output-actions{grid-template-columns:repeat(3,minmax(110px,170px))}
+    .btn{height:36px;border-radius:10px;border:1px solid #8ea3bf55;font-weight:700;cursor:pointer;font-size:13px}
     .btn-primary{background:linear-gradient(120deg,#8aa0b8,#7088a4);color:#f5f8ff;border:1px solid #b7c7d8}
     .btn-secondary{background:transparent;color:var(--muted)}
-    .tab-content{display:none}.tab-content.active{display:block}
-    .empty-state{color:var(--muted);font-size:13px;padding:12px}
-    .loading{display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:999px;animation:p 1s infinite;margin:0 3px}@keyframes p{50%{opacity:.25}}
-    .call-patient-panel{display:grid;grid-template-columns:minmax(220px,340px) auto;gap:10px;align-items:end;margin-bottom:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#00000012}
-    .call-patient-panel label{display:block;margin-bottom:6px;font-size:12px;color:var(--muted)}
-    .call-patient-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-
+    .btn-danger{background:transparent;color:var(--danger);border-color:#f8717144}
+    .empty-state{color:var(--muted);font-size:13px;padding:8px}
+    footer{padding:8px 24px;color:var(--muted);font-size:11px}
     html[data-stealth="on"] { --bg:#f3f3f3; --bg2:#ffffff; --panel:#ffffff; --text:#000000; --muted:#555; --line:#d0d0d0; }
-    html[data-stealth="on"] body{background:#f3f3f3}
-    html[data-stealth="on"] .container{background:#f3f3f3}
+    html[data-stealth="on"] body,html[data-stealth="on"] .container{background:#f3f3f3}
     html[data-stealth="on"] .header{background:#ede7f4;color:#2c2c2c;border-color:#c9bdd7;box-shadow:none}
-    html[data-stealth="on"] .saved-outputs-sidebar{background:#ececec;border-right-color:#d0d0d0}
-    html[data-stealth="on"] .main-content, html[data-stealth="on"] .work-area{background:#ffffff;background-image:url("/static/stealth%20UI.png");background-size:cover;background-position:center}
-    html[data-stealth="on"] .input-wrapper, html[data-stealth="on"] .output-wrapper, html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d0d0d0;box-shadow:none}
-    html[data-stealth="on"] select, html[data-stealth="on"] textarea, html[data-stealth="on"] .output-text{background:#fff;border-color:#d0d0d0;color:#000}
-    html[data-stealth="on"] .tab-btn, html[data-stealth="on"] .btn-secondary, html[data-stealth="on"] .auth-btn{background:#f3f3f3;color:#444;border-color:#d0d0d0;box-shadow:none}
-    html[data-stealth="on"] .tab-btn.active{background:#ece6f3;border-color:#b7acc3;color:#333}
+    html[data-stealth="on"] .sidebar{background:#ececec;border-right-color:#d0d0d0}
+    html[data-stealth="on"] .main-content,html[data-stealth="on"] .work-area{background:#ffffff;background-image:url("/static/stealth%20UI.png");background-size:cover;background-position:center}
+    html[data-stealth="on"] .input-wrapper,html[data-stealth="on"] .output-wrapper,html[data-stealth="on"] .patient-card,html[data-stealth="on"] .saved-note-card{background:#fff;border-color:#d0d0d0;box-shadow:none}
+    html[data-stealth="on"] input,html[data-stealth="on"] select,html[data-stealth="on"] textarea,html[data-stealth="on"] .output-text{background:#fff;border-color:#d0d0d0;color:#000}
+    html[data-stealth="on"] .btn-secondary,html[data-stealth="on"] .auth-btn,html[data-stealth="on"] .header-nav-btn{background:#f3f3f3;color:#444;border-color:#d0d0d0;box-shadow:none}
     html[data-stealth="on"] .btn-primary{background:#e8e8e8;color:#333;border-color:#c6c6c6;box-shadow:none}
-    html[data-stealth="on"] .page-title{font-size:12px}
-    html[data-stealth="on"] .logo-main{display:none}
-    html[data-stealth="on"] .saved-note-title, html[data-stealth="on"] .sidebar-header{color:#444}
-    @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
+    html[data-stealth="on"] .app-brand-name{color:#333}html[data-stealth="on"] .app-brand-tagline{color:#555}html[data-stealth="on"] .app-brand-mark{box-shadow:none}
+    @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.sidebar{width:250px}.header{align-items:flex-start}.header-left,.header-right{flex-wrap:wrap}}
   </style>
-  <link rel="stylesheet" href="/static/appointments.css">
 </head>
 <body>
 <div class="container">
-  <aside class="saved-outputs-sidebar">
-    <section class="saved-outputs-section" aria-label="Saved Outputs">
+  <aside class="sidebar">
+    <section class="sidebar-section queue-section" aria-label="Generic patient queue">
+      <div class="sidebar-header">Generic Patient Consults</div>
+      <div class="sidebar-body">
+        <div class="patient-form">
+          <input id="patientNameInput" type="text" placeholder="Patient name">
+          <input id="patientAgeInput" type="text" placeholder="Age">
+          <input id="patientContactInput" type="tel" placeholder="Contact number">
+          <div class="patient-actions">
+            <button class="btn btn-primary" id="addPatientBtn" type="button" onclick="addPatient()">Add Patient</button>
+            <button class="btn btn-secondary" id="clearPatientFormBtn" type="button" onclick="clearPatientForm()">Clear</button>
+          </div>
+        </div>
+        <div class="patient-list" id="patientList"><div class="empty-state">No patients added yet</div></div>
+      </div>
+    </section>
+    <section class="sidebar-section saved-section" aria-label="Saved Outputs">
       <div class="sidebar-header">Saved Outputs</div>
       <div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div>
     </section>
-    <section class="appointments-section" id="appointmentsSection" aria-label="Appointments">
-      <div class="appointments-header">
-        <div>
-          <div class="appointments-title">Appointments</div>
-          <div class="appointments-today">Today</div>
-        </div>
-        <div class="appointments-actions">
-          <button class="appointments-icon-btn" id="appointmentSyncBtn" type="button" title="Sync appointments" aria-label="Sync appointments">Sync</button>
-          <button class="appointments-icon-btn" id="appointmentImportBtn" type="button" title="Import appointments" aria-label="Import appointments">Import</button>
-        </div>
-      </div>
-      <div class="appointments-status" id="appointmentsStatus">Import MediRecords JSON or sync when connected.</div>
-      <div class="appointments-scroll" id="appointmentsList">
-        <div class="appointments-empty">No appointments loaded</div>
-      </div>
-    </section>
   </aside>
   <main class="main-content">
-    <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid #5f1a84;font-size:12px;color:#fff;background:#7719aa">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div><header class="header">
-      <div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.jpg" alt="Vivid Medi" class="vivid-logo" onerror="this.style.display='none'; document.body.classList.add('logo-missing');"><div class="brand-fallback">Vivid Medi</div><div class="page-title">Consultation Notes & Clinical Q&A</div></div>
+    <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid #5f1a84;font-size:12px;color:#fff;background:#7719aa">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div>
+    <header class="header">
+      <div class="header-left">
+        <div class="app-brand" id="logoClick" aria-label="Vivid Medi Clinical Documentation Aid">
+          <span class="app-brand-mark" aria-hidden="true"></span>
+          <span class="app-brand-copy">
+            <span class="app-brand-name">Vivid Medi</span>
+            <span class="app-brand-tagline">Clinical Documentation Aid</span>
+          </span>
+        </div>
+        <a class="header-nav-btn" href="/patient-list">Existing Patient List</a>
+      </div>
       <div class="header-right">
         <label class="switch-row"><span id="themeLabel">Night</span><input type="checkbox" id="themeSwitch"><span class="slider"></span></label>
         <label class="switch-row"><span id="stealthLabel">Focus Mode Off</span><input type="checkbox" id="stealthSwitch"><span class="slider"></span></label>
-        <button class="auth-btn" id="upgradeBtn" style="display:none">Upgrade to Pro</button><button class="auth-btn" id="authBtn">Logout</button>
+        <button class="auth-btn" id="authBtn">Logout</button>
       </div>
     </header>
     <section class="work-area">
-      <div class="tab-navigation"><button class="tab-btn active" id="consultNotesTab" data-tab="notes-tab">Consultation Notes</button><button class="tab-btn" id="clinicalQuestionsTab" data-tab="qa-tab">Clinical Questions</button></div>
+      <div class="mode-navigation">
+        <button class="mode-btn active" id="consultNotesTab" type="button">Consultation Notes</button>
+        <button class="mode-btn" id="clinicalQuestionsTab" type="button">Clinical Questions</button>
+      </div>
       <div class="tab-content active" id="notes-tab">
         <div class="section-title">Clinical Data Input</div>
+        <div class="active-consult-panel">
+          <div class="active-consult-top">
+            <div>
+              <div class="active-consult-name" id="activePatientName">No active patient selected</div>
+              <div class="active-consult-meta" id="activePatientMeta">Add or select a patient from the left column.</div>
+            </div>
+            <button class="btn btn-primary" id="startConsultBtn" type="button">Start Consult</button>
+          </div>
+          <div class="controls-row">
+            <div class="consult-type-control">
+              <label for="consultType">Consult Type</label>
+              <select id="consultType">
+                <option>General consultation note</option>
+                <option>Weight loss initial consult</option>
+                <option>Weight loss follow-up</option>
+                <option>Medicinal cannabis / CBD / THC consult</option>
+                <option>Chronic pain consult</option>
+                <option>Mental health review</option>
+                <option>Men's health consult</option>
+                <option>DVA allied health referral</option>
+                <option>GP letter</option>
+                <option>Patient instructions</option>
+                <option>Medical certificate / work capacity note</option>
+                <option>Pathology review</option>
+                <option>Medication follow-up</option>
+                <option>Emergency Department Note</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" id="clearBtn" type="button">Clear Consult</button>
+          </div>
+        </div>
         <div class="call-patient-panel">
           <div>
             <label for="patientPhone">Patient Phone (E.164)</label>
-            <input id="patientPhone" type="tel" placeholder="+61400000000" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:#0000001c;color:var(--text)">
+            <input id="patientPhone" class="patient-phone-input" type="tel" placeholder="+61400000000">
           </div>
           <div class="call-patient-actions">
             <button class="btn btn-primary" id="callPatientBtn" type="button">Call Patient</button>
             <div id="callStatus" style="font-size:12px;color:var(--muted)">Ready to place call</div>
           </div>
         </div>
-        <div class="controls-row parent-container"><div><label>Consult Type</label><select id="consultType"></select></div></div>
-        <div class="input-output-grid"><div class="input-wrapper"><textarea id="clinicalInput" placeholder="Paste clinical data or transcribed notes..."></textarea><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-secondary" id="startMicBtn" type="button">Start Mic Dictation</button><button class="btn btn-secondary" id="stopMicBtn" type="button" disabled>Stop Mic Dictation</button></div><div id="micStatus" style="margin:8px 0 0;color:var(--muted);font-size:12px">Mic dictation inactive</div><div style="margin:4px 0 8px;color:var(--muted);font-size:12px">Confirm patient consent before using dictation or call transcription.</div><div id="transcriptionStatus" style="margin:8px 0;color:var(--muted);font-size:12px">Transcription stopped</div><div class="action-buttons"><button class="btn btn-primary" id="convertBtn">Convert to Notes</button><button class="btn btn-secondary" id="clearBtn">Clear</button></div></div><div class="output-wrapper"><label for="outputBox">Output</label><details id="safetyPanel" style="display:none;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px;font-size:12px;color:var(--muted)"><summary>Safety & Completeness</summary><div id="safetyPanelContent"></div></details><div class="output-text" id="outputBox">Output will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyBtn">Copy</button><button class="btn btn-secondary" id="downloadBtn">Download</button></div></div></div>
+        <div class="input-output-grid">
+          <div class="input-wrapper">
+            <textarea id="clinicalInput" placeholder="Type consult information, paste notes, or dictate here..."></textarea>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary" id="startMicBtn" type="button">Start Mic Dictation</button>
+              <button class="btn btn-secondary" id="stopMicBtn" type="button" disabled>Stop Mic Dictation</button>
+            </div>
+            <div id="micStatus" style="color:var(--muted);font-size:12px">Mic dictation inactive</div>
+            <div id="transcriptionStatus" style="color:var(--muted);font-size:12px">Transcription stopped</div>
+            <div class="action-buttons">
+              <button class="btn btn-primary" id="convertBtn" type="button">Convert to Notes</button>
+              <button class="btn btn-secondary" id="clearInputBtn" type="button">Clear</button>
+            </div>
+          </div>
+          <div class="output-wrapper">
+            <label for="outputBox">Output</label>
+            <div class="output-text" id="outputBox">Output will appear here...</div>
+            <div class="action-buttons output-actions">
+              <button class="btn btn-primary" id="completeConsultBtn" type="button">Complete Consult</button>
+              <button class="btn btn-secondary" id="editOutputBtn" type="button">Edit</button>
+              <button class="btn btn-danger" id="clearOutputBtn" type="button">Delete</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="tab-content" id="qa-tab">
         <div class="section-title">Clinical Questions</div>
-        <div class="qa-grid"><div class="input-wrapper"><textarea id="clinicalQuestion" placeholder="Ask your clinical question..."></textarea><div class="action-buttons"><button class="btn btn-primary" id="askBtn">Generate Answer</button><button class="btn btn-secondary" id="clearQaBtn">Clear</button></div></div><div class="output-wrapper"><div class="output-text" id="clinicalAnswer">Answer will appear here...</div><div class="action-buttons"><button class="btn btn-secondary" id="copyAnswerBtn">Copy</button><button class="btn btn-secondary" id="downloadAnswerBtn">Download</button></div></div></div>
+        <div class="qa-grid">
+          <div class="input-wrapper">
+            <textarea id="clinicalQuestion" placeholder="Ask your clinical question..."></textarea>
+            <div class="action-buttons">
+              <button class="btn btn-primary" id="askBtn" type="button">Generate Answer</button>
+            </div>
+          </div>
+          <div class="output-wrapper">
+            <div class="output-text" id="clinicalAnswer">Answer will appear here...</div>
+            <div class="action-buttons">
+              <button class="btn btn-secondary" id="copyAnswerBtn" type="button">Copy</button>
+              <button class="btn btn-danger" id="clearQaBtn" type="button">Clear</button>
+            </div>
+          </div>
+        </div>
       </div>
-    </section><footer style="padding:8px 24px;color:var(--muted);font-size:11px">Vivid Medi supports clinical documentation and safety checking. It does not replace clinician judgement, local policy, Therapeutic Guidelines, product information, or regulatory requirements. The treating clinician is responsible for final assessment, prescribing and follow-up.</footer>
+    </section>
+    <footer>Vivid Medi supports clinical documentation. It does not replace clinician judgement, local policy, Therapeutic Guidelines, product information, or regulatory requirements. The treating clinician is responsible for final assessment, prescribing and follow-up.</footer>
   </main>
-</div>
-<div class="appointment-modal" id="appointmentImportModal" aria-hidden="true">
-  <div class="appointment-modal-panel" role="dialog" aria-modal="true" aria-labelledby="appointmentImportTitle">
-    <div class="appointment-modal-header">
-      <h2 id="appointmentImportTitle">Paste MediRecords appointment JSON</h2>
-      <button class="appointment-modal-close" id="appointmentImportClose" type="button" aria-label="Close import dialog">&times;</button>
-    </div>
-    <textarea id="appointmentImportText" placeholder="Paste a MediRecords appointment array or response object here..."></textarea>
-    <div class="appointment-modal-footer">
-      <span id="appointmentImportMessage"></span>
-      <button class="btn btn-primary" id="appointmentImportSubmit" type="button">Import appointments</button>
-    </div>
-  </div>
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", () => { initApp(); });
-const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
-let savedOutputs=JSON.parse(localStorage.getItem("vivid_saved_outputs")||"[]");
+const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men's health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
+const PATIENT_STORAGE_KEY="vivid_generic_patients";
+const SAVED_OUTPUTS_KEY="vivid_generic_saved_outputs";
+let savedOutputs=JSON.parse(localStorage.getItem(SAVED_OUTPUTS_KEY)||"[]");
+let genericPatients=JSON.parse(localStorage.getItem(PATIENT_STORAGE_KEY)||"[]");
 let selectedConsultType="";
+let activePatientId=null;
 let micRecognition=null;
 let micFinalBase="";
 let micIsActive=false;
-function initApp(){populateConsultTypes();bindUIEvents();setTheme("night");setFocusMode(false);setMode("notes");renderSavedOutputs();initMicDictation();connectTranscriptSocket();}
-function populateConsultTypes(){const select=document.getElementById("consultType");if(!select){console.error("Missing #consultType select");return;}select.innerHTML="";for(const type of CONSULT_TYPES){const option=document.createElement("option");option.value=type;option.textContent=type;select.appendChild(option);}selectedConsultType=CONSULT_TYPES[0];select.value=selectedConsultType;}
-function bindUIEvents(){const convertBtn=document.getElementById("convertBtn");const clearBtn=document.getElementById("clearBtn");const copyBtn=document.getElementById("copyBtn");const downloadBtn=document.getElementById("downloadBtn");const input=document.getElementById("clinicalInput");const notesTab=document.getElementById("consultNotesTab");const questionsTab=document.getElementById("clinicalQuestionsTab");const themeSwitch=document.getElementById("themeSwitch");const stealthSwitch=document.getElementById("stealthSwitch");const askBtn=document.getElementById("askBtn");const clearQaBtn=document.getElementById("clearQaBtn");const consultType=document.getElementById("consultType");const callBtn=document.getElementById("callPatientBtn");if(convertBtn)convertBtn.addEventListener("click",()=>generateOutput(selectedConsultType));if(clearBtn)clearBtn.addEventListener("click",clearForm);if(copyBtn)copyBtn.addEventListener("click",copyOutput);if(downloadBtn)downloadBtn.addEventListener("click",downloadOutput);if(askBtn)askBtn.addEventListener("click",askQuestion);if(clearQaBtn)clearQaBtn.addEventListener("click",clearQuestion);if(callBtn)callBtn.addEventListener("click",callPatient);if(consultType){consultType.addEventListener("change",e=>{selectedConsultType=e.target.value||CONSULT_TYPES[0];});}if(input){input.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();generateOutput(selectedConsultType);}});}const qInput=document.getElementById("clinicalQuestion");if(qInput){qInput.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();document.getElementById("askBtn")?.click();}});}if(notesTab)notesTab.addEventListener("click",()=>setMode("notes"));if(questionsTab)questionsTab.addEventListener("click",()=>setMode("questions"));if(themeSwitch){themeSwitch.addEventListener("change",e=>setTheme(e.target.checked?"day":"night"));}if(stealthSwitch){stealthSwitch.addEventListener("change",e=>setFocusMode(e.target.checked));}const authBtn=document.getElementById("authBtn");if(authBtn){authBtn.addEventListener("click",async()=>{await fetch("/auth/logout",{method:"POST"});window.location.href="/login";});}}
-async function callPatient(){const phone=(document.getElementById("patientPhone")?.value||"").trim();const callStatus=document.getElementById("callStatus");const callBtn=document.getElementById("callPatientBtn");if(!phone){if(callStatus)callStatus.textContent="Enter a patient phone number first.";return;}if(callStatus)callStatus.textContent="Placing call...";if(callBtn)callBtn.disabled=true;try{const res=await fetch('/api/call-patient',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patientPhone:phone})});const data=await res.json().catch(()=>({}));if(!res.ok){throw new Error(data?.error||'Call failed');}if(callStatus)callStatus.textContent=`Call started (SID: ${data.sid||'n/a'})`;}catch(err){if(callStatus)callStatus.textContent=`Call failed: ${err.message||'Unknown error'}`;}finally{if(callBtn)callBtn.disabled=false;}}
-async function generateOutput(consultTypeArg){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(!input||!output){console.error("Missing input or output element");return;}const raw=input.value.trim();const type=consultTypeArg||selectedConsultType||CONSULT_TYPES[0];if(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"){console.debug("selectedConsultType before generation:",type);}if(!raw){output.textContent="Please enter clinical information first.";return;}output.textContent="Generating...";try{const res=await fetch('/convert-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clinical_data:raw,note_type:'consultation_note',consult_type:type})});if(!res.ok) throw new Error('convert failed');const data=await res.json();output.textContent=data.clinical_notes||data.output||'No output generated.';}catch{output.textContent=`Consult type: ${type}
+let clinicalQuestionThread=[];
 
-Clinical note:
-${raw}
-
-Assessment:
-[Draft assessment generated from input.]
-
-Plan:
-[Draft plan generated from input.]
-
-Safety-netting:
-[Draft safety-netting generated from input.]`;}}
-async function askQuestion(){const q=document.getElementById("clinicalQuestion")?.value?.trim()||"";const out=document.getElementById("clinicalAnswer");if(!out)return;if(!q){out.textContent='Please enter a question first.';return;}out.textContent='Generating...';try{const res=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});if(!res.ok) throw new Error('ask failed');const data=await res.json();out.textContent=data.answer||data.output||'No answer generated.';}catch{out.textContent='Unable to generate answer right now. Please try again.';}}
-function clearForm(){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(output)saveToSidebar(output.textContent,"note");if(input)input.value="";if(output)output.textContent="Output will appear here...";}
-function clearQuestion(){const input=document.getElementById("clinicalQuestion");const output=document.getElementById("clinicalAnswer");if(output)saveToSidebar(output.textContent,"question");if(input)input.value="";if(output)output.textContent="Answer will appear here...";}
-async function copyOutput(){const output=document.getElementById("outputBox");const text=output?.textContent||"";if(!text||text==="Output will appear here...")return;await navigator.clipboard.writeText(text);}
-function downloadOutput(){const output=document.getElementById("outputBox");const text=output?.textContent||"";if(!text||text==="Output will appear here...")return;const blob=new Blob([text],{type:"text/plain;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="vivid-medi-note.txt";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
-
-function saveToSidebar(content,type){if(!content||content.includes("appear here"))return;const item={id:Date.now()+Math.random(),title:`${type==="question"?"Q&A":"Consult"} ${new Date().toLocaleString()}`,content,type};savedOutputs.unshift(item);savedOutputs=savedOutputs.slice(0,40);localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();}
-function renderSavedOutputs(){const list=document.getElementById("savedNotesList");if(!list)return;if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}list.innerHTML=savedOutputs.map((item,idx)=>`<div class="saved-note-card"><div class="saved-note-header"><div class="saved-note-title">${item.title}</div><button class="saved-note-btn" onclick="deleteSavedOutput(${idx})">✕</button></div><div class="saved-note-text">${item.content.replace(/</g,'&lt;')}</div></div>`).join('');}
-window.deleteSavedOutput=function(idx){savedOutputs.splice(idx,1);localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();};
-
-
-function setMicStatus(status){const el=document.getElementById("micStatus");if(!el)return;if(status==="active")el.textContent="Mic dictation active";else if(status==="unsupported")el.textContent="Mic dictation unsupported";else el.textContent="Mic dictation inactive";}
-function updateMicButtons(isActive){const startBtn=document.getElementById("startMicBtn");const stopBtn=document.getElementById("stopMicBtn");if(startBtn)startBtn.disabled=isActive||!micRecognition;if(stopBtn)stopBtn.disabled=!isActive;}
-function initMicDictation(){const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;const startBtn=document.getElementById("startMicBtn");const stopBtn=document.getElementById("stopMicBtn");if(!SpeechRecognition){setMicStatus("unsupported");if(startBtn)startBtn.disabled=true;if(stopBtn)stopBtn.disabled=true;return;}micRecognition=new SpeechRecognition();micRecognition.continuous=true;micRecognition.interimResults=true;micRecognition.lang="en-AU";if(startBtn){startBtn.addEventListener("click",()=>{const input=document.getElementById("clinicalInput");if(!input||!micRecognition)return;micFinalBase=input.value;micIsActive=true;setMicStatus("active");updateMicButtons(true);micRecognition.start();});}if(stopBtn){stopBtn.addEventListener("click",()=>{if(!micRecognition)return;micIsActive=false;micRecognition.stop();setMicStatus("inactive");updateMicButtons(false);});}micRecognition.onresult=(event)=>{const input=document.getElementById("clinicalInput");if(!input)return;let finalChunk="";let interimChunk="";for(let i=event.resultIndex;i<event.results.length;i+=1){const transcript=(event.results[i][0]?.transcript||"").trim();if(!transcript)continue;if(event.results[i].isFinal)finalChunk+=`${transcript} `;else interimChunk+=`${transcript} `;}const finalText=finalChunk.trim();const interimText=interimChunk.trim();let committed=micFinalBase.trimEnd();if(finalText){committed=committed?`${committed} ${finalText}`:finalText;micFinalBase=committed;}input.value=interimText?`${committed}${committed?" ":""}${interimText}`:committed;input.dispatchEvent(new Event("input",{bubbles:true}));};micRecognition.onend=()=>{if(micIsActive){try{micRecognition.start();return;}catch{};}micIsActive=false;setMicStatus("inactive");updateMicButtons(false);};micRecognition.onerror=()=>{micIsActive=false;setMicStatus("inactive");updateMicButtons(false);};setMicStatus("inactive");updateMicButtons(false);}
-function setTheme(theme){document.documentElement.setAttribute("data-theme",theme);const label=document.getElementById("themeLabel");if(label)label.textContent=theme==="day"?"Day":"Night";const sw=document.getElementById("themeSwitch");if(sw)sw.checked=theme==="day";}
-function setFocusMode(isOn){document.documentElement.setAttribute("data-stealth",isOn?"on":"off");const label=document.getElementById("stealthLabel");if(label)label.textContent=isOn?"Focus Mode On":"Focus Mode Off";const sw=document.getElementById("stealthSwitch");if(sw)sw.checked=!!isOn;const ribbon=document.querySelector(".stealth-ribbon");if(ribbon)ribbon.style.display=isOn?"block":"none";}
-window.setStealth=setFocusMode;
-function setMode(mode){const notes=mode==="notes";document.getElementById("notes-tab")?.classList.toggle("active",notes);document.getElementById("qa-tab")?.classList.toggle("active",!notes);document.getElementById("consultNotesTab")?.classList.toggle("active",notes);document.getElementById("clinicalQuestionsTab")?.classList.toggle("active",!notes);}
-function setTranscriptStatus(status){const el=document.getElementById("transcriptionStatus");if(!el)return;if(status==="connected")el.textContent="Connected to transcript server";else if(status==="active")el.textContent="Call transcription active";else el.textContent="Transcription stopped";}
-function appendTranscriptToConsultInput(text){const input=document.getElementById("clinicalInput");if(!input)return;const clean=(text||"").trim();if(!clean)return;const spacer=input.value&&![...input.value].slice(-2).join("").includes("\n\n")?"\n\n":input.value?"\n":"";input.value=`${input.value}${spacer}${clean}`;input.dispatchEvent(new Event("input",{bubbles:true}));}
-function connectTranscriptSocket(){const configured=(window.TRANSCRIPT_WS_URL||"").trim();const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");const suppressAuto=localStorage.getItem("vivid_transcript_ws_unavailable")==="1";if(!wsUrl||(!configured&&suppressAuto)){setTranscriptStatus("stopped");return;}if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){console.warn("Transcript WebSocket tunnel URL blocked by default. Set window.ALLOW_TUNNEL_WS=true to override.");setTranscriptStatus("stopped");return;}try{const socket=new WebSocket(wsUrl);socket.addEventListener("open",()=>{localStorage.removeItem("vivid_transcript_ws_unavailable");setTranscriptStatus("connected");});socket.addEventListener("close",()=>setTranscriptStatus("stopped"));socket.addEventListener("error",()=>{if(!configured){localStorage.setItem("vivid_transcript_ws_unavailable","1");}setTranscriptStatus("stopped");});socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});}catch{setTranscriptStatus("stopped");}}
+function initApp(){
+  savedOutputs=savedOutputs.map(normalizeSavedOutput);
+  populateConsultTypes();
+  bindUIEvents();
+  setTheme("night");
+  setFocusMode(false);
+  renderPatients();
+  renderSavedOutputs();
+  updateActivePatientPanel();
+  initMicDictation();
+  connectTranscriptSocket();
+}
+function populateConsultTypes(){
+  const select=document.getElementById("consultType");
+  select.innerHTML="";
+  for(const type of CONSULT_TYPES){
+    const option=document.createElement("option");
+    option.value=type;
+    option.textContent=type;
+    select.appendChild(option);
+  }
+  selectedConsultType=CONSULT_TYPES[0];
+  select.value=selectedConsultType;
+}
+function bindUIEvents(){
+  document.getElementById("startConsultBtn")?.addEventListener("click",startConsult);
+  document.getElementById("convertBtn")?.addEventListener("click",()=>generateOutput(selectedConsultType));
+  document.getElementById("completeConsultBtn")?.addEventListener("click",completeCurrentConsult);
+  document.getElementById("editOutputBtn")?.addEventListener("click",editCurrentOutput);
+  document.getElementById("clearOutputBtn")?.addEventListener("click",clearOutput);
+  document.getElementById("clearBtn")?.addEventListener("click",clearForm);
+  document.getElementById("clearInputBtn")?.addEventListener("click",clearForm);
+  document.getElementById("copyAnswerBtn")?.addEventListener("click",copyAnswer);
+  document.getElementById("askBtn")?.addEventListener("click",askQuestion);
+  document.getElementById("clearQaBtn")?.addEventListener("click",clearQuestion);
+  document.getElementById("consultNotesTab")?.addEventListener("click",()=>setMode("notes"));
+  document.getElementById("clinicalQuestionsTab")?.addEventListener("click",()=>setMode("questions"));
+  document.getElementById("callPatientBtn")?.addEventListener("click",callPatient);
+  document.getElementById("consultType")?.addEventListener("change",e=>{selectedConsultType=e.target.value||CONSULT_TYPES[0];updateActivePatientPanel();});
+  document.getElementById("themeSwitch")?.addEventListener("change",e=>setTheme(e.target.checked?"day":"night"));
+  document.getElementById("stealthSwitch")?.addEventListener("change",e=>setFocusMode(e.target.checked));
+  document.getElementById("authBtn")?.addEventListener("click",async()=>{await fetch("/auth/logout",{method:"POST"});window.location.href="/login";});
+  document.getElementById("clinicalQuestion")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askQuestion();}});
+}
+function persistPatients(){localStorage.setItem(PATIENT_STORAGE_KEY,JSON.stringify(genericPatients));}
+function persistSavedOutputs(){localStorage.setItem(SAVED_OUTPUTS_KEY,JSON.stringify(savedOutputs));}
+function patientById(id){return genericPatients.find(patient=>patient.id===id)||null;}
+function addPatient(){
+  const name=document.getElementById("patientNameInput").value.trim();
+  const age=document.getElementById("patientAgeInput").value.trim();
+  const contact=document.getElementById("patientContactInput").value.trim();
+  if(!name){document.getElementById("patientNameInput").focus();return;}
+  const patient={id:`patient-${Date.now()}-${Math.round(Math.random()*100000)}`,name,age,contact};
+  genericPatients.unshift(patient);
+  activePatientId=patient.id;
+  persistPatients();
+  clearPatientForm();
+  renderPatients();
+  selectPatient(patient.id);
+}
+function clearPatientForm(){
+  document.getElementById("patientNameInput").value="";
+  document.getElementById("patientAgeInput").value="";
+  document.getElementById("patientContactInput").value="";
+}
+function selectPatient(id){
+  activePatientId=id;
+  const patient=patientById(id);
+  if(patient?.contact) document.getElementById("patientPhone").value=patient.contact;
+  renderPatients();
+  updateActivePatientPanel();
+}
+function deletePatient(id,event){
+  if(event) event.stopPropagation();
+  genericPatients=genericPatients.filter(patient=>patient.id!==id);
+  if(activePatientId===id) activePatientId=null;
+  persistPatients();
+  renderPatients();
+  updateActivePatientPanel();
+}
+function renderPatients(){
+  const list=document.getElementById("patientList");
+  if(!list)return;
+  if(!genericPatients.length){list.innerHTML='<div class="empty-state">No patients added yet</div>';return;}
+  list.innerHTML=genericPatients.map(patient=>`
+    <button class="patient-card ${patient.id===activePatientId?"active":""}" type="button" onclick="selectPatient('${escapeJs(patient.id)}')">
+      <span>
+        <span class="patient-name">${escapeHtml(patient.name)}</span>
+        <span class="patient-meta">${escapeHtml([patient.age?`Age ${patient.age}`:"",patient.contact].filter(Boolean).join(" | "))}</span>
+      </span>
+      <span class="icon-btn" onclick="deletePatient('${escapeJs(patient.id)}',event)">x</span>
+    </button>
+  `).join("");
+}
+function updateActivePatientPanel(){
+  const patient=patientById(activePatientId);
+  const nameEl=document.getElementById("activePatientName");
+  const metaEl=document.getElementById("activePatientMeta");
+  if(!patient){
+    nameEl.textContent="No active patient selected";
+    metaEl.textContent="Add or select a patient from the left column.";
+    return;
+  }
+  nameEl.textContent=patient.name;
+  metaEl.textContent=[patient.age?`Age ${patient.age}`:"No age recorded",patient.contact||"No contact recorded",selectedConsultType].join(" | ");
+}
+function startConsult(){
+  const patient=patientById(activePatientId);
+  const output=document.getElementById("outputBox");
+  if(!patient){output.textContent="Select or add a patient before starting the consult.";return;}
+  document.getElementById("clinicalInput").focus();
+  output.textContent=`Consult started for ${patient.name} (${selectedConsultType}).`;
+}
+async function callPatient(){
+  const phone=(document.getElementById("patientPhone")?.value||"").trim();
+  const callStatus=document.getElementById("callStatus");
+  const callBtn=document.getElementById("callPatientBtn");
+  if(!phone){if(callStatus)callStatus.textContent="Enter a patient phone number first.";return;}
+  if(callStatus)callStatus.textContent="Placing call...";
+  if(callBtn)callBtn.disabled=true;
+  try{
+    const res=await fetch("/api/call-patient",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({patientPhone:phone})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data?.error||"Call failed");
+    if(callStatus)callStatus.textContent=`Call started (${data.patientSid||data.sid||"connected"})`;
+  }catch(err){
+    if(callStatus)callStatus.textContent=`Call failed: ${err.message||"Unknown error"}`;
+  }finally{
+    if(callBtn)callBtn.disabled=false;
+  }
+}
+function buildClinicalPayload(raw,type){
+  const patient=patientById(activePatientId);
+  if(!patient)return raw;
+  return [
+    "Patient context:",
+    `Name: ${patient.name}`,
+    `Age: ${patient.age||"Not documented"}`,
+    `Contact: ${patient.contact||"Not documented"}`,
+    `Consult type: ${type}`,
+    "",
+    "Consult information:",
+    raw
+  ].join("\n");
+}
+async function generateOutput(consultTypeArg){
+  const input=document.getElementById("clinicalInput");
+  const output=document.getElementById("outputBox");
+  const raw=input.value.trim();
+  const type=consultTypeArg||selectedConsultType||CONSULT_TYPES[0];
+  if(!raw){output.textContent="Please enter clinical information first.";return;}
+  output.textContent="Generating...";
+  try{
+    const res=await fetch("/convert-notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({clinical_data:buildClinicalPayload(raw,type),note_type:"consultation_note",consult_type:type})});
+    if(!res.ok)throw new Error("convert failed");
+    const data=await res.json();
+    output.textContent=data.clinical_notes||data.output||"No output generated.";
+  }catch{
+    output.textContent=`Consult type: ${type}\n\nClinical note:\n${raw}\n\nAssessment:\n[Draft assessment generated from input.]\n\nPlan:\n[Draft plan generated from input.]`;
+  }
+}
+function clearForm(){
+  document.getElementById("clinicalInput").value="";
+  document.getElementById("outputBox").textContent="Output will appear here...";
+  document.getElementById("callStatus").textContent="Ready to place call";
+}
+function normalizeSavedOutput(item){
+  return {
+    id:item.id||String(Date.now()+Math.random()),
+    patientName:item.patientName||item.title||"Consult",
+    consultType:item.consultType||item.type||"Consult",
+    date:item.date||new Date().toLocaleString(),
+    content:item.content||"",
+    expanded:Boolean(item.expanded)
+  };
+}
+function completeCurrentConsult(){
+  const output=document.getElementById("outputBox").textContent.trim();
+  if(!output||output==="Output will appear here..."||output.startsWith("Consult started"))return;
+  const patient=patientById(activePatientId);
+  const item={
+    id:String(Date.now()+Math.random()),
+    patientName:patient?.name||"Generic consult",
+    consultType:selectedConsultType,
+    date:new Date().toLocaleString(),
+    content:output,
+    expanded:false
+  };
+  savedOutputs.unshift(item);
+  savedOutputs=savedOutputs.slice(0,60);
+  persistSavedOutputs();
+  if(patient){
+    genericPatients=genericPatients.filter(existing=>existing.id!==patient.id);
+    activePatientId=null;
+    persistPatients();
+  }
+  clearForm();
+  renderPatients();
+  renderSavedOutputs();
+  updateActivePatientPanel();
+}
+function editCurrentOutput(){
+  const output=document.getElementById("outputBox").textContent.trim();
+  if(!output||output==="Output will appear here...")return;
+  const input=document.getElementById("clinicalInput");
+  input.value=output;
+  input.focus();
+  document.getElementById("outputBox").textContent="Output moved back to input for editing. Add further clinical information, then convert again.";
+}
+function clearOutput(){
+  document.getElementById("outputBox").textContent="Output will appear here...";
+}
+async function askQuestion(){
+  const q=document.getElementById("clinicalQuestion")?.value?.trim()||"";
+  const out=document.getElementById("clinicalAnswer");
+  if(!out)return;
+  if(!q){out.textContent="Please enter a question first.";return;}
+  clinicalQuestionThread.push({role:"user",content:q});
+  document.getElementById("clinicalQuestion").value="";
+  renderClinicalQuestionThread("Generating...");
+  const context=clinicalQuestionThread.map(item=>`${item.role==="user"?"Question":"Answer"}: ${item.content}`).join("\n\n");
+  try{
+    const res=await fetch("/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:`Use this clinical Q&A conversation context and answer the latest question with analysis.\n\n${context}\n\nLatest question: ${q}`})});
+    if(!res.ok)throw new Error("ask failed");
+    const data=await res.json();
+    const answer=data.answer||data.output||"No answer generated.";
+    out.textContent=answer;
+    clinicalQuestionThread.push({role:"assistant",content:answer});
+    renderClinicalQuestionThread();
+  }catch{
+    const answer="Unable to generate answer right now. Please try again.";
+    out.textContent=answer;
+    clinicalQuestionThread.push({role:"assistant",content:answer});
+    renderClinicalQuestionThread();
+  }
+}
+function clearQuestion(){
+  clinicalQuestionThread=[];
+  renderClinicalQuestionThread();
+  document.getElementById("clinicalQuestion").value="";
+  document.getElementById("clinicalAnswer").textContent="Answer will appear here...";
+}
+async function copyAnswer(){
+  const text=document.getElementById("clinicalAnswer")?.textContent||"";
+  if(!text||text==="Answer will appear here...")return;
+  await navigator.clipboard.writeText(text);
+}
+function renderClinicalQuestionThread(pendingText){
+  const out=document.getElementById("clinicalAnswer");
+  if(!out)return;
+  if(!clinicalQuestionThread.length){
+    out.textContent="Answer will appear here...";
+    return;
+  }
+  const suffix=pendingText?`\n\nAnswer:\n${pendingText}`:"";
+  out.textContent=clinicalQuestionThread.map(item=>`${item.role==="user"?"Question":"Answer"}:\n${item.content}`).join("\n\n")+suffix;
+  out.scrollTop=out.scrollHeight;
+}
+function setMode(mode){
+  const notes=mode==="notes";
+  document.getElementById("notes-tab")?.classList.toggle("active",notes);
+  document.getElementById("qa-tab")?.classList.toggle("active",!notes);
+  document.getElementById("consultNotesTab")?.classList.toggle("active",notes);
+  document.getElementById("clinicalQuestionsTab")?.classList.toggle("active",!notes);
+}
+function renderSavedOutputs(){
+  const list=document.getElementById("savedNotesList");
+  if(!list)return;
+  if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}
+  list.innerHTML=savedOutputs.map((item,idx)=>`
+    <div class="saved-note-card ${item.expanded?"open":""}">
+      <button class="saved-note-header" type="button" onclick="toggleSavedOutput(${idx})">
+        <span>
+          <span class="saved-note-title">${escapeHtml(item.patientName)}</span>
+          <span class="saved-note-meta">${escapeHtml(item.consultType)} | ${escapeHtml(item.date)}</span>
+        </span>
+        <span>${item.expanded?"v":">"}</span>
+      </button>
+      <div class="saved-note-content">
+        <div class="saved-note-text">${escapeHtml(item.content)}</div>
+        <div class="saved-note-actions">
+          <button class="btn btn-secondary" type="button" onclick="copySavedOutput(${idx})">Copy</button>
+          <button class="btn btn-secondary" type="button" onclick="editSavedOutput(${idx})">Edit</button>
+          <button class="btn btn-secondary" type="button" onclick="closeSavedOutput(${idx})">Close</button>
+          <button class="btn btn-danger" type="button" onclick="deleteSavedOutput(${idx})">x</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+window.toggleSavedOutput=function(idx){savedOutputs[idx].expanded=!savedOutputs[idx].expanded;persistSavedOutputs();renderSavedOutputs();};
+window.closeSavedOutput=function(idx){savedOutputs[idx].expanded=false;persistSavedOutputs();renderSavedOutputs();};
+window.deleteSavedOutput=function(idx){savedOutputs.splice(idx,1);persistSavedOutputs();renderSavedOutputs();};
+window.copySavedOutput=async function(idx){await navigator.clipboard.writeText(savedOutputs[idx]?.content||"");};
+window.editSavedOutput=function(idx){
+  const item=savedOutputs[idx];
+  if(!item)return;
+  document.getElementById("clinicalInput").value=item.content||"";
+  document.getElementById("outputBox").textContent="Saved note moved back to input for editing. Add further clinical information, then convert again.";
+  const consultSelect=document.getElementById("consultType");
+  if(item.consultType&&Array.from(consultSelect.options).some(option=>option.value===item.consultType)){
+    consultSelect.value=item.consultType;
+    selectedConsultType=item.consultType;
+  }
+  document.getElementById("clinicalInput").focus();
+};
+async function copyOutput(){
+  const text=document.getElementById("outputBox")?.textContent||"";
+  if(!text||text==="Output will appear here...")return;
+  await navigator.clipboard.writeText(text);
+}
+function escapeHtml(value){
+  return String(value||"").replace(/[&<>"']/g, char=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[char]));
+}
+function escapeJs(value){
+  return String(value||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+}
+function setMicStatus(status){
+  const el=document.getElementById("micStatus");
+  if(!el)return;
+  if(status==="active")el.textContent="Mic dictation active";
+  else if(status==="unsupported")el.textContent="Mic dictation unsupported";
+  else el.textContent="Mic dictation inactive";
+}
+function updateMicButtons(isActive){
+  const startBtn=document.getElementById("startMicBtn");
+  const stopBtn=document.getElementById("stopMicBtn");
+  if(startBtn)startBtn.disabled=isActive||!micRecognition;
+  if(stopBtn)stopBtn.disabled=!isActive;
+}
+function initMicDictation(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const startBtn=document.getElementById("startMicBtn");
+  const stopBtn=document.getElementById("stopMicBtn");
+  if(!SpeechRecognition){setMicStatus("unsupported");if(startBtn)startBtn.disabled=true;if(stopBtn)stopBtn.disabled=true;return;}
+  micRecognition=new SpeechRecognition();
+  micRecognition.continuous=true;
+  micRecognition.interimResults=true;
+  micRecognition.lang="en-AU";
+  if(startBtn){startBtn.addEventListener("click",()=>{const input=document.getElementById("clinicalInput");if(!input||!micRecognition)return;micFinalBase=input.value;micIsActive=true;setMicStatus("active");updateMicButtons(true);micRecognition.start();});}
+  if(stopBtn){stopBtn.addEventListener("click",()=>{if(!micRecognition)return;micIsActive=false;micRecognition.stop();setMicStatus("inactive");updateMicButtons(false);});}
+  micRecognition.onresult=(event)=>{const input=document.getElementById("clinicalInput");if(!input)return;let finalChunk="";let interimChunk="";for(let i=event.resultIndex;i<event.results.length;i+=1){const transcript=(event.results[i][0]?.transcript||"").trim();if(!transcript)continue;if(event.results[i].isFinal)finalChunk+=`${transcript} `;else interimChunk+=`${transcript} `;}const finalText=finalChunk.trim();const interimText=interimChunk.trim();let committed=micFinalBase.trimEnd();if(finalText){committed=committed?`${committed} ${finalText}`:finalText;micFinalBase=committed;}input.value=interimText?`${committed}${committed?" ":""}${interimText}`:committed;input.dispatchEvent(new Event("input",{bubbles:true}));};
+  micRecognition.onend=()=>{if(micIsActive){try{micRecognition.start();return;}catch{}}micIsActive=false;setMicStatus("inactive");updateMicButtons(false);};
+  micRecognition.onerror=()=>{micIsActive=false;setMicStatus("inactive");updateMicButtons(false);};
+  setMicStatus("inactive");
+  updateMicButtons(false);
+}
+function setTheme(theme){
+  document.documentElement.setAttribute("data-theme",theme);
+  const label=document.getElementById("themeLabel");
+  if(label)label.textContent=theme==="day"?"Day":"Night";
+  const sw=document.getElementById("themeSwitch");
+  if(sw)sw.checked=theme==="day";
+}
+function setFocusMode(isOn){
+  document.documentElement.setAttribute("data-stealth",isOn?"on":"off");
+  const label=document.getElementById("stealthLabel");
+  if(label)label.textContent=isOn?"Focus Mode On":"Focus Mode Off";
+  const sw=document.getElementById("stealthSwitch");
+  if(sw)sw.checked=!!isOn;
+  const ribbon=document.querySelector(".stealth-ribbon");
+  if(ribbon)ribbon.style.display=isOn?"block":"none";
+}
+function setTranscriptStatus(status){
+  const el=document.getElementById("transcriptionStatus");
+  if(!el)return;
+  if(status==="connected")el.textContent="Connected to transcript server";
+  else if(status==="active")el.textContent="Call transcription active";
+  else el.textContent="Transcription stopped";
+}
+function appendTranscriptToConsultInput(text){
+  const input=document.getElementById("clinicalInput");
+  if(!input)return;
+  const clean=(text||"").trim();
+  if(!clean)return;
+  const spacer=input.value&&![...input.value].slice(-2).join("").includes("\n\n")?"\n\n":input.value?"\n":"";
+  input.value=`${input.value}${spacer}${clean}`;
+  input.dispatchEvent(new Event("input",{bubbles:true}));
+}
+function connectTranscriptSocket(){
+  const configured=(window.TRANSCRIPT_WS_URL||"").trim();
+  const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);
+  const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);
+  const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");
+  const suppressAuto=localStorage.getItem("vivid_transcript_ws_unavailable")==="1";
+  if(!wsUrl||(!configured&&suppressAuto)){setTranscriptStatus("stopped");return;}
+  if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){setTranscriptStatus("stopped");return;}
+  try{
+    const socket=new WebSocket(wsUrl);
+    socket.addEventListener("open",()=>{localStorage.removeItem("vivid_transcript_ws_unavailable");setTranscriptStatus("connected");});
+    socket.addEventListener("close",()=>setTranscriptStatus("stopped"));
+    socket.addEventListener("error",()=>{if(!configured){localStorage.setItem("vivid_transcript_ws_unavailable","1");}setTranscriptStatus("stopped");});
+    socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});
+  }catch{
+    setTranscriptStatus("stopped");
+  }
+}
 </script>
-<script src="/static/js/appointments-storage.js?v=20260530-2"></script>
-<script src="/static/js/appointments-medirecords.js?v=20260530-2"></script>
-<script src="/static/js/appointments-ui.js?v=20260530-2"></script>
 </body>
 </html>

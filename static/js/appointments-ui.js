@@ -3,6 +3,7 @@
   const service = window.VividMediAppointmentsService;
   let appointments = [];
   let saveTimer = null;
+  let activeAppointmentGuid = null;
 
   function visibleAppointments() {
     return appointments.filter((appointment) => !appointment.isDeleted);
@@ -217,6 +218,7 @@
   function toggleAppointment(appointmentGuid) {
     const appointment = appointmentById(appointmentGuid);
     if (!appointment) return;
+    activeAppointmentGuid = appointmentGuid;
     appointment.isExpanded = !appointment.isExpanded;
     appointment.lastSavedAt = new Date().toISOString();
     saveNow();
@@ -245,6 +247,7 @@
   function analyseAppointmentNote(appointmentGuid) {
     const appointment = appointmentById(appointmentGuid);
     if (!appointment) return;
+    activeAppointmentGuid = appointmentGuid;
 
     const note = String(appointment.consultNote || appointment.appointmentNote || "").trim();
     if (!note) {
@@ -287,6 +290,25 @@
     clinicalInput.dispatchEvent(new Event("input", { bubbles: true }));
     setStatus(`Appointment notes sent for analysis using your selected consult type: ${selectedConsultType}.`);
     document.getElementById("convertBtn")?.click();
+  }
+
+  function getActiveAppointment() {
+    if (activeAppointmentGuid) return appointmentById(activeAppointmentGuid);
+    return appointments.find((appointment) => appointment.isExpanded && !appointment.isDeleted) || null;
+  }
+
+  function completeAppointment(appointmentGuid) {
+    const appointment = appointmentById(appointmentGuid);
+    if (!appointment) return false;
+    appointment.isDeleted = true;
+    appointment.isExpanded = false;
+    appointment.isDone = true;
+    appointment.lastSavedAt = new Date().toISOString();
+    if (activeAppointmentGuid === appointmentGuid) activeAppointmentGuid = null;
+    saveNow();
+    renderAppointments();
+    setStatus("Completed appointment moved to Saved Outputs.");
+    return true;
   }
 
   function renderCollapsedAppointment(appointment) {
@@ -583,6 +605,8 @@
     renderAppointments,
     syncAppointments,
     importAppointmentsFromText,
-    analyseAppointmentNote
+    analyseAppointmentNote,
+    getActiveAppointment,
+    completeAppointment
   };
 })();
