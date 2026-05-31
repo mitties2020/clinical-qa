@@ -40,6 +40,11 @@
     const previousWeightMatch = firstMatch(lower, [
       /(?:last|previous|starting|initial)\s+weight\D{0,20}(\d+(?:[.,]\d+)?)\s*kg/
     ]);
+    const intervalBaselineWeightMatch = firstMatch(lower, [
+      /(?:current\s+approval|approval|authority|funding|funded|interval|4\s*month|four\s*month|last\s+approved|most\s+recent\s+approved)[^\n.]{0,60}(?:baseline|start|starting|previous|initial)?\s*weight\D{0,20}(\d+(?:[.,]\d+)?)\s*kg/,
+      /(?:baseline|start|starting|previous)\s+weight\s+(?:for|at|of)\s+(?:current\s+)?(?:approval|authority|funding|funded|interval)\D{0,20}(\d+(?:[.,]\d+)?)\s*kg/,
+      /(?:weight\s+at\s+start\s+of\s+(?:current\s+)?(?:approval|authority|funding|interval))\D{0,20}(\d+(?:[.,]\d+)?)\s*kg/
+    ]);
     const heightMatch = firstMatch(lower, [
       /(?:height|heaight|ht)\D{0,12}(\d+(?:[.,]\d+)?)\s*cm/
     ]);
@@ -56,6 +61,7 @@
 
     const currentWeight = numberValue(currentWeightMatch?.[1]);
     const previousWeight = numberValue(previousWeightMatch?.[1]);
+    const intervalBaselineWeight = numberValue(intervalBaselineWeightMatch?.[1]);
     const heightCm = numberValue(heightMatch?.[1]);
     const currentDose = numberValue(currentDoseMatch?.[1]);
     const plannedDose = numberValue(plannedDoseMatch?.[1]);
@@ -76,6 +82,7 @@
       sex: ageMatch?.[2] || "",
       currentWeight,
       previousWeight,
+      intervalBaselineWeight,
       heightCm,
       bmi,
       medicine,
@@ -180,26 +187,38 @@
     return ((facts.previousWeight - facts.currentWeight) / facts.previousWeight) * 100;
   }
 
+  function vapacIntervalBaselineWeight(facts) {
+    return facts.intervalBaselineWeight || null;
+  }
+
+  function vapacIntervalWeightLoss(facts) {
+    const baseline = vapacIntervalBaselineWeight(facts);
+    if (!baseline || !facts.currentWeight) return null;
+    return ((baseline - facts.currentWeight) / baseline) * 100;
+  }
+
   function criticalVapacIssues(raw, facts) {
     const lower = String(raw || "").toLowerCase();
     const issues = [];
     if (!extractLine(raw, [/(?:patient|name)\s*[:\-]\s*([^\n]+)/i]) && !/\bmr\.|\bmrs\.|\bms\.|\bmiss\b/i.test(raw)) issues.push("Patient full name/title not clearly documented.");
     if (!/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(raw) && !/dob|date of birth/i.test(raw)) issues.push("DOB not clearly documented.");
     if (!/gold|white|dva|vsm|file|card/i.test(raw)) issues.push("DVA card type and/or DVA file number not clearly documented.");
-    if (!facts.previousWeight) issues.push("Starting weight not clearly documented.");
+    if (!vapacIntervalBaselineWeight(facts)) issues.push("Baseline weight for the most recent 4-month approval/funding interval is not clearly documented. Do not use older original treatment starting weight for the 5% continuation calculation unless it is explicitly the current interval baseline.");
     if (!facts.currentWeight) issues.push("Current weight not clearly documented.");
     if (!facts.heightCm) issues.push("Height not clearly documented, so BMI cannot be verified.");
     if (!/accepted conditions?|comorbid|oa|osa|hypertension|htn|diabetes|dm|pain|back|knee|ankle|mental health|ptsd/i.test(raw)) issues.push("Accepted conditions / relevant comorbidities not clearly documented.");
     if (!facts.medicine && !/tirzepatide|semaglutide|mounjaro|wegovy|ozempic/i.test(lower)) issues.push("Requested medication not clearly documented.");
     if (!facts.plannedDose && !/requested|proposed|maintenance|continue|continuation/i.test(lower)) issues.push("Requested dose/regimen not clearly documented.");
     if (!facts.hasDietician) issues.push("Dietitian/dietician engagement not clearly documented.");
-    if (percentWeightLoss(facts) !== null && percentWeightLoss(facts) < 5) issues.push(`Weight loss is ${formatNumber(percentWeightLoss(facts), 1)}%, below the commonly cited 5% continuation threshold; written justification should address clinical benefits/barriers.`);
+    if (vapacIntervalWeightLoss(facts) !== null && vapacIntervalWeightLoss(facts) < 5) issues.push(`Weight loss across the most recent approval interval is ${formatNumber(vapacIntervalWeightLoss(facts), 1)}%, below the commonly cited 5% continuation threshold; written justification should address clinical benefits/barriers.`);
     return issues;
   }
 
   function vapacApplication(raw, facts) {
     const issues = criticalVapacIssues(raw, facts);
-    const loss = percentWeightLoss(facts);
+    const intervalBaseline = vapacIntervalBaselineWeight(facts);
+    const intervalLoss = vapacIntervalWeightLoss(facts);
+    const lifetimeLoss = percentWeightLoss(facts);
     const patientName = extractLine(raw, [/(?:patient|name)\s*[:\-]\s*([^\n]+)/i])
       || String(raw || "").match(/\b(?:Mr|Mrs|Ms|Miss|Dr)\.?\s+[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)+/)?.[0]
       || "Patient name: Not documented";
@@ -231,7 +250,7 @@
       dob,
       dva,
       "",
-      `Starting Weight: ${facts.previousWeight ? `${formatNumber(facts.previousWeight, 1)} kg` : "Not documented"}`,
+      `Starting Weight for Current Approval Interval: ${intervalBaseline ? `${formatNumber(intervalBaseline, 1)} kg` : "Not documented"}`,
       `Current Weight: ${facts.currentWeight ? `${formatNumber(facts.currentWeight, 1)} kg` : "Not documented"}`,
       `Height: ${facts.heightCm ? `${formatNumber(facts.heightCm, 1)} cm` : "Not documented"}`,
       `BMI: ${facts.bmi ? `~${formatNumber(facts.bmi, 1)} kg/m2 (${bmiCategory(facts.bmi)})` : "Not documented"}`,
@@ -239,7 +258,10 @@
       extractLine(raw, [/(?:accepted conditions?|comorbidities|comorbid conditions)\s*[:\-]?\s*([^\n]+)/i]) || "Not documented",
       "",
       "Clinical Summary (Reason for request):",
-      loss !== null ? `Documented weight change is ${formatNumber(loss, 1)}% from starting weight.` : "Percentage weight loss cannot be calculated from the supplied data.",
+      intervalLoss !== null
+        ? `Documented weight change across the most recent approval interval is ${formatNumber(intervalLoss, 1)}%. The 5% continuation requirement should be assessed against this interval baseline, not older original treatment weights. ${intervalLoss >= 5 ? "This appears to meet the 5% interval threshold." : "This appears below the 5% interval threshold and requires written clinical justification for continuation."}`
+        : "Percentage weight loss for the most recent approval interval cannot be calculated because the interval baseline weight and/or current weight is not clearly supplied.",
+      lifetimeLoss !== null && facts.previousWeight !== intervalBaseline ? `Original/older treatment weight change supplied as background: ${formatNumber(lifetimeLoss, 1)}%. This is not used for the 5% interval continuation calculation unless explicitly stated as the current approval interval baseline.` : "",
       raw,
       "",
       "Current Medication (Generic/ Brand name/ Dose):",

@@ -396,7 +396,7 @@ HANDOVER_SYSTEM_PROMPT = (
 CONSULT_TYPE_INSTRUCTIONS = {
     "weight loss initial consult": "Use the organisation's initial weight-management consult style. Focus on ID check, telehealth mode, DVA/card context where documented, obesity/metabolic history, comorbidities, current and prior weight-loss medicines, contraindications, counselling, consent/opportunity for questions, baseline observations, starting plan, follow-up, safety-netting, and current medication line.",
     "weight loss follow-up": "Use the organisation's weight-management review/script-renewal style. Focus on response to treatment, adverse effects, tolerability, adherence, current dose, requested dose change/script renewal, BMI/weight trajectory, comorbidities, escalation rationale, dietitian/lifestyle measures, safety-netting, follow-up, and current medication line.",
-    "vapac weight loss application": "Write a formal DVA VAPAC application letter for RPBS funding or continuation of weight-loss pharmacotherapy. Focus on patient identifiers, DVA card/file details, accepted conditions/comorbidities, anthropometrics, prior response, 5% weight-loss status, medication history, requested medication/regimen, clinical justification, monitoring, evidence, and missing critical information.",
+    "vapac weight loss application": "Write a formal DVA VAPAC application letter for RPBS funding or continuation of weight-loss pharmacotherapy. Focus on patient identifiers, DVA card/file details, accepted conditions/comorbidities, anthropometrics, prior response, 5% weight-loss status for the most recent approval interval, medication history, requested medication/regimen, clinical justification, monitoring, evidence, and missing critical information.",
     "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
     "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
@@ -491,7 +491,7 @@ VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE = (
     "<Patient title/name>\n"
     "<DOB>\n"
     "<DVA card type and DVA/file number>\n\n"
-    "Starting Weight:\n"
+    "Starting Weight for Current Approval Interval:\n"
     "Current Weight:\n"
     "Height:\n"
     "BMI:\n"
@@ -531,8 +531,11 @@ VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE = (
     "- <list missing or contradictory items, or write 'No critical missing information identified from the supplied input.'>\n\n"
     "Content requirements:\n"
     "- Preserve supplied patient identifiers, DVA card type, file number, DOB, dates, medications, doses and prior notes accurately.\n"
-    "- Calculate BMI if height and current weight are supplied. Calculate percentage weight loss if starting and current weight are supplied.\n"
-    "- Explicitly state whether the patient meets or fails the 5% weight-loss continuation threshold when data permits.\n"
+    "- Calculate BMI if height and current weight are supplied.\n"
+    "- For VAPAC continuation, the 5% weight-loss requirement applies to the most recent approved funding interval, generally a 4-month interval / 4 pens. Use the baseline weight at the start of that current approval interval as the denominator, not the original treatment starting weight from earlier months unless that is also the interval baseline.\n"
+    "- If multiple weights/dates are supplied, identify and use the weight at the start of the most recent funded approval interval and the current/authority-attempt weight. Mention older original starting weights only as background.\n"
+    "- Explicitly state whether the patient meets or fails the 5% weight-loss continuation threshold for the most recent approval interval when data permits.\n"
+    "- If the interval baseline weight is unclear, do not calculate the 5% continuation result from an older original starting weight; instead flag 'current approval interval baseline weight unclear' as critical missing information.\n"
     "- For White Card holders, explicitly link the request to accepted conditions/comorbidities where supplied. If this link is unclear, flag it as critical missing information.\n"
     "- If continuation is requested despite less than 5% weight loss, include a reasoned written-application justification based only on supplied facts: clinical benefits, functional gains, barriers, dose titration, interruptions, tolerability, comorbidity improvement, or risk of harm if ceased.\n"
     "- Do not invent accepted conditions, specialist support, renal/hepatic status, pathology, or medication response. If absent, state it is not documented and flag if important."
@@ -575,7 +578,10 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "Organisation workflow priority:\n"
             "The final output is a formal application letter to VAPAC, not a routine consult note. "
             "Use the supplied pasted information to populate the letter. Keep it professional, concise and defensible. "
-            "At the bottom, always include a Critical information missing / issues to address section."
+            "For the 5% continuation rule, compare the current weight against the baseline weight for the most recent "
+            "approved funding interval, generally the last 4 months / 4 pens, not the original treatment starting "
+            "weight from older approvals. At the bottom, always include a Critical information missing / issues to "
+            "address section."
         )
 
     if chosen_type == "emergency department note":
