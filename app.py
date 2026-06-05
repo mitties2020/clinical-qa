@@ -513,6 +513,46 @@ def deepgram_listen_url() -> str:
     return f"wss://api.deepgram.com/v1/listen?{urlencode(params)}"
 
 
+def deepgram_prerecorded_url() -> str:
+    params = {
+        "model": os.getenv("DEEPGRAM_MODEL", "nova-2"),
+        "language": os.getenv("DEEPGRAM_LANGUAGE", "en-AU"),
+        "punctuate": "true",
+        "smart_format": "true",
+    }
+    return f"https://api.deepgram.com/v1/listen?{urlencode(params)}"
+
+
+def extract_deepgram_transcript(payload: dict) -> str:
+    return (
+        payload.get("results", {})
+        .get("channels", [{}])[0]
+        .get("alternatives", [{}])[0]
+        .get("transcript", "")
+        .strip()
+    )
+
+
+def transcribe_audio_with_deepgram(audio_bytes: bytes, content_type: str) -> str:
+    deepgram_api_key = (os.getenv("DEEPGRAM_API_KEY") or "").strip()
+    if not deepgram_api_key:
+        raise RuntimeError("DEEPGRAM_API_KEY is not configured")
+
+    response = http.post(
+        deepgram_prerecorded_url(),
+        headers={
+            "Authorization": f"Token {deepgram_api_key}",
+            "Content-Type": content_type or "audio/webm",
+        },
+        data=audio_bytes,
+        timeout=60,
+    )
+    if response.status_code >= 400:
+        detail = response.text[:300] if response.text else f"HTTP {response.status_code}"
+        raise RuntimeError(f"Deepgram transcription failed: {detail}")
+    return extract_deepgram_transcript(response.json())
+
+
 def handle_deepgram_message(raw, role_label: str):
     try:
         data = json.loads(raw)
@@ -1175,12 +1215,24 @@ def transcribe():
     if not f:
         return jsonify({"error": "Missing audio"}), 400
 
+    audio_bytes = f.read()
+    if not audio_bytes:
+        return jsonify({"error": "Missing audio"}), 400
+
+    if (os.getenv("DEEPGRAM_API_KEY") or "").strip():
+        try:
+            text = transcribe_audio_with_deepgram(audio_bytes, f.mimetype or "audio/webm")
+            return jsonify({"text": text})
+        except Exception as exc:
+            app.logger.warning("Deepgram mic transcription failed, falling back to Whisper: %s", exc)
+
     with _transcribe_lock:
         tmp_path = None
         try:
             fd, tmp_path = tempfile.mkstemp(suffix=".webm")
             os.close(fd)
-            f.save(tmp_path)
+            with open(tmp_path, "wb") as tmp:
+                tmp.write(audio_bytes)
 
             wav_path = tmp_path + ".wav"
             cmd = ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", wav_path]

@@ -1,4 +1,5 @@
 import unittest
+from io import BytesIO
 from unittest.mock import patch
 
 
@@ -119,6 +120,39 @@ class TwilioCallingTests(unittest.TestCase):
         self.assertIn('<Parameter name="room" value="consult-test" />', xml)
         self.assertIn('<Parameter name="role" value="patient" />', xml)
         self.assertIn("<Dial><Conference", xml)
+
+
+class MicTranscriptionTests(unittest.TestCase):
+    def authenticated_client(self):
+        import app as app_module
+
+        app_module.app.config.update(TESTING=True)
+        client = app_module.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return app_module, client
+
+    def test_transcribe_uses_deepgram_when_configured(self):
+        app_module, client = self.authenticated_client()
+        deepgram_body = {
+            "results": {
+                "channels": [
+                    {"alternatives": [{"transcript": "hello this is a test"}]}
+                ]
+            }
+        }
+        with patch.dict("os.environ", {"DEEPGRAM_API_KEY": "dg-token"}, clear=False), patch.object(app_module.http, "post") as post:
+            post.return_value = FakeTwilioResponse(body=deepgram_body)
+            response = client.post(
+                "/api/transcribe",
+                data={"audio": (BytesIO(b"fake-webm-audio"), "dictation.webm")},
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["text"], "hello this is a test")
+        self.assertIn("https://api.deepgram.com/v1/listen", post.call_args.args[0])
+        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Token dg-token")
 
 
 if __name__ == "__main__":
