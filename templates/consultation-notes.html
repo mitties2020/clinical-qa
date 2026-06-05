@@ -368,8 +368,11 @@ async function callPatient(){
   try{
     const res=await fetch("/api/call-patient",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({patientPhone:phone})});
     const data=await res.json().catch(()=>({}));
-    if(!res.ok)throw new Error(data?.error||"Call failed");
-    if(callStatus)callStatus.textContent=`Call started (${data.patientSid||data.sid||"connected"})`;
+    if(!res.ok){
+      const fallback=res.status===401?"Please log in again before calling.":res.status===404?"Calling endpoint is not available in this preview. Use the live Flask app URL.":`Call failed (${res.status})`;
+      throw new Error(data?.error||fallback);
+    }
+    if(callStatus)callStatus.textContent=`Call started. Your phone and the patient phone should ring now.`;
   }catch(err){
     if(callStatus)callStatus.textContent=`Call failed: ${err.message||"Unknown error"}`;
   }finally{

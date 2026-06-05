@@ -10,7 +10,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 from functools import wraps
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 from flask import (
@@ -208,14 +208,25 @@ def ping():
 def call_patient():
     account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
     auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
-    twilio_number = (os.getenv("TWILIO_NUMBER") or "").strip()
-    base_url = (os.getenv("BASE_URL") or request.host_url).strip()
+    twilio_number_raw = (os.getenv("TWILIO_NUMBER") or "").strip()
+    twilio_number = normalize_twilio_from_phone(twilio_number_raw)
+    base_url = twilio_base_url()
 
-    if not (account_sid and auth_token and twilio_number):
+    missing = [
+        name for name, value in (
+            ("TWILIO_ACCOUNT_SID", account_sid),
+            ("TWILIO_AUTH_TOKEN", auth_token),
+            ("TWILIO_NUMBER", twilio_number_raw),
+        )
+        if not value
+    ]
+    if missing:
         return jsonify({
             "ok": False,
-            "error": "Calling is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_NUMBER."
+            "error": f"Calling is not configured. Missing: {', '.join(missing)}."
         }), 503
+    if not twilio_number:
+        return jsonify({"ok": False, "error": "TWILIO_NUMBER must be a valid E.164 phone number, e.g. +614XXXXXXXX."}), 503
 
     payload = request.get_json(silent=True) or {}
     patient_phone_raw = str(payload.get("patientPhone") or "").strip()
@@ -223,10 +234,22 @@ def call_patient():
     if not patient_phone:
         return jsonify({"ok": False, "error": "Invalid patientPhone. Use E.164 (e.g. +614XXXXXXXX) or AU mobile format."}), 400
 
+    if not is_public_twilio_base_url(base_url):
+        return jsonify({
+            "ok": False,
+            "error": "Calling needs a public BASE_URL or APP_BASE_URL, e.g. https://www.vividmedi.com. Local preview URLs cannot receive Twilio webhooks."
+        }), 503
+
     base_url_norm = base_url if base_url.endswith("/") else f"{base_url}/"
-    status_url = urljoin(base_url if base_url.endswith("/") else f"{base_url}/", "api/call-status")
+    status_url = urljoin(base_url_norm, "api/call-status")
     conference_name = f"consult-{uuid4().hex}"
     doctor_phone = normalize_au_phone((os.getenv("DOCTOR_PHONE") or "").strip())
+    if not doctor_phone and (os.getenv("ALLOW_PATIENT_ONLY_CALLS") or "").strip().lower() not in {"1", "true", "yes"}:
+        return jsonify({
+            "ok": False,
+            "error": "Doctor phone is not configured. Set DOCTOR_PHONE so Twilio can bridge your phone with the patient."
+        }), 503
+
     patient_twiml_url = urljoin(base_url_norm, f"twiml/join-consult?room={conference_name}&role=patient")
     doctor_twiml_url = urljoin(base_url_norm, f"twiml/join-consult?room={conference_name}&role=doctor")
 
@@ -239,6 +262,7 @@ def call_patient():
                     "To": doctor_phone,
                     "From": twilio_number,
                     "Url": doctor_twiml_url,
+                    "Method": "POST",
                     "StatusCallback": status_url,
                     "StatusCallbackMethod": "POST",
                     "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
@@ -246,7 +270,7 @@ def call_patient():
                 timeout=20,
             )
             if doctor_res.status_code >= 400:
-                detail = doctor_res.json().get("message") if "application/json" in doctor_res.headers.get("content-type", "") else doctor_res.text
+                detail = twilio_response_error(doctor_res)
                 return jsonify({"ok": False, "error": f"Twilio doctor leg failed: {detail}"}), 502
             doctor_sid = doctor_res.json().get("sid")
         else:
@@ -259,6 +283,7 @@ def call_patient():
                 "To": patient_phone,
                 "From": twilio_number,
                 "Url": patient_twiml_url,
+                "Method": "POST",
                 "StatusCallback": status_url,
                 "StatusCallbackMethod": "POST",
                 "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
@@ -266,15 +291,16 @@ def call_patient():
             timeout=20,
         )
         if patient_res.status_code >= 400:
-            detail = patient_res.json().get("message") if "application/json" in patient_res.headers.get("content-type", "") else patient_res.text
+            detail = twilio_response_error(patient_res)
             return jsonify({"ok": False, "error": f"Twilio patient leg failed: {detail}"}), 502
         patient_sid = patient_res.json().get("sid")
-        return jsonify({"ok": True, "room": conference_name, "patientSid": patient_sid, "doctorSid": doctor_sid, "to": patient_phone}), 200
+        return jsonify({"ok": True, "room": conference_name, "sid": patient_sid, "patientSid": patient_sid, "doctorSid": doctor_sid, "to": patient_phone}), 200
     except requests.RequestException as exc:
+        app.logger.exception("Twilio call request failed")
         return jsonify({"ok": False, "error": f"Twilio request failed: {exc}"}), 502
 
 
-@app.post("/twiml/connect-patient")
+@app.route("/twiml/connect-patient", methods=["GET", "POST"])
 def twiml_connect_patient():
     stream_url = (os.getenv("STREAM_URL") or "").strip()
     if stream_url:
@@ -284,7 +310,7 @@ def twiml_connect_patient():
     return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
 
 
-@app.post("/twiml/join-consult")
+@app.route("/twiml/join-consult", methods=["GET", "POST"])
 def twiml_join_consult():
     room = (request.args.get("room") or f"consult-{uuid4().hex}").strip()
     role = (request.args.get("role") or "participant").strip().lower()
@@ -304,6 +330,50 @@ def twiml_join_consult():
 def call_status():
     monitor.record_system_metric("twilio.call_status.webhook", 1.0)
     return "", 204
+
+
+def twilio_base_url() -> str:
+    configured = (os.getenv("BASE_URL") or os.getenv("APP_BASE_URL") or "").strip()
+    base_url = configured or request.host_url
+    if base_url and not re.match(r"^https?://", base_url, flags=re.IGNORECASE):
+        base_url = f"https://{base_url}"
+    return base_url if base_url.endswith("/") else f"{base_url}/"
+
+
+def is_public_twilio_base_url(base_url: str) -> bool:
+    parsed = urlparse(base_url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        return False
+    if host.endswith(".local"):
+        return False
+    return bool(host)
+
+
+def twilio_response_error(response) -> str:
+    content_type = response.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = response.json()
+            message = body.get("message") or body.get("detail") or response.text
+            code = body.get("code")
+            return f"{message} (code {code})" if code else str(message)
+        except ValueError:
+            pass
+    return response.text or f"HTTP {response.status_code}"
+
+
+def normalize_e164_phone(phone: str) -> str:
+    cleaned = re.sub(r"[^\d+]", "", phone or "")
+    if cleaned.startswith("+") and re.fullmatch(r"\+\d{8,15}", cleaned):
+        return cleaned
+    return ""
+
+
+def normalize_twilio_from_phone(phone: str) -> str:
+    return normalize_e164_phone(phone) or normalize_au_phone(phone)
 
 
 def normalize_au_phone(phone: str) -> str:
