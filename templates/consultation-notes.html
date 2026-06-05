@@ -720,6 +720,8 @@ function setTranscriptStatus(status,message=""){
   if(!el)return;
   if(status==="connected")el.textContent="Connected to transcript server";
   else if(status==="active")el.textContent="Call transcription active";
+  else if(status==="stream")el.textContent=message||"Call audio stream connected";
+  else if(status==="audio")el.textContent=message||"Receiving call audio";
   else if(status==="error")el.textContent=message||"Call transcription unavailable";
   else el.textContent="Transcription stopped";
 }

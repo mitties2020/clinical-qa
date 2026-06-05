@@ -112,14 +112,31 @@ class TwilioCallingTests(unittest.TestCase):
     def test_join_consult_twiml_starts_media_stream_with_role_parameters(self):
         _app_module, client = self.authenticated_client()
         with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_SECRET": ""}, clear=False):
+            response = client.post("/twiml/join-consult?room=consult-test&role=doctor")
+
+        self.assertEqual(response.status_code, 200)
+        xml = response.get_data(as_text=True)
+        self.assertIn('<Start><Stream name="consult-test-doctor" url="wss://www.vividmedi.com/twilio-stream" track="both_tracks"', xml)
+        self.assertIn('statusCallback="https://www.vividmedi.com/api/stream-status?room=consult-test&amp;role=doctor"', xml)
+        self.assertIn('<Parameter name="room" value="consult-test" />', xml)
+        self.assertIn('<Parameter name="role" value="doctor" />', xml)
+        self.assertIn("<Dial><Conference", xml)
+
+    def test_patient_leg_does_not_duplicate_stream_by_default(self):
+        _app_module, client = self.authenticated_client()
+        with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_LEG": ""}, clear=False):
             response = client.post("/twiml/join-consult?room=consult-test&role=patient")
 
         self.assertEqual(response.status_code, 200)
         xml = response.get_data(as_text=True)
-        self.assertIn('<Start><Stream url="wss://www.vividmedi.com/twilio-stream" track="inbound_track">', xml)
-        self.assertIn('<Parameter name="room" value="consult-test" />', xml)
-        self.assertIn('<Parameter name="role" value="patient" />', xml)
+        self.assertNotIn("<Start><Stream", xml)
         self.assertIn("<Dial><Conference", xml)
+
+    def test_doctor_stream_labels_tracks_as_clinician_and_patient(self):
+        import app as app_module
+
+        self.assertEqual(app_module.twilio_track_speaker_label("doctor", "inbound"), "Clinician")
+        self.assertEqual(app_module.twilio_track_speaker_label("doctor", "outbound"), "Patient")
 
 
 class MicTranscriptionTests(unittest.TestCase):
