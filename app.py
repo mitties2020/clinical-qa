@@ -6,13 +6,16 @@ import threading
 import subprocess
 import sqlite3
 import json
+import base64
+import html
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 from functools import wraps
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 
 import requests
+import websocket
 from flask import (
     Flask,
     g,
@@ -24,6 +27,7 @@ from flask import (
     redirect,
     url_for,
 )
+from flask_sock import Sock
 
 from faster_whisper import WhisperModel
 from performance_monitor import monitor
@@ -43,8 +47,13 @@ EXTENSION_SYNC_TOKEN = (os.getenv("EXTENSION_SYNC_TOKEN") or "").strip()
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
+sock = Sock(app)
 
 http = requests.Session()
+transcript_clients = set()
+transcript_clients_lock = threading.Lock()
+active_transcript_streams = 0
+active_transcript_lock = threading.Lock()
 
 
 @app.before_request
@@ -315,13 +324,24 @@ def twiml_join_consult():
     room = (request.args.get("room") or f"consult-{uuid4().hex}").strip()
     role = (request.args.get("role") or "participant").strip().lower()
     start_on_enter = "true" if role == "doctor" else "false"
+    stream_url = twilio_media_stream_url(room, role)
+    stream_xml = (
+        '<Start><Stream '
+        f'url="{html.escape(stream_url, quote=True)}" '
+        'track="inbound_track">'
+        f'<Parameter name="room" value="{html.escape(room, quote=True)}" />'
+        f'<Parameter name="role" value="{html.escape(role, quote=True)}" />'
+        f"{twilio_stream_secret_parameter()}"
+        '</Stream></Start>'
+        if stream_url else ""
+    )
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        "<Response><Dial><Conference "
+        f"<Response>{stream_xml}<Dial><Conference "
         f'startConferenceOnEnter="{start_on_enter}" '
         'endConferenceOnExit="false" '
         'beep="false">'
-        f"{room}</Conference></Dial></Response>"
+        f"{html.escape(room)}</Conference></Dial></Response>"
     )
     return make_response(xml, 200, {"Content-Type": "text/xml; charset=utf-8"})
 
@@ -332,12 +352,210 @@ def call_status():
     return "", 204
 
 
+@sock.route("/frontend-transcript")
+def frontend_transcript(ws):
+    if session.get("authenticated") is not True:
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return
+    with transcript_clients_lock:
+        transcript_clients.add(ws)
+    send_transcript_message(ws, {"type": "status", "status": "connected"})
+    send_transcript_message(ws, {"type": "status", "status": "active" if active_transcript_streams else "stopped"})
+    try:
+        while True:
+            message = ws.receive()
+            if message is None:
+                break
+    finally:
+        with transcript_clients_lock:
+            transcript_clients.discard(ws)
+
+
+@sock.route("/twilio-stream")
+def twilio_stream(ws):
+    role = (request.args.get("role") or "participant").strip().lower()
+    room = (request.args.get("room") or "").strip()
+    role_label = "Patient" if role == "patient" else "Clinician" if role == "doctor" else "Call"
+    deepgram_api_key = (os.getenv("DEEPGRAM_API_KEY") or "").strip()
+    deepgram_ws = None
+    deepgram_reader_stop = threading.Event()
+    stream_started = False
+    transcription_marked_active = False
+
+    if not deepgram_api_key:
+        broadcast_transcript_status("error", "DEEPGRAM_API_KEY is not configured.")
+
+    try:
+        if deepgram_api_key:
+            deepgram_ws = websocket.create_connection(
+                deepgram_listen_url(),
+                header=[f"Authorization: Token {deepgram_api_key}"],
+                timeout=10,
+            )
+            deepgram_ws.settimeout(None)
+
+            def read_deepgram():
+                while not deepgram_reader_stop.is_set():
+                    try:
+                        raw = deepgram_ws.recv()
+                    except Exception:
+                        break
+                    handle_deepgram_message(raw, role_label)
+
+            threading.Thread(target=read_deepgram, daemon=True).start()
+
+        while True:
+            raw = ws.receive()
+            if raw is None:
+                break
+            try:
+                message = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            event = message.get("event")
+            if event == "start" and not stream_started:
+                custom_parameters = message.get("start", {}).get("customParameters", {}) or {}
+                expected_secret = (os.getenv("TWILIO_STREAM_SECRET") or "").strip()
+                received_secret = (custom_parameters.get("streamSecret") or "").strip()
+                if expected_secret and received_secret != expected_secret:
+                    app.logger.warning("Rejected Twilio media stream with invalid stream secret")
+                    break
+                role = (custom_parameters.get("role") or role).strip().lower()
+                room = (custom_parameters.get("room") or room).strip()
+                role_label = "Patient" if role == "patient" else "Clinician" if role == "doctor" else "Call"
+                stream_started = True
+                if deepgram_ws:
+                    transcription_marked_active = True
+                    increment_transcript_streams()
+                else:
+                    broadcast_transcript_status("error", "Call audio stream connected, but Deepgram transcription is not available.")
+                app.logger.info("Twilio media stream started: role=%s room=%s", role, room)
+            elif event == "media" and deepgram_ws:
+                payload = message.get("media", {}).get("payload")
+                if payload:
+                    try:
+                        deepgram_ws.send_binary(base64.b64decode(payload))
+                    except Exception as exc:
+                        app.logger.warning("Failed to forward Twilio audio to Deepgram: %s", exc)
+            elif event == "stop":
+                break
+    except Exception as exc:
+        app.logger.exception("Twilio transcription stream failed")
+        broadcast_transcript_status("error", f"Call transcription failed: {exc}")
+    finally:
+        deepgram_reader_stop.set()
+        if transcription_marked_active:
+            decrement_transcript_streams()
+        if deepgram_ws:
+            try:
+                deepgram_ws.close()
+            except Exception:
+                pass
+
+
+def send_transcript_message(ws, payload) -> bool:
+    try:
+        ws.send(json.dumps(payload))
+        return True
+    except Exception:
+        return False
+
+
+def broadcast_transcript(payload):
+    with transcript_clients_lock:
+        clients = list(transcript_clients)
+    stale = []
+    for client in clients:
+        if not send_transcript_message(client, payload):
+            stale.append(client)
+    if stale:
+        with transcript_clients_lock:
+            for client in stale:
+                transcript_clients.discard(client)
+
+
+def broadcast_transcript_status(status: str, message: str = ""):
+    payload = {"type": "status", "status": status}
+    if message:
+        payload["message"] = message
+    broadcast_transcript(payload)
+
+
+def increment_transcript_streams():
+    global active_transcript_streams
+    with active_transcript_lock:
+        active_transcript_streams += 1
+    broadcast_transcript_status("active")
+
+
+def decrement_transcript_streams():
+    global active_transcript_streams
+    with active_transcript_lock:
+        active_transcript_streams = max(0, active_transcript_streams - 1)
+        still_active = active_transcript_streams > 0
+    broadcast_transcript_status("active" if still_active else "stopped")
+
+
+def deepgram_listen_url() -> str:
+    params = {
+        "model": os.getenv("DEEPGRAM_MODEL", "nova-2"),
+        "language": os.getenv("DEEPGRAM_LANGUAGE", "en-AU"),
+        "encoding": "mulaw",
+        "sample_rate": "8000",
+        "channels": "1",
+        "interim_results": "false",
+        "punctuate": "true",
+        "smart_format": "true",
+    }
+    return f"wss://api.deepgram.com/v1/listen?{urlencode(params)}"
+
+
+def handle_deepgram_message(raw, role_label: str):
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return
+    transcript = (
+        data.get("channel", {})
+        .get("alternatives", [{}])[0]
+        .get("transcript", "")
+        .strip()
+    )
+    if not transcript:
+        return
+    if data.get("is_final") is False:
+        return
+    broadcast_transcript({"type": "transcript", "text": f"{role_label}: {transcript}", "speaker": role_label})
+
+
 def twilio_base_url() -> str:
     configured = (os.getenv("BASE_URL") or os.getenv("APP_BASE_URL") or "").strip()
     base_url = configured or request.host_url
     if base_url and not re.match(r"^https?://", base_url, flags=re.IGNORECASE):
         base_url = f"https://{base_url}"
     return base_url if base_url.endswith("/") else f"{base_url}/"
+
+
+def twilio_media_stream_url(room: str, role: str) -> str:
+    configured = (os.getenv("STREAM_URL") or "").strip()
+    if configured:
+        stream_url = configured
+    else:
+        base_url = twilio_base_url()
+        stream_url = urljoin(base_url, "twilio-stream")
+        stream_url = re.sub(r"^https:", "wss:", stream_url, flags=re.IGNORECASE)
+        stream_url = re.sub(r"^http:", "ws:", stream_url, flags=re.IGNORECASE)
+    return stream_url
+
+
+def twilio_stream_secret_parameter() -> str:
+    stream_secret = (os.getenv("TWILIO_STREAM_SECRET") or "").strip()
+    if not stream_secret:
+        return ""
+    return f'<Parameter name="streamSecret" value="{html.escape(stream_secret, quote=True)}" />'
 
 
 def is_public_twilio_base_url(base_url: str) -> bool:

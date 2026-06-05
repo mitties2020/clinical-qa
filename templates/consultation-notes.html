@@ -706,11 +706,12 @@ function setFocusMode(isOn){
   const ribbon=document.querySelector(".stealth-ribbon");
   if(ribbon)ribbon.style.display=isOn?"block":"none";
 }
-function setTranscriptStatus(status){
+function setTranscriptStatus(status,message=""){
   const el=document.getElementById("transcriptionStatus");
   if(!el)return;
   if(status==="connected")el.textContent="Connected to transcript server";
   else if(status==="active")el.textContent="Call transcription active";
+  else if(status==="error")el.textContent=message||"Call transcription unavailable";
   else el.textContent="Transcription stopped";
 }
 function appendTranscriptToConsultInput(text){
@@ -727,15 +728,14 @@ function connectTranscriptSocket(){
   const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);
   const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);
   const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");
-  const suppressAuto=localStorage.getItem("vivid_transcript_ws_unavailable")==="1";
-  if(!wsUrl||(!configured&&suppressAuto)){setTranscriptStatus("stopped");return;}
+  if(!wsUrl){setTranscriptStatus("stopped");return;}
   if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){setTranscriptStatus("stopped");return;}
   try{
     const socket=new WebSocket(wsUrl);
-    socket.addEventListener("open",()=>{localStorage.removeItem("vivid_transcript_ws_unavailable");setTranscriptStatus("connected");});
+    socket.addEventListener("open",()=>{setTranscriptStatus("connected");});
     socket.addEventListener("close",()=>setTranscriptStatus("stopped"));
-    socket.addEventListener("error",()=>{if(!configured){localStorage.setItem("vivid_transcript_ws_unavailable","1");}setTranscriptStatus("stopped");});
-    socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});
+    socket.addEventListener("error",()=>{setTranscriptStatus("stopped");});
+    socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status,data.message);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});
   }catch{
     setTranscriptStatus("stopped");
   }

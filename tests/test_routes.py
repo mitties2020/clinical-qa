@@ -108,6 +108,18 @@ class TwilioCallingTests(unittest.TestCase):
         self.assertIn("public BASE_URL or APP_BASE_URL", response.get_json()["error"])
         post.assert_not_called()
 
+    def test_join_consult_twiml_starts_media_stream_with_role_parameters(self):
+        _app_module, client = self.authenticated_client()
+        with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_SECRET": ""}, clear=False):
+            response = client.post("/twiml/join-consult?room=consult-test&role=patient")
+
+        self.assertEqual(response.status_code, 200)
+        xml = response.get_data(as_text=True)
+        self.assertIn('<Start><Stream url="wss://www.vividmedi.com/twilio-stream" track="inbound_track">', xml)
+        self.assertIn('<Parameter name="room" value="consult-test" />', xml)
+        self.assertIn('<Parameter name="role" value="patient" />', xml)
+        self.assertIn("<Dial><Conference", xml)
+
 
 if __name__ == "__main__":
     unittest.main()
