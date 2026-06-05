@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VividMedi - My Patient List</title>
+  <link rel="icon" href="../static/vivid-medi-icon.svg" type="image/svg+xml">
   <style>
     :root { --bg:#080d1a; --bg2:#131c2f; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; --accent2:#18a4b8; --ok:#35c9a0; --danger:#f87171; }
     html[data-theme="night"] { --bg:#080d1a; --panel:#172235; --text:#f4f7ff; --muted:#9fb0cf; --line:#2f3d56; --accent:#25aee4; }
@@ -86,6 +87,7 @@
     @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
   </style>
   <link rel="stylesheet" href="/static/appointments.css">
+  <link rel="stylesheet" href="../static/vivid-medi-brand.css">
 </head>
 <body>
 <div class="container">
@@ -113,7 +115,7 @@
   </aside>
   <main class="main-content">
     <div class="stealth-ribbon" style="display:none;padding:8px 16px;border-bottom:1px solid #5f1a84;font-size:12px;color:#fff;background:#7719aa">File &nbsp; Home &nbsp; Insert &nbsp; Draw &nbsp; View</div><header class="header">
-      <div style="display:flex;align-items:center;gap:18px;min-width:0"><div class="logo-wrap" id="logoClick" style="display:flex;align-items:center;gap:10px"><img src="/static/header.jpg" alt="Vivid Medi" class="vivid-logo" onerror="this.style.display='none'; document.body.classList.add('logo-missing');"><div class="brand-fallback">Vivid Medi</div><div class="page-title">My Patient List</div></div><a class="auth-btn" href="/" style="text-decoration:none">Home</a></div>
+      <div style="display:flex;align-items:center;gap:18px;min-width:0"><div class="app-brand" id="logoClick" aria-label="Vivid Medi Clinical Documentation Aid"><span class="app-brand-mark" aria-hidden="true"></span><span class="app-brand-copy"><span class="app-brand-name">Vivid Medi</span><span class="app-brand-tagline">Clinical Documentation Aid</span></span><div class="page-title">My Patient List</div></div><a class="auth-btn" href="/" style="text-decoration:none">Home</a></div>
       <div class="header-right">
         <label class="switch-row"><span id="themeLabel">Night</span><input type="checkbox" id="themeSwitch"><span class="slider"></span></label>
         <label class="switch-row"><span id="stealthLabel">Focus Mode Off</span><input type="checkbox" id="stealthSwitch"><span class="slider"></span></label>

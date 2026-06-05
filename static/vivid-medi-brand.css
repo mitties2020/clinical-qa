@@ -1,0 +1,63 @@
+.vivid-mark,
+.logo-dot,
+.app-brand-mark {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border: 2px solid #83f6ff;
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, #28f0ff 0%, #078df8 52%, #063fd0 100%);
+  box-shadow:
+    0 0 0 1px rgba(105, 244, 255, .34),
+    0 0 18px rgba(14, 199, 255, .66),
+    0 0 42px rgba(16, 101, 255, .34),
+    inset 0 1px 16px rgba(180, 255, 255, .28),
+    inset 0 -16px 28px rgba(4, 24, 100, .42);
+  overflow: hidden;
+}
+
+.vivid-mark::before,
+.app-brand-mark::before,
+.logo-dot::before {
+  content: "";
+  position: absolute;
+  left: auto;
+  top: auto;
+  width: auto;
+  height: auto;
+  inset: 12px 11px 8px;
+  border-radius: 0;
+  background: linear-gradient(180deg, #03142f, #071934 56%, #020a18);
+  clip-path: polygon(0 0, 34% 0, 50% 60%, 66% 0, 100% 0, 67% 100%, 33% 100%);
+  box-shadow: none;
+  transform: none;
+  filter: drop-shadow(0 0 5px rgba(2, 12, 35, .82));
+}
+
+.vivid-mark::after,
+.app-brand-mark::after,
+.logo-dot::after {
+  content: "";
+  position: absolute;
+  left: auto;
+  top: auto;
+  width: auto;
+  height: auto;
+  inset: 2px;
+  border-radius: 12px;
+  background: radial-gradient(circle at 32% 18%, rgba(255, 255, 255, .42), transparent 30%);
+  box-shadow: none;
+  transform: none;
+  pointer-events: none;
+}
+
+.app-brand-mark {
+  border-radius: 15px !important;
+}
+
+html[data-stealth="on"] .app-brand-mark {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .16);
+}

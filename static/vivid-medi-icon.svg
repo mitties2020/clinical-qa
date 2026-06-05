@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Vivid Medi">
+  <defs>
+    <linearGradient id="vm-bg" x1="18" y1="16" x2="108" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#20f2ff"/>
+      <stop offset=".52" stop-color="#0798ff"/>
+      <stop offset="1" stop-color="#0647d8"/>
+    </linearGradient>
+    <linearGradient id="vm-v" x1="34" y1="42" x2="96" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#061126"/>
+      <stop offset=".56" stop-color="#071a3a"/>
+      <stop offset="1" stop-color="#041024"/>
+    </linearGradient>
+    <filter id="vm-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="18" y="14" width="92" height="92" rx="24" fill="url(#vm-bg)" stroke="#7ff8ff" stroke-width="3" filter="url(#vm-glow)"/>
+  <path d="M31 49c-1.4-3.4 1.1-7 4.8-7h18.4c2.2 0 4.2 1.4 5 3.5L65 61.6l5.8-16.1c.8-2.1 2.8-3.5 5-3.5h18.4c3.7 0 6.2 3.6 4.8 7L75.8 99.4a6.7 6.7 0 0 1-6.1 4H60.3a6.7 6.7 0 0 1-6.1-4L31 49Z" fill="url(#vm-v)"/>
+  <path d="M39 50h13.3L65 84.5 77.7 50H91L70.4 94H59.6L39 50Z" fill="#07162d"/>
+  <path d="M24 83c11 14 25 21 42 21 16 0 29-6 39-19" fill="none" stroke="#35dcff" stroke-opacity=".42" stroke-width="2"/>
+</svg>

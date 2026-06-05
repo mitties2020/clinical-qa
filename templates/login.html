@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="../static/vivid-medi-icon.svg" type="image/svg+xml">
     <title>Vivid Medi • Secure Access</title>
     <style>
         :root {
@@ -87,26 +88,168 @@
         }
         .invite-only { color: #a6bcdf; font-size: 18px; }
 
-        .mock {
+        .logo-reveal {
+            position: relative;
+            min-height: 396px;
             border: 1px solid var(--panel-border);
             border-radius: 18px;
-            background: linear-gradient(180deg, rgba(16, 31, 61, 0.95), rgba(7, 16, 34, 0.95));
+            background:
+                radial-gradient(circle at 50% 80%, rgba(17, 107, 255, .38), transparent 22%),
+                radial-gradient(circle at 48% 42%, rgba(0, 208, 255, .2), transparent 26%),
+                linear-gradient(180deg, rgba(4, 12, 30, .98), rgba(2, 5, 14, .98));
             box-shadow: var(--glow);
-            padding: 16px;
+            overflow: hidden;
+            isolation: isolate;
         }
-        .mock-inner {
-            border: 1px solid rgba(94, 147, 255, 0.28);
-            border-radius: 12px;
-            min-height: 360px;
-            padding: 16px;
+
+        .logo-reveal::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, transparent 0%, rgba(16, 201, 255, .12) 50%, transparent 100%),
+                radial-gradient(circle at 50% 48%, rgba(19, 205, 255, .18), transparent 28%);
+            opacity: .72;
+        }
+
+        .logo-reveal::after {
+            content: "";
+            position: absolute;
+            left: 32%;
+            right: 32%;
+            bottom: 48px;
+            height: 18px;
+            border-radius: 999px;
+            background: rgba(23, 128, 255, .72);
+            filter: blur(18px);
+            animation: revealGround 3s ease-in-out forwards;
+        }
+
+        .particle,
+        .data-line {
+            position: absolute;
+            z-index: 1;
+            background: #16d6ff;
+            box-shadow: 0 0 14px rgba(22, 214, 255, .8);
+            animation: particleGather 2.7s ease-in-out forwards;
+        }
+
+        .particle {
+            width: 4px;
+            height: 4px;
+            border-radius: 999px;
+        }
+
+        .data-line {
+            width: 86px;
+            height: 1px;
+            opacity: .58;
+            transform-origin: right center;
+        }
+
+        .particle:nth-child(1) { left: 9%; top: 30%; animation-delay: 0s; }
+        .particle:nth-child(2) { left: 14%; top: 48%; animation-delay: .08s; }
+        .particle:nth-child(3) { left: 21%; top: 64%; animation-delay: .14s; }
+        .particle:nth-child(4) { left: 31%; top: 36%; animation-delay: .22s; }
+        .particle:nth-child(5) { left: 40%; top: 58%; animation-delay: .3s; }
+        .particle:nth-child(6) { left: 76%; top: 35%; animation-delay: .18s; }
+        .particle:nth-child(7) { left: 82%; top: 54%; animation-delay: .28s; }
+        .data-line:nth-child(8) { left: 10%; top: 44%; transform: rotate(-5deg); animation-delay: .02s; }
+        .data-line:nth-child(9) { left: 13%; top: 51%; transform: rotate(3deg); animation-delay: .12s; }
+        .data-line:nth-child(10) { left: 18%; top: 59%; transform: rotate(12deg); animation-delay: .2s; }
+
+        .orbit {
+            position: absolute;
+            z-index: 2;
+            left: 50%;
+            top: 44%;
+            width: 250px;
+            height: 118px;
+            border: 1px solid rgba(36, 159, 255, .42);
+            border-left-color: rgba(45, 240, 255, .95);
+            border-right-color: rgba(45, 240, 255, .18);
+            border-radius: 50%;
+            opacity: 0;
+            transform: translate(-50%, -50%) rotate(-18deg);
+            filter: drop-shadow(0 0 12px rgba(31, 137, 255, .6));
+            animation: orbitReveal 3s ease-in-out forwards;
+        }
+
+        .orbit.two {
+            width: 300px;
+            height: 92px;
+            transform: translate(-50%, -50%) rotate(18deg);
+            animation-delay: .08s;
+        }
+
+        .hero-logo-lockup {
+            position: absolute;
+            z-index: 3;
+            inset: 0;
             display: grid;
-            grid-template-columns: 130px 1fr;
-            gap: 16px;
+            place-items: center;
+            align-content: center;
+            gap: 20px;
+            padding-top: 18px;
         }
-        .mock-side, .mock-main { border: 1px solid rgba(123, 162, 235, 0.2); border-radius: 10px; padding: 12px; }
-        .mock-side div { color: #c0d7ff; margin: 10px 0; }
-        .mock-main h4 { margin: 0 0 10px; color: #daebff; }
-        .fakebox { height: 120px; border: 1px solid rgba(90, 138, 230, 0.35); border-radius: 8px; }
+
+        .hero-logo-lockup .vivid-mark {
+            width: 106px;
+            height: 106px;
+            border-radius: 28px;
+            opacity: 0;
+            transform: scale(.48);
+            animation: markReveal 3s cubic-bezier(.2, .8, .2, 1) forwards;
+        }
+
+        .hero-logo-lockup .vivid-mark::before { inset: 28px 25px 20px; }
+        .hero-logo-lockup .vivid-mark::after { border-radius: 24px; }
+
+        .reveal-copy {
+            text-align: center;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: copyReveal 3s ease-in-out forwards;
+        }
+
+        .reveal-copy strong {
+            display: block;
+            font-size: clamp(34px, 4vw, 52px);
+            line-height: 1;
+            letter-spacing: 0;
+        }
+
+        .reveal-copy strong span { color: #16d6ff; text-shadow: 0 0 18px rgba(22, 214, 255, .64); }
+        .reveal-copy small { color: #c7d8f7; font-size: 18px; letter-spacing: 1px; }
+
+        @keyframes particleGather {
+            0% { opacity: 0; transform: translateX(-34px) translateY(10px) scale(.7); }
+            20% { opacity: .95; }
+            50% { opacity: .8; transform: translateX(155px) translateY(-12px) scale(.92); }
+            72% { opacity: .24; transform: translateX(190px) translateY(-2px) scale(.5); }
+            100% { opacity: 0; transform: translateX(-34px) translateY(10px) scale(.7); }
+        }
+
+        @keyframes orbitReveal {
+            0%, 24% { opacity: 0; transform: translate(-50%, -50%) rotate(-40deg) scale(.78); }
+            48%, 66% { opacity: .9; transform: translate(-50%, -50%) rotate(24deg) scale(1); }
+            86%, 100% { opacity: 0; transform: translate(-50%, -50%) rotate(82deg) scale(1.06); }
+        }
+
+        @keyframes markReveal {
+            0%, 28% { opacity: 0; transform: scale(.42); filter: blur(4px); }
+            50%, 100% { opacity: 1; transform: scale(1); filter: blur(0); }
+        }
+
+        @keyframes copyReveal {
+            0%, 62% { opacity: 0; transform: translateY(12px); }
+            78%, 100% { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes revealGround {
+            0%, 40% { opacity: .2; transform: scaleX(.45); }
+            72%, 100% { opacity: 1; transform: scaleX(1); }
+        }
 
         .access-wrap {
             margin-top: 24px;
@@ -183,8 +326,20 @@
             .hero, .access-wrap { grid-template-columns: 1fr; }
             .nav { display: none; }
             .headline { font-size: 46px; }
+            .logo-reveal { min-height: 300px; }
+        }
+
+        @media (max-width: 620px) {
+            .logo-reveal { min-height: 230px; }
+            .hero-logo-lockup .vivid-mark { width: 76px; height: 76px; border-radius: 22px; }
+            .hero-logo-lockup .vivid-mark::before { inset: 20px 18px 14px; }
+            .reveal-copy strong { font-size: 30px; }
+            .reveal-copy small { font-size: 13px; }
+            .orbit { width: 190px; height: 88px; }
+            .orbit.two { width: 220px; height: 70px; }
         }
     </style>
+    <link rel="stylesheet" href="../static/vivid-medi-brand.css">
 </head>
 <body>
     <div class="shell">
@@ -218,16 +373,24 @@
                     <span class="invite-only">Invitation only</span>
                 </div>
             </div>
-            <div class="mock" aria-hidden="true">
-                <div class="mock-inner">
-                    <div class="mock-side">
-                        <div>Text</div>
-                        <div>Voice</div>
-                        <div>File</div>
-                    </div>
-                    <div class="mock-main">
-                        <h4>Capture clinical information</h4>
-                        <div class="fakebox"></div>
+            <div class="logo-reveal" aria-hidden="true">
+                <span class="particle"></span>
+                <span class="particle"></span>
+                <span class="particle"></span>
+                <span class="particle"></span>
+                <span class="particle"></span>
+                <span class="particle"></span>
+                <span class="particle"></span>
+                <span class="data-line"></span>
+                <span class="data-line"></span>
+                <span class="data-line"></span>
+                <span class="orbit"></span>
+                <span class="orbit two"></span>
+                <div class="hero-logo-lockup">
+                    <span class="vivid-mark"></span>
+                    <div class="reveal-copy">
+                        <strong>Vivid <span>Medi</span></strong>
+                        <small>Clinical Documentation Aid</small>
                     </div>
                 </div>
             </div>
