@@ -176,7 +176,7 @@
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", () => { initApp(); });
-const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
+const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","WA mental health discharge summary","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
 let savedOutputs=JSON.parse(localStorage.getItem("vivid_saved_outputs")||"[]");
 let selectedConsultType="";
 let micRecognition=null;
@@ -222,9 +222,9 @@ function setTranscriptStatus(status,message=""){const el=document.getElementById
 function appendTranscriptToConsultInput(text){const input=document.getElementById("clinicalInput");if(!input)return;const clean=(text||"").trim();if(!clean)return;const spacer=input.value&&![...input.value].slice(-2).join("").includes("\n\n")?"\n\n":input.value?"\n":"";input.value=`${input.value}${spacer}${clean}`;input.dispatchEvent(new Event("input",{bubbles:true}));}
 function connectTranscriptSocket(){const configured=(window.TRANSCRIPT_WS_URL||"").trim();const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");if(!wsUrl){setTranscriptStatus("stopped");return;}if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){console.warn("Transcript WebSocket tunnel URL blocked by default. Set window.ALLOW_TUNNEL_WS=true to override.");setTranscriptStatus("stopped");return;}try{const socket=new WebSocket(wsUrl);socket.addEventListener("open",()=>{setTranscriptStatus("connected");});socket.addEventListener("close",()=>setTranscriptStatus("stopped"));socket.addEventListener("error",()=>{setTranscriptStatus("stopped");});socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status,data.message);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});}catch{setTranscriptStatus("stopped");}}
 </script>
-<script src="/static/js/local-fallback-notes.js?v=20260601-1"></script>
+<script src="/static/js/local-fallback-notes.js?v=20260618-wa-mh-discharge"></script>
 <script src="/static/js/appointments-storage.js?v=20260530-2"></script>
 <script src="/static/js/appointments-medirecords.js?v=20260530-2"></script>
-<script src="/static/js/appointments-ui.js?v=20260530-2"></script>
+<script src="/static/js/appointments-ui.js?v=20260618-wa-mh-discharge"></script>
 </body>
 </html>

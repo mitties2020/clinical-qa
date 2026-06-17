@@ -840,6 +840,7 @@ CONSULT_TYPE_INSTRUCTIONS = {
     "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
     "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
+    "wa mental health discharge summary": "Write a WA hospital psychiatry discharge summary using NACS-style psychiatric discharge headings. Focus on admission problems, psychiatric history, mental state, risk on admission and discharge, formulation, management, investigations, medications, adverse reactions, discharge advice, follow-up, and clear communication to GP/CMHT/patient or carer.",
     "men’s health consult": "Focus on men's health concerns, sexual/reproductive history, cardiovascular/metabolic risk, and shared plan.",
     "dva allied health referral": "Use DVA referral framing including accepted conditions, referral rationale, renewal checks, and audit readiness.",
     "gp letter": "Format as a GP letter with reason for correspondence, summary, assessment, actions, and requested follow-up.",
@@ -984,6 +985,63 @@ VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE = (
     "- Do not invent accepted conditions, specialist support, renal/hepatic status, pathology, or medication response. If absent, state it is not documented and flag if important."
 )
 
+WA_MENTAL_HEALTH_DISCHARGE_SUMMARY_STRUCTURE = (
+    "Use this exact practical document style for WA hospital psychiatry discharge summaries. Plain text only. "
+    "Keep it copy-paste ready for a WA Health/NACS style discharge summary. Do not use Markdown.\n"
+    "Heading/order:\n"
+    "Event\n"
+    "Problems this Admission\n"
+    "Clinical Interventions\n"
+    "Significant MHx\n"
+    "Clinical Synopsis\n"
+    "Presenting History\n"
+    "Past Psychiatric/Mental Health History\n"
+    "Mental State on Admission\n"
+    "Risk Assessment on Admission\n"
+    "Drug and Alcohol History\n"
+    "Family Medical/Mental Health History\n"
+    "Social History\n"
+    "Developmental and Personal History\n"
+    "Admission Physical Assessment (Clinical Findings)\n"
+    "Management/Progress (incl. Consultations)\n"
+    "Formulation\n"
+    "Discharge Mental State\n"
+    "Risk Assessment on Discharge\n"
+    "Diagnosis\n"
+    "Diagnostic Investigations\n"
+    "Interpreted Summary\n"
+    "Health Profile\n"
+    "Adverse Reactions\n"
+    "Medications\n"
+    "Current Medications\n"
+    "Medication Changes / Rationale\n"
+    "Discharge Plan\n"
+    "Advice to GP\n"
+    "Advice to Community Mental Health Team\n"
+    "Advice to Residential Aged Care Home\n"
+    "Advice to Patient/Guardian/Carer\n"
+    "Follow-up / Appointments\n"
+    "Safeguarding / Author Notes\n\n"
+    "Content requirements:\n"
+    "- Expect the input to contain multiple pasted admission notes in messy order. Synthesize them into one coherent discharge summary; do not simply restate each note chronologically.\n"
+    "- Build a clinically plausible timeline from dated entries where dates are supplied. If notes conflict, prefer the most recent clearly dated information and flag unresolved contradictions in Safeguarding / Author Notes.\n"
+    "- De-duplicate repeated MSE, risk, medication, and collateral material. Keep the most clinically useful final version while preserving important changes over admission.\n"
+    "- Be confident in organisation, wording, and summarisation: convert scattered fragments into polished hospital discharge-summary prose. Confidence means clear synthesis, not invented facts.\n"
+    "- Use WA hospital discharge-summary tone: concise, factual, handover-oriented, and written for GP, community mental health, patient/carer, and facility readers.\n"
+    "- Preserve the clinician's intended emphasis from the source text. If the author appears to be qualifying risk, uncertainty, capacity, MHA status, diagnosis, substance use, collateral reliability, or family concerns, keep that nuance.\n"
+    "- Under Problems this Admission, list principal psychiatric problem first, then comorbidities/complications only when supplied.\n"
+    "- Under Clinical Interventions, include inpatient psychiatric care, MHA status, observations, seclusion/restraint, ECT, psychological/OT/social work input, family meetings, discharge planning, and medical reviews only when documented.\n"
+    "- Significant MHx should include psychiatric diagnoses, prior admissions, suicide/self-harm history, violence/aggression risk, trauma history, and relevant cognitive/neurodevelopmental history only where documented.\n"
+    "- Risk sections should distinguish suicide/self-harm, harm to others, vulnerability/exploitation, absconding, neglect/self-neglect, substance-related risk, and relapse risk where relevant. State static factors, dynamic factors, protective factors, and discharge mitigations when supplied.\n"
+    "- Do not write that risk is absent just because it is not mentioned. Use 'Not documented' or 'No evidence documented in the supplied information' as appropriate.\n"
+    "- Formulation should be a short biopsychosocial formulation tying presentation, vulnerabilities, precipitants, perpetuating factors, protective factors, diagnosis, risk, and discharge rationale together.\n"
+    "- Discharge Mental State should be current and specific: appearance/behaviour, rapport, speech, mood/affect, thought form/content, perception, cognition, insight/judgement, and engagement, only from documented material.\n"
+    "- Medications should include dose, route, frequency, indication, supply, changes during admission, and monitoring needs when documented. Do not invent reconciliation details.\n"
+    "- Advice sections should be practical and directed: GP actions, CMHT follow-up, facility/RACH requirements, patient/carer warning signs, crisis contacts, adherence, monitoring, and when to re-present.\n"
+    "- Safeguarding / Author Notes should be brief and should flag missing high-risk information, contradictions, source limitations, or items the author should verify before signing. Do not include defensive boilerplate if no issue is identified; write 'No specific author-safeguarding issues identified from the supplied information.'\n"
+    "- Do not provide legal advice, do not claim WA Health compliance is guaranteed, and do not invent dates, diagnoses, MHA status, risk assessments, follow-up appointments, allergies, medication supply, pathology, or collateral."
+)
+
 
 def build_consult_prompt_context(consult_type: str) -> str:
     normalized = (consult_type or "").strip().lower()
@@ -1027,6 +1085,20 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "sorting RPBS tirzepatide/semaglutide issue dates oldest-to-newest and grouping them into 4-pen blocks; "
             "the first script in the latest 4-pen block anchors the interval baseline date. At the bottom, always "
             "include a Critical information missing / issues to address section."
+        )
+
+    if chosen_type == "wa mental health discharge summary":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n\n"
+            f"{WA_MENTAL_HEALTH_DISCHARGE_SUMMARY_STRUCTURE}\n\n"
+            "Organisation workflow priority:\n"
+            "The final output is a WA hospital psychiatry discharge summary, not a generic mental health review. "
+            "Mirror the NACS-style headings, keep the voice clear and clinically familiar for WA psychiatry handover, "
+            "and protect the author by preserving uncertainty, collateral/source limits, absent documentation, "
+            "and discharge-risk mitigation without overstating certainty. The user may paste many random admission "
+            "notes; integrate them into one coherent discharge summary with sensible chronology, de-duplication, "
+            "and clinically confident synthesis."
         )
 
     if chosen_type == "emergency department note":

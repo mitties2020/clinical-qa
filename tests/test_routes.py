@@ -23,6 +23,19 @@ class RouteRegistrationTests(unittest.TestCase):
             self.assertIn(path, by_path)
             self.assertEqual(len(by_path[path]), 1, f"{path} should be registered once")
 
+    def test_wa_mental_health_discharge_summary_prompt_uses_psychiatry_structure(self):
+        import app as app_module
+
+        prompt = app_module.build_consult_prompt_context("WA mental health discharge summary")
+
+        self.assertIn("WA hospital psychiatry discharge summary", prompt)
+        self.assertIn("Problems this Admission", prompt)
+        self.assertIn("Mental State on Admission", prompt)
+        self.assertIn("Risk Assessment on Discharge", prompt)
+        self.assertIn("Advice to Community Mental Health Team", prompt)
+        self.assertIn("multiple pasted admission notes", prompt.lower())
+        self.assertIn("do not claim WA Health compliance is guaranteed", prompt)
+
 
 class FakeTwilioResponse:
     def __init__(self, status_code=201, body=None):
