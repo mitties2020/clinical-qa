@@ -34,6 +34,9 @@ class RouteRegistrationTests(unittest.TestCase):
         self.assertIn("Risk Assessment on Discharge", prompt)
         self.assertIn("Advice to Community Mental Health Team", prompt)
         self.assertIn("multiple pasted admission notes", prompt.lower())
+        self.assertIn("do not force it to be short", prompt)
+        self.assertIn("senior psychiatry registrar/consultant", prompt)
+        self.assertIn("If the patient died during admission", prompt)
         self.assertIn("do not claim WA Health compliance is guaranteed", prompt)
 
 
