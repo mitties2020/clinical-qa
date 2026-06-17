@@ -39,6 +39,13 @@ class RouteRegistrationTests(unittest.TestCase):
         self.assertIn("If the patient died during admission", prompt)
         self.assertIn("do not claim WA Health compliance is guaranteed", prompt)
 
+    def test_wa_mental_health_discharge_summary_gets_long_completion_budget(self):
+        import app as app_module
+
+        self.assertGreaterEqual(app_module.consult_completion_budget("WA mental health discharge summary"), 6000)
+        self.assertGreaterEqual(app_module.consult_request_timeout("WA mental health discharge summary"), 150)
+        self.assertEqual(app_module.consult_completion_budget("General consultation note"), 1800)
+
 
 class FakeTwilioResponse:
     def __init__(self, status_code=201, body=None):

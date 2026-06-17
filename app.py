@@ -1139,9 +1139,28 @@ def build_consult_prompt_context(consult_type: str) -> str:
         "Prioritise concise, clinically actionable output and do not invent missing facts."
     )
 
-def call_deepseek(system_prompt: str, user_content: str) -> str:
+def consult_completion_budget(consult_type: str) -> int:
+    normalized = (consult_type or "").strip().lower()
+    if normalized == "wa mental health discharge summary":
+        return int(os.getenv("DEEPSEEK_WA_MH_DISCHARGE_MAX_TOKENS") or "6000")
+    if normalized == "vapac weight loss application":
+        return int(os.getenv("DEEPSEEK_LONG_FORM_MAX_TOKENS") or "3600")
+    return int(os.getenv("DEEPSEEK_MAX_TOKENS") or "1800")
+
+
+def consult_request_timeout(consult_type: str) -> int:
+    normalized = (consult_type or "").strip().lower()
+    if normalized == "wa mental health discharge summary":
+        return int(os.getenv("DEEPSEEK_WA_MH_DISCHARGE_TIMEOUT") or "150")
+    return int(os.getenv("DEEPSEEK_TIMEOUT") or "70")
+
+
+def call_deepseek(system_prompt: str, user_content: str, max_tokens: int | None = None, timeout: int | None = None) -> str:
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
+
+    max_tokens = max_tokens or int(os.getenv("DEEPSEEK_MAX_TOKENS") or "1800")
+    timeout = timeout or int(os.getenv("DEEPSEEK_TIMEOUT") or "70")
 
     payload = {
         "model": DEEPSEEK_MODEL,
@@ -1151,7 +1170,7 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
         ],
         "temperature": 0.25,
         "top_p": 0.9,
-        "max_tokens": 1800,
+        "max_tokens": max_tokens,
     }
 
     headers = {
@@ -1159,7 +1178,7 @@ def call_deepseek(system_prompt: str, user_content: str) -> str:
         "Content-Type": "application/json",
     }
 
-    resp = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=70)
+    resp = http.post(DEEPSEEK_URL, json=payload, headers=headers, timeout=timeout)
     resp.raise_for_status()
     out = resp.json()
     answer = (((out.get("choices") or [{}])[0]).get("message", {}) or {}).get("content", "").strip()
@@ -1347,7 +1366,12 @@ def consult():
                 f"{build_consult_prompt_context(consult_type)}\n\n"
                 f"{text}"
             )
-            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(
+                CONSULT_NOTE_SYSTEM_PROMPT,
+                user_content,
+                max_tokens=consult_completion_budget(consult_type),
+                timeout=consult_request_timeout(consult_type),
+            )
 
         return jsonify({"answer": answer})
 
@@ -1386,7 +1410,12 @@ def convert_notes_legacy():
                 f"{build_consult_prompt_context(consult_type)}\n\n"
                 f"{text}"
             )
-            answer = call_deepseek(CONSULT_NOTE_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(
+                CONSULT_NOTE_SYSTEM_PROMPT,
+                user_content,
+                max_tokens=consult_completion_budget(consult_type),
+                timeout=consult_request_timeout(consult_type),
+            )
         save_history("note", answer)
         return jsonify({"clinical_notes": answer})
     except Exception as e:
