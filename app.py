@@ -840,7 +840,7 @@ CONSULT_TYPE_INSTRUCTIONS = {
     "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
     "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
-    "wa mental health discharge summary": "Write a WA hospital psychiatry discharge summary using NACS-style psychiatric discharge headings. Focus on admission problems, psychiatric history, mental state, risk on admission and discharge, formulation, management, investigations, medications, adverse reactions, discharge advice, follow-up, and clear communication to GP/CMHT/patient or carer.",
+    "wa mental health discharge summary": "Write a polished, comprehensive WA hospital psychiatry discharge summary using NACS-style psychiatric discharge headings. Synthesize multiple pasted admission notes into a coherent consultant-level narrative covering admission problems, psychiatric history, mental state, risk on admission and discharge, formulation, management, investigations, medications, adverse reactions, discharge advice, follow-up, and clear communication to GP/CMHT/patient or carer.",
     "men’s health consult": "Focus on men's health concerns, sexual/reproductive history, cardiovascular/metabolic risk, and shared plan.",
     "dva allied health referral": "Use DVA referral framing including accepted conditions, referral rationale, renewal checks, and audit readiness.",
     "gp letter": "Format as a GP letter with reason for correspondence, summary, assessment, actions, and requested follow-up.",
@@ -987,7 +987,8 @@ VAPAC_WEIGHT_LOSS_APPLICATION_STRUCTURE = (
 
 WA_MENTAL_HEALTH_DISCHARGE_SUMMARY_STRUCTURE = (
     "Use this exact practical document style for WA hospital psychiatry discharge summaries. Plain text only. "
-    "Keep it copy-paste ready for a WA Health/NACS style discharge summary. Do not use Markdown.\n"
+    "Keep it copy-paste ready for a WA Health/NACS style discharge summary. Do not use Markdown. "
+    "This document type should be comprehensive and professionally written; do not force it to be short or overly succinct.\n"
     "Heading/order:\n"
     "Event\n"
     "Problems this Admission\n"
@@ -1027,17 +1028,28 @@ WA_MENTAL_HEALTH_DISCHARGE_SUMMARY_STRUCTURE = (
     "- Build a clinically plausible timeline from dated entries where dates are supplied. If notes conflict, prefer the most recent clearly dated information and flag unresolved contradictions in Safeguarding / Author Notes.\n"
     "- De-duplicate repeated MSE, risk, medication, and collateral material. Keep the most clinically useful final version while preserving important changes over admission.\n"
     "- Be confident in organisation, wording, and summarisation: convert scattered fragments into polished hospital discharge-summary prose. Confidence means clear synthesis, not invented facts.\n"
-    "- Use WA hospital discharge-summary tone: concise, factual, handover-oriented, and written for GP, community mental health, patient/carer, and facility readers.\n"
+    "- Use a senior psychiatry registrar/consultant discharge-summary tone: fluent, precise, balanced, and clinically authoritative. The author should sound careful, professional, and across the admission.\n"
+    "- Prioritise flow and readability. Where the source material supports it, write developed paragraphs rather than bare fragments, especially in Clinical Synopsis, Presenting History, Management/Progress, Formulation, Discharge Mental State, Risk Assessment on Discharge, and Advice sections.\n"
+    "- Do not compress clinically important context merely to be brief. A longer discharge summary is appropriate when it improves continuity of care, risk communication, medication safety, or professional defensibility.\n"
+    "- Transform rough pasted notes into finished prose. Avoid phrases that sound like the AI is apologising for missing data. Prefer elegant clinical wording such as 'There was no documentation provided regarding...' only where genuinely needed.\n"
+    "- Avoid repetitive 'Not documented' lines when an entire domain is absent. In longer sections, summarise missing domains professionally and only flag critical omissions in Safeguarding / Author Notes.\n"
+    "- Use WA hospital discharge-summary tone: factual, handover-oriented, and written for GP, community mental health, patient/carer, and facility readers.\n"
+    "- Do not leave a major heading as 'Not documented' if relevant information can reasonably be synthesized from anywhere in the pasted notes. Use 'Not documented' only after considering the whole pasted record.\n"
     "- Preserve the clinician's intended emphasis from the source text. If the author appears to be qualifying risk, uncertainty, capacity, MHA status, diagnosis, substance use, collateral reliability, or family concerns, keep that nuance.\n"
     "- Under Problems this Admission, list principal psychiatric problem first, then comorbidities/complications only when supplied.\n"
     "- Under Clinical Interventions, include inpatient psychiatric care, MHA status, observations, seclusion/restraint, ECT, psychological/OT/social work input, family meetings, discharge planning, and medical reviews only when documented.\n"
     "- Significant MHx should include psychiatric diagnoses, prior admissions, suicide/self-harm history, violence/aggression risk, trauma history, and relevant cognitive/neurodevelopmental history only where documented.\n"
     "- Risk sections should distinguish suicide/self-harm, harm to others, vulnerability/exploitation, absconding, neglect/self-neglect, substance-related risk, and relapse risk where relevant. State static factors, dynamic factors, protective factors, and discharge mitigations when supplied.\n"
     "- Do not write that risk is absent just because it is not mentioned. Use 'Not documented' or 'No evidence documented in the supplied information' as appropriate.\n"
-    "- Formulation should be a short biopsychosocial formulation tying presentation, vulnerabilities, precipitants, perpetuating factors, protective factors, diagnosis, risk, and discharge rationale together.\n"
+    "- Clinical Synopsis should read as a professional admission-to-discharge narrative: reason for admission, key symptoms/risks, major changes during admission, response to treatment, discharge rationale, and remaining issues.\n"
+    "- If the patient died during admission, explicitly adapt the document: state the date/time of death if supplied, describe the final deterioration and comfort-care/palliative approach, use 'Not applicable - patient died during admission' for Discharge Mental State and Risk Assessment on Discharge, and ensure advice/follow-up sections focus on GP/family notification, death certification/cause of death if documented, bereavement/family communication, medication cessation, and administrative handover rather than routine relapse planning.\n"
+    "- For complex older-adult psychiatry admissions, integrate medical comorbidity, delirium, dementia/BPSD, falls, pain, infection, nutrition/hydration, capacity/MHA status, goals of care, family meetings, and placement/carer stress into one coherent account.\n"
+    "- Management/Progress should integrate medication changes, behavioural observations, engagement, ward course, allied-health/social-work input, family/collateral work, physical-health issues, and discharge planning into a coherent account.\n"
+    "- Formulation should be a well-reasoned biopsychosocial formulation tying presentation, vulnerabilities, precipitants, perpetuating factors, protective factors, diagnosis, risk, treatment response, and discharge rationale together.\n"
+    "- Diagnosis should be ordered and phrased professionally, separating principal psychiatric/cognitive diagnosis, delirium/medical precipitants, major medical events, injuries, and psychosocial/contextual issues.\n"
     "- Discharge Mental State should be current and specific: appearance/behaviour, rapport, speech, mood/affect, thought form/content, perception, cognition, insight/judgement, and engagement, only from documented material.\n"
     "- Medications should include dose, route, frequency, indication, supply, changes during admission, and monitoring needs when documented. Do not invent reconciliation details.\n"
-    "- Advice sections should be practical and directed: GP actions, CMHT follow-up, facility/RACH requirements, patient/carer warning signs, crisis contacts, adherence, monitoring, and when to re-present.\n"
+    "- Advice sections should be practical and directed: GP actions, CMHT follow-up, facility/RACH requirements, patient/carer warning signs, crisis contacts, adherence, monitoring, and when to re-present. Make these sections sound like thoughtful continuity-of-care instructions, not generic filler.\n"
     "- Safeguarding / Author Notes should be brief and should flag missing high-risk information, contradictions, source limitations, or items the author should verify before signing. Do not include defensive boilerplate if no issue is identified; write 'No specific author-safeguarding issues identified from the supplied information.'\n"
     "- Do not provide legal advice, do not claim WA Health compliance is guaranteed, and do not invent dates, diagnoses, MHA status, risk assessments, follow-up appointments, allergies, medication supply, pathology, or collateral."
 )
@@ -1098,7 +1110,9 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "and protect the author by preserving uncertainty, collateral/source limits, absent documentation, "
             "and discharge-risk mitigation without overstating certainty. The user may paste many random admission "
             "notes; integrate them into one coherent discharge summary with sensible chronology, de-duplication, "
-            "and clinically confident synthesis."
+            "and clinically confident synthesis. This note type should favour a polished, comprehensive final "
+            "hospital discharge summary over a short note. If the admission ended in death, adapt all discharge, "
+            "risk, advice, and follow-up language accordingly."
         )
 
     if chosen_type == "emergency department note":
