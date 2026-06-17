@@ -161,6 +161,7 @@
                 <option>Medicinal cannabis / CBD / THC consult</option>
                 <option>Chronic pain consult</option>
                 <option>Mental health review</option>
+                <option>WA mental health discharge summary</option>
                 <option>Men's health consult</option>
                 <option>DVA allied health referral</option>
                 <option>GP letter</option>
@@ -233,7 +234,7 @@
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", () => { initApp(); });
-const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","Men's health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
+const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","WA mental health discharge summary","Men's health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
 const PATIENT_STORAGE_KEY="vivid_generic_patients";
 const SAVED_OUTPUTS_KEY="vivid_generic_saved_outputs";
 let savedOutputs=JSON.parse(localStorage.getItem(SAVED_OUTPUTS_KEY)||"[]");
@@ -752,6 +753,6 @@ function connectTranscriptSocket(){
   }
 }
 </script>
-<script src="/static/js/local-fallback-notes.js?v=20260601-1"></script>
+<script src="/static/js/local-fallback-notes.js?v=20260618-wa-mh-discharge"></script>
 </body>
 </html>
