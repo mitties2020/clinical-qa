@@ -21,6 +21,8 @@
 
         * { box-sizing: border-box; }
 
+        html { scroll-behavior: smooth; }
+
         body {
             margin: 0;
             font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
@@ -52,7 +54,7 @@
         .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 
         .nav { display: flex; gap: 10px; color: #d2def8; font-size: 14px; }
-        .nav span {
+        .nav a {
             display: inline-flex;
             align-items: center;
             gap: 8px;
@@ -65,11 +67,12 @@
             cursor: pointer;
             font-weight: 650;
             line-height: 1;
+            text-decoration: none;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
             transition: transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
             user-select: none;
         }
-        .nav span::after {
+        .nav a::after {
             content: "";
             display: block;
             width: 6px;
@@ -78,7 +81,7 @@
             background: linear-gradient(145deg, #16d6ff, #2e7bff);
             box-shadow: 0 0 10px rgba(22, 214, 255, .52);
         }
-        .nav span:hover {
+        .nav a:hover {
             transform: translateY(-1px);
             border-color: rgba(22, 214, 255, 0.62);
             background: rgba(16, 201, 255, 0.1);
@@ -115,6 +118,10 @@
             font-size: 18px;
             font-weight: 700;
             cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
             box-shadow: 0 10px 25px rgba(25, 108, 235, 0.45);
         }
         .invite-only { color: #a6bcdf; font-size: 16px; }
@@ -353,8 +360,64 @@
             cursor: pointer;
         }
 
+        .info-sections {
+            display: grid;
+            gap: 16px;
+            padding: 24px 0 8px;
+        }
+
+        .info-panel {
+            scroll-margin-top: 24px;
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            background: rgba(7, 18, 38, 0.72);
+            padding: 22px;
+            box-shadow: 0 16px 42px rgba(0, 19, 56, 0.26);
+        }
+
+        .info-panel h3 {
+            margin: 0 0 10px;
+            font-size: 26px;
+            line-height: 1.1;
+        }
+
+        .info-panel p {
+            margin: 0;
+            color: #c8d8f8;
+            font-size: 17px;
+            line-height: 1.58;
+        }
+
+        .info-panel strong { color: #ffffff; }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 16px;
+        }
+
+        .info-note {
+            border: 1px solid rgba(94, 147, 255, 0.2);
+            border-radius: 12px;
+            background: rgba(4, 11, 24, 0.5);
+            padding: 14px;
+            color: #d7e2fb;
+            line-height: 1.5;
+        }
+
+        .info-note span {
+            display: block;
+            color: var(--cyan);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
         @media (max-width: 980px) {
-            .hero, .access-wrap { grid-template-columns: 1fr; }
+            .hero, .access-wrap, .info-grid { grid-template-columns: 1fr; }
             .headline { font-size: 40px; }
             .logo-reveal { min-height: 270px; }
         }
@@ -388,10 +451,10 @@
                 </div>
             </div>
             <nav class="nav">
-                <span>Features</span>
-                <span>Workflow</span>
-                <span>Privacy</span>
-                <span>Access</span>
+                <a href="#features-info">Features</a>
+                <a href="#workflow-info">Workflow</a>
+                <a href="#privacy-info">Privacy</a>
+                <a href="#access-info">Access</a>
             </nav>
         </header>
 
@@ -405,8 +468,8 @@
                     <li>Streamlines documentation and enhances care</li>
                 </ul>
                 <div class="cta">
-                    <button class="btn-primary" type="button">Request Access</button>
-                    <span class="invite-only">Invitation only</span>
+                    <a class="btn-primary" href="#access-info">Request Access</a>
+                    <span class="invite-only">Currently only via invitation</span>
                 </div>
             </div>
             <div class="logo-reveal" aria-hidden="true">
@@ -447,6 +510,40 @@
                 <button id="loginBtn" class="access-button">Continue to Vivid Medi</button>
                 <div id="msg"></div>
             </div>
+        </section>
+
+        <section class="info-sections" aria-label="Vivid Medi information">
+            <article class="info-panel" id="features-info">
+                <h3>Features</h3>
+                <p>Vivid Medi turns messy clinical input into documentation that is structured, useful, and ready to refine. It is built for clinicians who need a precise draft quickly: notes, summaries, referrals, handovers, investigation summaries, review documentation, and supporting clinical correspondence.</p>
+                <div class="info-grid">
+                    <div class="info-note"><span>Structured output</span>Convert raw history, review notes, or dictated clinical data into clean documentation with the required shape.</div>
+                    <div class="info-note"><span>Purpose built</span>Select what you need produced, add the relevant clinical detail, and Vivid Medi prepares the draft around that task.</div>
+                </div>
+            </article>
+
+            <article class="info-panel" id="workflow-info">
+                <h3>Workflow</h3>
+                <p>Use it around the way the work actually arrives: admission documentation, additional reviews, investigation updates, referral letters, handovers, discharge summaries, and whichever extra data helps the next clinician understand the case. Click the required output, provide the useful facts, and the platform prepares a focused draft for clinician review.</p>
+                <div class="info-grid">
+                    <div class="info-note"><span>From data to document</span>Capture the important clinical details once, then reshape them into the documentation needed for that moment.</div>
+                    <div class="info-note"><span>Personalised build</span>Member workflows differ, so the platform can be tuned around how you actually operate rather than forcing one generic template.</div>
+                </div>
+            </article>
+
+            <article class="info-panel" id="privacy-info">
+                <h3>Privacy</h3>
+                <p>Patient consent is always required. Users are responsible for ensuring confidential information is handled appropriately, that workplace policy permits use of the platform, and that any clinical output is reviewed before use. Vivid Medi is not intended for real-time clinical decision-making and remains in a testing phase.</p>
+            </article>
+
+            <article class="info-panel" id="access-info">
+                <h3>Access</h3>
+                <p>Access is limited to private invitation. New members receive an onboarding appointment tailored to their needs, usually between <strong>1 and 4 hours</strong>. 24-hour assistance is available during setup and early use, because every member's workflow is different and the most valuable version of the platform is the one shaped around how you work.</p>
+                <div class="info-grid">
+                    <div class="info-note"><span>Membership</span>Annual memberships range from <strong>$1,000 to $11,000</strong>, reflecting the value and level of personalisation provided.</div>
+                    <div class="info-note"><span>Current access</span>There are currently <strong>22 active members</strong> and a <strong>2 week build backlog</strong>. Refunds are offered where no substantial benefit can be built for the member.</div>
+                </div>
+            </article>
         </section>
     </div>
 
