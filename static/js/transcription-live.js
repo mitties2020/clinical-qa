@@ -332,7 +332,6 @@
 
   window.initMicDictation = async function initMicDictation() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const hasRecorder = Boolean(window.MediaRecorder && window.navigator?.mediaDevices?.getUserMedia);
     setMicStatus("requesting", "Checking mic dictation...");
     if (SpeechRecognition && window.PREFER_BROWSER_SPEECH !== false) {
       setupSpeechRecognition(SpeechRecognition);
@@ -342,11 +341,7 @@
       setupMediaRecorder();
       return;
     }
-    if (hasRecorder && !SpeechRecognition) {
-      setupMediaRecorder();
-      return;
-    }
-    setMicStatus("unsupported");
+    setMicStatus("unsupported", "Mic dictation unsupported in this browser");
     setButtons("unsupported");
   };
 
