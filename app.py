@@ -7,6 +7,8 @@ import subprocess
 import sqlite3
 import json
 import base64
+import hashlib
+import hmac
 import html
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -44,9 +46,12 @@ WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
 AUTH_CODE = (os.getenv("AUTH_CODE") or "").strip()
 DB_PATH = os.getenv("DB_PATH") or "vividmedi.db"
 EXTENSION_SYNC_TOKEN = (os.getenv("EXTENSION_SYNC_TOKEN") or "").strip()
+MAX_AUDIO_UPLOAD_BYTES = int(os.getenv("MAX_AUDIO_UPLOAD_MB") or "25") * 1024 * 1024
+FFMPEG_TIMEOUT_SECONDS = int(os.getenv("FFMPEG_TIMEOUT_SECONDS") or "60")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY") or "dev-insecure-change-me"
+app.config["MAX_CONTENT_LENGTH"] = MAX_AUDIO_UPLOAD_BYTES
 sock = Sock(app)
 
 http = requests.Session()
@@ -81,14 +86,66 @@ def require_auth(f):
     return wrapped
 
 
+def env_flag(name: str, default: bool = True) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw not in {"0", "false", "no", "off"}
+
+
+def twilio_signature_url() -> str:
+    configured_base = (os.getenv("BASE_URL") or os.getenv("APP_BASE_URL") or "").strip()
+    if configured_base:
+        base_url = configured_base if configured_base.endswith("/") else f"{configured_base}/"
+        signed_url = urljoin(base_url, request.path.lstrip("/"))
+        if request.query_string:
+            signed_url = f"{signed_url}?{request.query_string.decode('utf-8')}"
+        return signed_url
+    return request.url
+
+
+def valid_twilio_signature(auth_token: str) -> bool:
+    signature = (request.headers.get("X-Twilio-Signature") or "").strip()
+    if not signature:
+        return False
+    signed_data = twilio_signature_url()
+    for key, value in sorted(request.form.items(multi=True)):
+        signed_data += f"{key}{value}"
+    digest = hmac.new(auth_token.encode("utf-8"), signed_data.encode("utf-8"), hashlib.sha1).digest()
+    expected = base64.b64encode(digest).decode("ascii")
+    return hmac.compare_digest(expected, signature)
+
+
+def twilio_validation_error_response():
+    auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
+    if not auth_token or not env_flag("TWILIO_VALIDATE_SIGNATURE", True):
+        return None
+    if valid_twilio_signature(auth_token):
+        return None
+    app.logger.warning("Rejected unsigned or invalid Twilio webhook request for %s", request.path)
+    return make_response("Forbidden", 403)
+
+
+def twilio_stream_secret_misconfigured_response():
+    stream_secret = (os.getenv("TWILIO_STREAM_SECRET") or "").strip()
+    auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
+    if stream_secret and (not auth_token or not env_flag("TWILIO_VALIDATE_SIGNATURE", True)):
+        app.logger.error("TWILIO_STREAM_SECRET requires TWILIO_AUTH_TOKEN and signature validation")
+        return make_response("Twilio stream secret requires signed Twilio webhooks", 503)
+    return None
+
+
 def db_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    timeout = float(os.getenv("SQLITE_TIMEOUT_SECONDS") or "30")
+    conn = sqlite3.connect(DB_PATH, timeout=timeout, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute(f"PRAGMA busy_timeout = {int(timeout * 1000)}")
     return conn
 
 
 def init_history_db():
     with db_conn() as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS history_entries (
@@ -311,6 +368,9 @@ def call_patient():
 
 @app.route("/twiml/connect-patient", methods=["GET", "POST"])
 def twiml_connect_patient():
+    validation_error = twilio_validation_error_response()
+    if validation_error:
+        return validation_error
     stream_url = (os.getenv("STREAM_URL") or "").strip()
     if stream_url:
         xml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="{stream_url}" /></Connect></Response>'
@@ -321,6 +381,12 @@ def twiml_connect_patient():
 
 @app.route("/twiml/join-consult", methods=["GET", "POST"])
 def twiml_join_consult():
+    validation_error = twilio_validation_error_response()
+    if validation_error:
+        return validation_error
+    secret_error = twilio_stream_secret_misconfigured_response()
+    if secret_error:
+        return secret_error
     room = (request.args.get("room") or f"consult-{uuid4().hex}").strip()
     role = (request.args.get("role") or "participant").strip().lower()
     start_on_enter = "true" if role == "doctor" else "false"
@@ -353,6 +419,9 @@ def twiml_join_consult():
 
 @app.post("/api/stream-status")
 def stream_status():
+    validation_error = twilio_validation_error_response()
+    if validation_error:
+        return validation_error
     event = (request.form.get("StreamEvent") or "stream-status").strip()
     error = (request.form.get("StreamError") or "").strip()
     role = (request.args.get("role") or "call").strip().lower()
@@ -388,6 +457,9 @@ def transcription_health():
 
 @app.post("/api/call-status")
 def call_status():
+    validation_error = twilio_validation_error_response()
+    if validation_error:
+        return validation_error
     monitor.record_system_metric("twilio.call_status.webhook", 1.0)
     return "", 204
 
@@ -1267,9 +1339,11 @@ def perf_stats():
 
 @app.post("/authenticate")
 def authenticate():
+    if not AUTH_CODE:
+        return jsonify({"ok": False, "error": "Authentication is not configured"}), 503
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip()
-    if code == AUTH_CODE:
+    if code and hmac.compare_digest(code, AUTH_CODE):
         session["authenticated"] = True
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "Invalid code"}), 401
@@ -1442,9 +1516,14 @@ def transcribe():
     if not f:
         return jsonify({"error": "Missing audio"}), 400
 
-    audio_bytes = f.read()
+    if request.content_length and request.content_length > MAX_AUDIO_UPLOAD_BYTES:
+        return jsonify({"error": "Audio upload is too large"}), 413
+
+    audio_bytes = f.read(MAX_AUDIO_UPLOAD_BYTES + 1)
     if not audio_bytes:
         return jsonify({"error": "Missing audio"}), 400
+    if len(audio_bytes) > MAX_AUDIO_UPLOAD_BYTES:
+        return jsonify({"error": "Audio upload is too large"}), 413
 
     if (os.getenv("DEEPGRAM_API_KEY") or "").strip():
         try:
@@ -1463,7 +1542,7 @@ def transcribe():
 
             wav_path = tmp_path + ".wav"
             cmd = ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", wav_path]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=FFMPEG_TIMEOUT_SECONDS)
 
             model = get_whisper_model()
             segments, _info = model.transcribe(wav_path, beam_size=5, vad_filter=True)

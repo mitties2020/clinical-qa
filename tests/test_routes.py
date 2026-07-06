@@ -1,6 +1,17 @@
+import base64
+import hashlib
+import hmac
 import unittest
 from io import BytesIO
 from unittest.mock import patch
+
+
+def twilio_signature(url, auth_token, params=None):
+    signed_data = url
+    for key, value in sorted((params or {}).items()):
+        signed_data += f"{key}{value}"
+    digest = hmac.new(auth_token.encode("utf-8"), signed_data.encode("utf-8"), hashlib.sha1).digest()
+    return base64.b64encode(digest).decode("ascii")
 
 
 class RouteRegistrationTests(unittest.TestCase):
@@ -45,6 +56,43 @@ class RouteRegistrationTests(unittest.TestCase):
         self.assertGreaterEqual(app_module.consult_completion_budget("WA mental health discharge summary"), 6000)
         self.assertGreaterEqual(app_module.consult_request_timeout("WA mental health discharge summary"), 150)
         self.assertEqual(app_module.consult_completion_budget("General consultation note"), 1800)
+
+
+class AuthenticationTests(unittest.TestCase):
+    def test_authentication_fails_closed_without_auth_code(self):
+        import app as app_module
+
+        old_auth_code = app_module.AUTH_CODE
+        app_module.AUTH_CODE = ""
+        app_module.app.config.update(TESTING=True)
+        client = app_module.app.test_client()
+        try:
+            response = client.post("/authenticate", json={})
+            self.assertEqual(response.status_code, 503)
+            self.assertFalse(response.get_json()["ok"])
+            with client.session_transaction() as sess:
+                self.assertIsNone(sess.get("authenticated"))
+        finally:
+            app_module.AUTH_CODE = old_auth_code
+
+    def test_authentication_requires_non_empty_matching_code(self):
+        import app as app_module
+
+        old_auth_code = app_module.AUTH_CODE
+        app_module.AUTH_CODE = "123456"
+        app_module.app.config.update(TESTING=True)
+        client = app_module.app.test_client()
+        try:
+            empty_response = client.post("/authenticate", json={})
+            self.assertEqual(empty_response.status_code, 401)
+
+            good_response = client.post("/authenticate", json={"code": "123456"})
+            self.assertEqual(good_response.status_code, 200)
+            self.assertTrue(good_response.get_json()["ok"])
+            with client.session_transaction() as sess:
+                self.assertIs(sess.get("authenticated"), True)
+        finally:
+            app_module.AUTH_CODE = old_auth_code
 
 
 class FakeTwilioResponse:
@@ -134,7 +182,7 @@ class TwilioCallingTests(unittest.TestCase):
 
     def test_join_consult_twiml_starts_media_stream_with_role_parameters(self):
         _app_module, client = self.authenticated_client()
-        with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_SECRET": ""}, clear=False):
+        with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_SECRET": "", "TWILIO_AUTH_TOKEN": ""}, clear=False):
             response = client.post("/twiml/join-consult?room=consult-test&role=doctor")
 
         self.assertEqual(response.status_code, 200)
@@ -147,7 +195,7 @@ class TwilioCallingTests(unittest.TestCase):
 
     def test_patient_leg_does_not_duplicate_stream_by_default(self):
         _app_module, client = self.authenticated_client()
-        with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_LEG": ""}, clear=False):
+        with patch.dict("os.environ", {"APP_BASE_URL": "https://www.vividmedi.com", "STREAM_URL": "", "TWILIO_STREAM_LEG": "", "TWILIO_AUTH_TOKEN": ""}, clear=False):
             response = client.post("/twiml/join-consult?room=consult-test&role=patient")
 
         self.assertEqual(response.status_code, 200)
@@ -160,6 +208,67 @@ class TwilioCallingTests(unittest.TestCase):
 
         self.assertEqual(app_module.twilio_track_speaker_label("doctor", "inbound"), "Clinician")
         self.assertEqual(app_module.twilio_track_speaker_label("doctor", "outbound"), "Patient")
+
+    def test_join_consult_rejects_unsigned_twilio_request_when_token_configured(self):
+        _app_module, client = self.authenticated_client()
+        env = {
+            "APP_BASE_URL": "https://www.vividmedi.com",
+            "STREAM_URL": "",
+            "TWILIO_AUTH_TOKEN": "twilio-token",
+            "TWILIO_STREAM_SECRET": "secret-value",
+            "TWILIO_VALIDATE_SIGNATURE": "true",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            response = client.post(
+                "/twiml/join-consult?room=consult-test&role=doctor",
+                base_url="https://www.vividmedi.com",
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn("secret-value", response.get_data(as_text=True))
+
+    def test_join_consult_requires_auth_token_before_emitting_stream_secret(self):
+        _app_module, client = self.authenticated_client()
+        env = {
+            "APP_BASE_URL": "https://www.vividmedi.com",
+            "STREAM_URL": "",
+            "TWILIO_AUTH_TOKEN": "",
+            "TWILIO_STREAM_SECRET": "secret-value",
+            "TWILIO_VALIDATE_SIGNATURE": "true",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            response = client.post("/twiml/join-consult?room=consult-test&role=doctor")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("secret-value", response.get_data(as_text=True))
+
+    def test_signed_join_consult_can_emit_stream_secret_for_twilio(self):
+        _app_module, client = self.authenticated_client()
+        url = "https://www.vividmedi.com/twiml/join-consult?room=consult-test&role=doctor"
+        env = {
+            "APP_BASE_URL": "https://www.vividmedi.com",
+            "STREAM_URL": "",
+            "TWILIO_AUTH_TOKEN": "twilio-token",
+            "TWILIO_STREAM_SECRET": "secret-value",
+            "TWILIO_VALIDATE_SIGNATURE": "true",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            response = client.post(
+                "/twiml/join-consult?room=consult-test&role=doctor",
+                base_url="https://www.vividmedi.com",
+                headers={"X-Twilio-Signature": twilio_signature(url, "twilio-token")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("secret-value", response.get_data(as_text=True))
+
+    def test_call_status_records_metric_without_crashing(self):
+        app_module, client = self.authenticated_client()
+        with patch.dict("os.environ", {"TWILIO_AUTH_TOKEN": ""}, clear=False):
+            response = client.post("/api/call-status")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertIn("twilio.call_status.webhook", app_module.monitor.system_metrics)
 
 
 class MicTranscriptionTests(unittest.TestCase):
@@ -193,6 +302,24 @@ class MicTranscriptionTests(unittest.TestCase):
         self.assertEqual(response.get_json()["text"], "hello this is a test")
         self.assertIn("https://api.deepgram.com/v1/listen", post.call_args.args[0])
         self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Token dg-token")
+
+    def test_transcribe_rejects_oversized_upload(self):
+        app_module, client = self.authenticated_client()
+        old_limit = app_module.MAX_AUDIO_UPLOAD_BYTES
+        old_config_limit = app_module.app.config.get("MAX_CONTENT_LENGTH")
+        app_module.MAX_AUDIO_UPLOAD_BYTES = 4
+        app_module.app.config["MAX_CONTENT_LENGTH"] = None
+        try:
+            response = client.post(
+                "/api/transcribe",
+                data={"audio": (BytesIO(b"too-large"), "dictation.webm")},
+                content_type="multipart/form-data",
+            )
+        finally:
+            app_module.MAX_AUDIO_UPLOAD_BYTES = old_limit
+            app_module.app.config["MAX_CONTENT_LENGTH"] = old_config_limit
+
+        self.assertEqual(response.status_code, 413)
 
 
 if __name__ == "__main__":
