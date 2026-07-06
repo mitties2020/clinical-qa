@@ -641,11 +641,17 @@ def deepgram_listen_url() -> str:
         "encoding": "mulaw",
         "sample_rate": "8000",
         "channels": "1",
-        "interim_results": "false",
+        "interim_results": "true" if env_flag("DEEPGRAM_INTERIM_RESULTS", True) else "false",
         "punctuate": "true",
         "smart_format": "true",
     }
-    return f"wss://api.deepgram.com/v1/listen?{urlencode(params)}"
+    endpointing = (os.getenv("DEEPGRAM_ENDPOINTING_MS") or "300").strip()
+    if endpointing:
+        params["endpointing"] = endpointing
+    keywords = deepgram_keywords()
+    if keywords:
+        params["keywords"] = keywords
+    return f"wss://api.deepgram.com/v1/listen?{urlencode(params, doseq=True)}"
 
 
 def deepgram_prerecorded_url() -> str:
@@ -655,7 +661,15 @@ def deepgram_prerecorded_url() -> str:
         "punctuate": "true",
         "smart_format": "true",
     }
-    return f"https://api.deepgram.com/v1/listen?{urlencode(params)}"
+    keywords = deepgram_keywords()
+    if keywords:
+        params["keywords"] = keywords
+    return f"https://api.deepgram.com/v1/listen?{urlencode(params, doseq=True)}"
+
+
+def deepgram_keywords() -> list[str]:
+    raw = os.getenv("DEEPGRAM_KEYWORDS") or ""
+    return [keyword.strip() for keyword in raw.split(",") if keyword.strip()]
 
 
 def extract_deepgram_transcript(payload: dict) -> str:
@@ -702,6 +716,7 @@ def handle_deepgram_message(raw, role_label: str):
     if not transcript:
         return
     if data.get("is_final") is False:
+        broadcast_transcript({"type": "transcript-preview", "text": f"{role_label}: {transcript}", "speaker": role_label})
         return
     broadcast_transcript({"type": "transcript", "text": f"{role_label}: {transcript}", "speaker": role_label})
 
@@ -1530,7 +1545,9 @@ def transcribe():
             text = transcribe_audio_with_deepgram(audio_bytes, f.mimetype or "audio/webm")
             return jsonify({"text": text})
         except Exception as exc:
-            app.logger.warning("Deepgram mic transcription failed, falling back to Whisper: %s", exc)
+            app.logger.warning("Deepgram mic transcription failed: %s", exc)
+            if not env_flag("MIC_TRANSCRIBE_FALLBACK_TO_WHISPER", False):
+                return jsonify({"error": "Deepgram transcription failed"}), 502
 
     with _transcribe_lock:
         tmp_path = None

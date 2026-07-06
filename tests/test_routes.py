@@ -209,6 +209,34 @@ class TwilioCallingTests(unittest.TestCase):
         self.assertEqual(app_module.twilio_track_speaker_label("doctor", "inbound"), "Clinician")
         self.assertEqual(app_module.twilio_track_speaker_label("doctor", "outbound"), "Patient")
 
+    def test_deepgram_stream_url_enables_low_latency_options(self):
+        import app as app_module
+
+        env = {
+            "DEEPGRAM_INTERIM_RESULTS": "true",
+            "DEEPGRAM_ENDPOINTING_MS": "250",
+            "DEEPGRAM_KEYWORDS": "Mounjaro:2, tirzepatide:2",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            url = app_module.deepgram_listen_url()
+
+        self.assertIn("interim_results=true", url)
+        self.assertIn("endpointing=250", url)
+        self.assertIn("keywords=Mounjaro%3A2", url)
+        self.assertIn("keywords=tirzepatide%3A2", url)
+
+    def test_interim_deepgram_message_updates_preview_without_appending(self):
+        import app as app_module
+
+        raw = '{"channel":{"alternatives":[{"transcript":"patient reports nausea"}]},"is_final":false}'
+        with patch.object(app_module, "broadcast_transcript") as broadcast:
+            app_module.handle_deepgram_message(raw, "Clinician")
+
+        broadcast.assert_called_once()
+        payload = broadcast.call_args.args[0]
+        self.assertEqual(payload["type"], "transcript-preview")
+        self.assertEqual(payload["text"], "Clinician: patient reports nausea")
+
     def test_join_consult_rejects_unsigned_twilio_request_when_token_configured(self):
         _app_module, client = self.authenticated_client()
         env = {
@@ -302,6 +330,24 @@ class MicTranscriptionTests(unittest.TestCase):
         self.assertEqual(response.get_json()["text"], "hello this is a test")
         self.assertIn("https://api.deepgram.com/v1/listen", post.call_args.args[0])
         self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Token dg-token")
+
+    def test_transcribe_fails_fast_when_deepgram_configured_but_unavailable(self):
+        app_module, client = self.authenticated_client()
+        env = {
+            "DEEPGRAM_API_KEY": "dg-token",
+            "MIC_TRANSCRIBE_FALLBACK_TO_WHISPER": "false",
+        }
+        with patch.dict("os.environ", env, clear=False), patch.object(app_module.http, "post") as post, patch.object(app_module, "get_whisper_model") as whisper:
+            post.return_value = FakeTwilioResponse(status_code=500, body={"error": "bad gateway"})
+            response = client.post(
+                "/api/transcribe",
+                data={"audio": (BytesIO(b"fake-webm-audio"), "dictation.webm")},
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("Deepgram transcription failed", response.get_json()["error"])
+        whisper.assert_not_called()
 
     def test_transcribe_rejects_oversized_upload(self):
         app_module, client = self.authenticated_client()
