@@ -15,6 +15,7 @@ except Exception:
 class PerformanceMonitor:
     def __init__(self):
         self.metrics = defaultdict(list)
+        self.system_metrics = defaultdict(list)
         self.start_time = time.time()
     
     def record_endpoint(self, endpoint, method, status, duration_ms, cache_status=None):
@@ -28,6 +29,16 @@ class PerformanceMonitor:
         # Keep only last 1000 records per endpoint
         if len(self.metrics[f"{method} {endpoint}"]) > 1000:
             self.metrics[f"{method} {endpoint}"] = self.metrics[f"{method} {endpoint}"][-1000:]
+
+    def record_system_metric(self, name, value, metadata=None):
+        """Record non-endpoint operational metrics."""
+        self.system_metrics[name].append({
+            "value": value,
+            "metadata": metadata or {},
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        if len(self.system_metrics[name]) > 1000:
+            self.system_metrics[name] = self.system_metrics[name][-1000:]
     
     def get_stats(self, endpoint=None):
         """Calculate statistics"""
@@ -66,6 +77,10 @@ class PerformanceMonitor:
         for endpoint in self.metrics.keys():
             stats[endpoint] = self.get_stats(endpoint)
         return stats
+
+    def get_system_metrics(self):
+        """Get recent non-endpoint metrics."""
+        return {name: records[-1000:] for name, records in self.system_metrics.items()}
 
 monitor = PerformanceMonitor()
 
