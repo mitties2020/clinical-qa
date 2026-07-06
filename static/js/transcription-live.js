@@ -14,11 +14,23 @@
     if (element) element.textContent = value;
   }
 
-  function appendText(value) {
+  function focusClinicalInput() {
+    const input = document.getElementById("clinicalInput");
+    if (!input) return null;
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+    return input;
+  }
+
+  function appendText(value, shouldFocus) {
     const clean = text(value);
     if (!clean) return;
     if (typeof window.appendTranscriptToConsultInput === "function") {
       window.appendTranscriptToConsultInput(clean);
+      if (shouldFocus) focusClinicalInput();
       return;
     }
     const input = document.getElementById("clinicalInput");
@@ -26,29 +38,10 @@
     const spacer = input.value ? (input.value.endsWith("\n") ? "" : "\n\n") : "";
     input.value = `${input.value}${spacer}${clean}`;
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    if (shouldFocus) focusClinicalInput();
   }
 
   function renderTranscriptStatus() {
-    if (micState.status === "requesting") {
-      setText("transcriptionStatus", micState.message || "Requesting microphone permission...");
-      return;
-    }
-    if (micState.status === "active") {
-      setText("transcriptionStatus", micState.message || "Mic dictation active");
-      return;
-    }
-    if (micState.status === "processing") {
-      setText("transcriptionStatus", micState.message || "Transcribing mic audio...");
-      return;
-    }
-    if (micState.status === "error") {
-      setText("transcriptionStatus", micState.message || "Mic transcription failed");
-      return;
-    }
-    if (micState.status === "ready") {
-      setText("transcriptionStatus", micState.message || "Mic transcription ready");
-      return;
-    }
     if (callState.status === "connected") {
       setText("transcriptionStatus", callState.message || "Call transcript connected; waiting for audio");
       return;
@@ -85,14 +78,13 @@
 
     micState.status = ["active", "requesting", "processing", "ready", "error"].includes(next) ? next : "idle";
     micState.message = msg;
-    renderTranscriptStatus();
 
     if (next === "ready") {
       window.setTimeout(() => {
         if (micState.status === "ready") {
           micState.status = "idle";
           micState.message = "";
-          renderTranscriptStatus();
+          setText("micStatus", "Mic dictation inactive");
         }
       }, 2500);
     }
@@ -120,8 +112,8 @@
     return {};
   }
 
-  async function deepgramConfigured() {
-    if (window.PREFER_BROWSER_SPEECH === true || window.PREFER_SERVER_MIC_TRANSCRIPTION === false) return false;
+  async function serverMicTranscriptionConfigured() {
+    if (window.PREFER_SERVER_MIC_TRANSCRIPTION !== true) return false;
     if (!window.MediaRecorder || !window.navigator?.mediaDevices?.getUserMedia) return false;
     try {
       const response = await fetch("/api/transcription-health", { credentials: "same-origin" });
@@ -167,6 +159,7 @@
         stopRestartTimer();
         baseText = input.value;
         active = true;
+        focusClinicalInput();
         setMicStatus("active", "Mic dictation active");
         setButtons("active");
         startRecognition();
@@ -204,6 +197,7 @@
       }
       input.value = interimText ? `${committed}${committed ? " " : ""}${interimText}` : committed;
       input.dispatchEvent(new Event("input", { bubbles: true }));
+      focusClinicalInput();
       setMicStatus("active", interimText ? "Mic dictation active; listening..." : "Mic dictation active");
     };
 
@@ -236,6 +230,8 @@
     let uploadChain = Promise.resolve();
     let stopped = false;
     let addedText = false;
+    let chunks = [];
+    const chunkUploads = window.MIC_TRANSCRIBE_CHUNK_UPLOAD === true;
 
     async function upload(blob) {
       const form = new FormData();
@@ -258,7 +254,7 @@
         const transcript = await upload(blob);
         if (transcript) {
           addedText = true;
-          appendText(transcript);
+          appendText(transcript, true);
           setMicStatus("active", "Mic dictation active; text added");
         }
       }).catch((error) => {
@@ -272,6 +268,7 @@
         try {
           stopped = false;
           addedText = false;
+          chunks = [];
           uploadChain = Promise.resolve();
           setMicStatus("requesting");
           setButtons("processing");
@@ -284,20 +281,30 @@
             },
           });
           recorder = new MediaRecorder(stream, pickRecorderOptions());
-          recorder.ondataavailable = (event) => queueUpload(event.data);
+          recorder.ondataavailable = (event) => {
+            if (!event.data || event.data.size < 512) return;
+            if (chunkUploads) queueUpload(event.data);
+            else chunks.push(event.data);
+          };
           recorder.onstop = async () => {
             stopped = true;
             stream?.getTracks().forEach((track) => track.stop());
             setButtons("processing");
             setMicStatus("processing", "Finishing mic transcription...");
+            if (!chunkUploads && chunks.length) {
+              const type = recorder?.mimeType || chunks[0]?.type || "audio/webm";
+              await queueUpload(new Blob(chunks, { type })).catch(() => {});
+            }
             await uploadChain.catch(() => {});
             recorder = null;
             stream = null;
+            chunks = [];
             setButtons("inactive");
             setMicStatus(addedText ? "ready" : "inactive", addedText ? "Mic transcription added to input" : "No speech detected in mic recording");
           };
-          recorder.start(Math.max(3000, chunkMs));
-          setMicStatus("active", "Mic dictation active; transcribing in chunks");
+          if (chunkUploads) recorder.start(Math.max(3000, chunkMs));
+          else recorder.start();
+          setMicStatus("active", chunkUploads ? "Mic dictation active; transcribing in chunks" : "Mic recording active");
           setButtons("active");
         } catch {
           setMicStatus("error", "Microphone permission denied or unavailable");
@@ -326,16 +333,16 @@
   window.initMicDictation = async function initMicDictation() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const hasRecorder = Boolean(window.MediaRecorder && window.navigator?.mediaDevices?.getUserMedia);
-    setMicStatus("requesting", "Checking mic transcription...");
-    if (await deepgramConfigured()) {
-      setupMediaRecorder();
-      return;
-    }
-    if (SpeechRecognition) {
+    setMicStatus("requesting", "Checking mic dictation...");
+    if (SpeechRecognition && window.PREFER_BROWSER_SPEECH !== false) {
       setupSpeechRecognition(SpeechRecognition);
       return;
     }
-    if (hasRecorder) {
+    if (await serverMicTranscriptionConfigured()) {
+      setupMediaRecorder();
+      return;
+    }
+    if (hasRecorder && !SpeechRecognition) {
       setupMediaRecorder();
       return;
     }
@@ -371,7 +378,7 @@
         if (data?.type === "status") setTranscriptStatus(data.status, data.message);
         if (data?.type === "transcript-preview") setTranscriptStatus("preview", data.text ? `Hearing: ${data.text}` : "Hearing call audio...");
         if (data?.type === "transcript") {
-          appendText(data.text);
+          appendText(data.text, false);
           setTranscriptStatus("active", "Call transcription active; text added");
         }
       });
