@@ -176,7 +176,7 @@
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", () => { initApp(); });
-const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","WA mental health discharge summary","Men’s health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
+const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","WA mental health discharge summary","Men’s health consult","Premature Ejaculation and Erectile Dysfunction","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
 let savedOutputs=JSON.parse(localStorage.getItem("vivid_saved_outputs")||"[]");
 let selectedConsultType="";
 let micRecognition=null;
@@ -187,7 +187,69 @@ function initApp(){populateConsultTypes();bindUIEvents();setTheme("night");setFo
 function populateConsultTypes(){const select=document.getElementById("consultType");if(!select){console.error("Missing #consultType select");return;}select.innerHTML="";for(const type of CONSULT_TYPES){const option=document.createElement("option");option.value=type;option.textContent=type;select.appendChild(option);}selectedConsultType=CONSULT_TYPES[0];select.value=selectedConsultType;}
 function bindUIEvents(){const convertBtn=document.getElementById("convertBtn");const clearBtn=document.getElementById("clearBtn");const clearInputBtn=document.getElementById("clearInputBtn");const copyBtn=document.getElementById("copyBtn");const completeBtn=document.getElementById("completeConsultBtn");const editBtn=document.getElementById("editOutputBtn");const clearOutputBtn=document.getElementById("clearOutputBtn");const input=document.getElementById("clinicalInput");const notesTab=document.getElementById("consultNotesTab");const questionsTab=document.getElementById("clinicalQuestionsTab");const themeSwitch=document.getElementById("themeSwitch");const stealthSwitch=document.getElementById("stealthSwitch");const askBtn=document.getElementById("askBtn");const clearQaBtn=document.getElementById("clearQaBtn");const copyAnswerBtn=document.getElementById("copyAnswerBtn");const consultType=document.getElementById("consultType");const callBtn=document.getElementById("callPatientBtn");const startConsultBtn=document.getElementById("startConsultBtn");if(convertBtn)convertBtn.addEventListener("click",()=>generateOutput(selectedConsultType));if(clearBtn)clearBtn.addEventListener("click",clearForm);if(clearInputBtn)clearInputBtn.addEventListener("click",clearForm);if(copyBtn)copyBtn.addEventListener("click",copyOutput);if(completeBtn)completeBtn.addEventListener("click",completeCurrentAppointmentConsult);if(editBtn)editBtn.addEventListener("click",editCurrentOutput);if(clearOutputBtn)clearOutputBtn.addEventListener("click",clearOutput);if(askBtn)askBtn.addEventListener("click",askQuestion);if(clearQaBtn)clearQaBtn.addEventListener("click",clearQuestion);if(copyAnswerBtn)copyAnswerBtn.addEventListener("click",copyAnswer);if(callBtn)callBtn.addEventListener("click",callPatient);if(startConsultBtn)startConsultBtn.addEventListener("click",startAppointmentConsult);if(consultType){consultType.addEventListener("change",e=>{selectedConsultType=e.target.value||CONSULT_TYPES[0];});}if(input){input.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();generateOutput(selectedConsultType);}});}const qInput=document.getElementById("clinicalQuestion");if(qInput){qInput.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askQuestion();}});}if(notesTab)notesTab.addEventListener("click",()=>setMode("notes"));if(questionsTab)questionsTab.addEventListener("click",()=>setMode("questions"));if(themeSwitch){themeSwitch.addEventListener("change",e=>setTheme(e.target.checked?"day":"night"));}if(stealthSwitch){stealthSwitch.addEventListener("change",e=>setFocusMode(e.target.checked));}const authBtn=document.getElementById("authBtn");if(authBtn){authBtn.addEventListener("click",async()=>{await fetch("/auth/logout",{method:"POST"});window.location.href="/login";});}}
 async function callPatient(){const phone=(document.getElementById("patientPhone")?.value||"").trim();const callStatus=document.getElementById("callStatus");const callBtn=document.getElementById("callPatientBtn");if(!phone){if(callStatus)callStatus.textContent="Enter a patient phone number first.";return;}if(callStatus)callStatus.textContent="Placing call...";if(callBtn)callBtn.disabled=true;try{const res=await fetch('/api/call-patient',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patientPhone:phone})});const data=await res.json().catch(()=>({}));if(!res.ok){const fallback=res.status===401?"Please log in again before calling.":res.status===404?"Calling endpoint is not available in this preview. Use the live Flask app URL.":`Call failed (${res.status})`;throw new Error(data?.error||fallback);}if(callStatus)callStatus.textContent="Call started. Your phone and the patient phone should ring now.";}catch(err){if(callStatus)callStatus.textContent=`Call failed: ${err.message||'Unknown error'}`;}finally{if(callBtn)callBtn.disabled=false;}}
-function buildLocalFallbackNote(type,raw){const lower=String(type||"").toLowerCase();if(lower==="weight loss follow-up"){return ["Consult Type: Script Renewal - Weight Management","Clinician: Not documented","Mode: Telehealth","","ID Verification","Not documented","","Reason for Consult","Weight management review / script renewal.","","Medical conditions","Not documented","","Anthropometrics","Current weight: Not documented","Height: Not documented","BMI: Not documented","","Current Treatment","Medication and current dose: Not documented","","Progress Since Last Review",raw,"","Side Effects","Not documented","","Assessment","Weight management review completed. Treatment response, tolerability, BMI/weight trend, and dose escalation rationale require clinician confirmation from the consult details above.","","Plan","Dose/script plan: Not documented","Reinforce high-protein diet, hydration, and ongoing lifestyle measures where appropriate.","Follow-up timing: Not documented","","Safety Netting","Advise patient to stop injections and seek urgent care for persistent vomiting, severe abdominal pain especially right upper quadrant, or symptoms suggestive of pancreatitis/gallbladder pathology.","","Current Medication","Exact prescribing line: Not documented"].join("\n");}if(lower==="weight loss initial consult"){return ["Telehealth consult","","ID Verification","Not documented","","Patient profile","Not documented","","DVA / entitlement context","Not documented","","Past medical history","Not documented","","Medications","Not documented","","Weight management history",raw,"","Counselling","Counselled on Mounjaro (tirzepatide) where clinically appropriate: once-weekly self-administered subcutaneous injection, GLP-1/GIP agonist mechanism, appetite/satiety effect, metabolic effect, potential GI side effects, pen/needle administration, and refrigeration/storage requirements.","","Opportunity to ask questions","Not documented","","Assessment","Initial weight management consultation completed. Suitability, contraindication screening, baseline observations, and treatment choice require clinician confirmation from the consult details above.","","Plan","Weight-management medication plan: Not documented","Review in 4 weeks or sooner if concerns, if clinically appropriate.","","Safety Netting","Advise patient to stop injections and seek urgent care for persistent vomiting, severe abdominal pain especially right upper quadrant, or symptoms suggestive of pancreatitis/gallbladder pathology.","","Observation","Weight: Not documented","Height: Not documented","BMI: Not documented","","Current Medication","Exact prescribing line: Not documented"].join("\n");}return `Consult type: ${type}\n\nClinical note:\n${raw}\n\nAssessment:\n[Draft assessment generated from input.]\n\nPlan:\n[Draft plan generated from input.]`;}
+function buildLocalFallbackNote(type,raw){
+const lower=String(type||"").toLowerCase();
+if(lower==="weight loss follow-up"){return ["Consult Type: Script Renewal - Weight Management","Clinician: Not documented","Mode: Telehealth","","ID Verification","Not documented","","Reason for Consult","Weight management review / script renewal.","","Medical conditions","Not documented","","Anthropometrics","Current weight: Not documented","Height: Not documented","BMI: Not documented","","Current Treatment","Medication and current dose: Not documented","","Progress Since Last Review",raw,"","Side Effects","Not documented","","Assessment","Weight management review completed. Treatment response, tolerability, BMI/weight trend, and dose escalation rationale require clinician confirmation from the consult details above.","","Plan","Dose/script plan: Not documented","Reinforce high-protein diet, hydration, and ongoing lifestyle measures where appropriate.","Follow-up timing: Not documented","","Safety Netting","Advise patient to stop injections and seek urgent care for persistent vomiting, severe abdominal pain especially right upper quadrant, or symptoms suggestive of pancreatitis/gallbladder pathology.","","Current Medication","Exact prescribing line: Not documented"].join("\n");}
+if(lower==="weight loss initial consult"){return ["Telehealth consult","","ID Verification","Not documented","","Patient profile","Not documented","","DVA / entitlement context","Not documented","","Past medical history","Not documented","","Medications","Not documented","","Weight management history",raw,"","Counselling","Counselled on Mounjaro (tirzepatide) where clinically appropriate: once-weekly self-administered subcutaneous injection, GLP-1/GIP agonist mechanism, appetite/satiety effect, metabolic effect, potential GI side effects, pen/needle administration, and refrigeration/storage requirements.","","Opportunity to ask questions","Not documented","","Assessment","Initial weight management consultation completed. Suitability, contraindication screening, baseline observations, and treatment choice require clinician confirmation from the consult details above.","","Plan","Weight-management medication plan: Not documented","Review in 4 weeks or sooner if concerns, if clinically appropriate.","","Safety Netting","Advise patient to stop injections and seek urgent care for persistent vomiting, severe abdominal pain especially right upper quadrant, or symptoms suggestive of pancreatitis/gallbladder pathology.","","Observation","Weight: Not documented","Height: Not documented","BMI: Not documented","","Current Medication","Exact prescribing line: Not documented"].join("\n");}
+if(lower==="premature ejaculation and erectile dysfunction"){
+return [
+"ED / PE Assessment",
+"Mode: Telehealth",
+"",
+"ID Verification",
+"Not documented",
+"",
+"Consent",
+"Phone consult consent: Not documented",
+"Off-label compounded medication consent: Not documented",
+"",
+"Presenting Concern",
+"Patient seeking assessment for erectile dysfunction and/or premature ejaculation.",
+"",
+"History",
+raw,
+"",
+"ED History",
+"Not documented",
+"",
+"PE History",
+"Not documented",
+"",
+"Libido / orgasm / penile symptoms",
+"Not documented",
+"",
+"Previous Treatments",
+"Not documented",
+"",
+"Past Medical History",
+"Not documented",
+"",
+"Current Medications / Allergies",
+"Not documented",
+"",
+"Psychosexual / lifestyle factors",
+"Not documented",
+"",
+"Safety / Suitability Screen",
+"Cardiovascular risk, nitrate/nicorandil/poppers use, blood pressure, priapism risk, penile deformity, anticoagulation/bleeding risk, mental health/serotonergic medicine interactions, current medicines, allergies, and My Health Record/medication check require clinician confirmation if not documented.",
+"",
+"Impression",
+"ED / PE assessment completed. Predominant condition and contributing factors require clinician confirmation from the supplied history.",
+"",
+"Plan",
+"Treatment decision: Not documented.",
+"If contraindications, safety concerns, or missing key safety information are present, treatment should be deferred pending clinician/CMO review.",
+"Case manager welcome call and follow-up: Not documented.",
+"",
+"Counselling / Consent",
+"Adverse effects, off-label status, medication instructions, and patient consent: Not documented.",
+"",
+"Critical information missing / issues to address",
+"Confirm ID/consent, ED versus PE versus combined presentation, duration/onset/severity, libido, prior treatment response, PMHx, medications/allergies, cardiovascular suitability, contraindications, and exact medication plan before signing."
+].join("\n");
+}
+return `Consult type: ${type}\n\nClinical note:\n${raw}\n\nAssessment:\n[Draft assessment generated from input.]\n\nPlan:\n[Draft plan generated from input.]`;
+}
 async function generateOutput(consultTypeArg){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(!input||!output){console.error("Missing input or output element");return;}const raw=input.value.trim();const type=consultTypeArg||selectedConsultType||CONSULT_TYPES[0];const clinicalData=window.VividMediAppointmentsUI?.buildAppointmentClinicalPayload?.(raw,type)||raw;if(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1"){console.debug("selectedConsultType before generation:",type);}if(!raw){output.textContent="Please enter clinical information first.";return;}output.textContent="Generating...";try{const res=await fetch('/convert-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clinical_data:clinicalData,note_type:'consultation_note',consult_type:type})});if(!res.ok) throw new Error('convert failed');const data=await res.json();output.textContent=data.clinical_notes||data.output||'No output generated.';}catch{output.textContent=buildLocalFallbackNote(type,raw);}}
 async function askQuestion(){const q=document.getElementById("clinicalQuestion")?.value?.trim()||"";const out=document.getElementById("clinicalAnswer");if(!out)return;if(!q){out.textContent='Please enter a question first.';return;}clinicalQuestionThread.push({role:"user",content:q});document.getElementById("clinicalQuestion").value="";renderClinicalQuestionThread("Generating...");const context=clinicalQuestionThread.map(item=>`${item.role==="user"?"Question":"Answer"}: ${item.content}`).join("\n\n");try{const res=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:`Use this clinical Q&A conversation context and answer the latest question with analysis.\n\n${context}\n\nLatest question: ${q}`})});if(!res.ok) throw new Error('ask failed');const data=await res.json();const answer=data.answer||data.output||'No answer generated.';clinicalQuestionThread.push({role:"assistant",content:answer});renderClinicalQuestionThread();}catch{const answer='Unable to generate answer right now. Please try again.';clinicalQuestionThread.push({role:"assistant",content:answer});renderClinicalQuestionThread();}}
 function clearForm(){const input=document.getElementById("clinicalInput");const output=document.getElementById("outputBox");if(input)input.value="";if(output)output.textContent="Output will appear here...";}
@@ -223,7 +285,7 @@ function appendTranscriptToConsultInput(text){const input=document.getElementByI
 function connectTranscriptSocket(){const configured=(window.TRANSCRIPT_WS_URL||"").trim();const disableDefault=Boolean(window.DISABLE_DEFAULT_TRANSCRIPT_WS);const allowTunnel=Boolean(window.ALLOW_TUNNEL_WS);const wsUrl=configured||(!disableDefault?`${window.location.protocol==="https:"?"wss":"ws"}://${window.location.host}/frontend-transcript`:"");if(!wsUrl){setTranscriptStatus("stopped");return;}if(/ngrok|tunnel/i.test(wsUrl)&&!allowTunnel){console.warn("Transcript WebSocket tunnel URL blocked by default. Set window.ALLOW_TUNNEL_WS=true to override.");setTranscriptStatus("stopped");return;}try{const socket=new WebSocket(wsUrl);socket.addEventListener("open",()=>{setTranscriptStatus("connected");});socket.addEventListener("close",()=>setTranscriptStatus("stopped"));socket.addEventListener("error",()=>{setTranscriptStatus("stopped");});socket.addEventListener("message",(event)=>{let data;try{data=JSON.parse(event.data);}catch{return;}if(data?.type==="status"){setTranscriptStatus(data.status,data.message);}if(data?.type==="transcript"){appendTranscriptToConsultInput(data.text);setTranscriptStatus("active");}});}catch{setTranscriptStatus("stopped");}}
 </script>
 <script src="/static/js/transcription-live.js?v=20260707-1"></script>
-<script src="/static/js/local-fallback-notes.js?v=20260618-wa-mh-discharge"></script>
+<script src="/static/js/local-fallback-notes.js?v=20260707-ed-pe"></script>
 <script src="/static/js/appointments-storage.js?v=20260530-2"></script>
 <script src="/static/js/appointments-medirecords.js?v=20260530-2"></script>
 <script src="/static/js/appointments-ui.js?v=20260618-wa-mh-discharge"></script>

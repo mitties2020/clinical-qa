@@ -163,6 +163,7 @@
                 <option>Mental health review</option>
                 <option>WA mental health discharge summary</option>
                 <option>Men's health consult</option>
+                <option>Premature Ejaculation and Erectile Dysfunction</option>
                 <option>DVA allied health referral</option>
                 <option>GP letter</option>
                 <option>Patient instructions</option>
@@ -234,7 +235,7 @@
 </div>
 <script>
 document.addEventListener("DOMContentLoaded", () => { initApp(); });
-const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","WA mental health discharge summary","Men's health consult","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
+const CONSULT_TYPES=["General consultation note","Weight loss initial consult","Weight loss follow-up","VAPAC weight loss application","Medicinal cannabis / CBD / THC consult","Chronic pain consult","Mental health review","WA mental health discharge summary","Men's health consult","Premature Ejaculation and Erectile Dysfunction","DVA allied health referral","GP letter","Patient instructions","Medical certificate / work capacity note","Pathology review","Medication follow-up","Emergency Department Note"];
 const PATIENT_STORAGE_KEY="vivid_generic_patients";
 const SAVED_OUTPUTS_KEY="vivid_generic_saved_outputs";
 let savedOutputs=JSON.parse(localStorage.getItem(SAVED_OUTPUTS_KEY)||"[]");
@@ -485,6 +486,63 @@ function buildLocalFallbackNote(type,raw){
       "",
       "Current Medication",
       "Exact prescribing line: Not documented"
+    ].join("\n");
+  }
+  if(lower==="premature ejaculation and erectile dysfunction"){
+    return [
+      "ED / PE Assessment",
+      "Mode: Telehealth",
+      "",
+      "ID Verification",
+      "Not documented",
+      "",
+      "Consent",
+      "Phone consult consent: Not documented",
+      "Off-label compounded medication consent: Not documented",
+      "",
+      "Presenting Concern",
+      "Patient seeking assessment for erectile dysfunction and/or premature ejaculation.",
+      "",
+      "History",
+      raw,
+      "",
+      "ED History",
+      "Not documented",
+      "",
+      "PE History",
+      "Not documented",
+      "",
+      "Libido / orgasm / penile symptoms",
+      "Not documented",
+      "",
+      "Previous Treatments",
+      "Not documented",
+      "",
+      "Past Medical History",
+      "Not documented",
+      "",
+      "Current Medications / Allergies",
+      "Not documented",
+      "",
+      "Psychosexual / lifestyle factors",
+      "Not documented",
+      "",
+      "Safety / Suitability Screen",
+      "Cardiovascular risk, nitrate/nicorandil/poppers use, blood pressure, priapism risk, penile deformity, anticoagulation/bleeding risk, mental health/serotonergic medicine interactions, current medicines, allergies, and My Health Record/medication check require clinician confirmation if not documented.",
+      "",
+      "Impression",
+      "ED / PE assessment completed. Predominant condition and contributing factors require clinician confirmation from the supplied history.",
+      "",
+      "Plan",
+      "Treatment decision: Not documented.",
+      "If contraindications, safety concerns, or missing key safety information are present, treatment should be deferred pending clinician/CMO review.",
+      "Case manager welcome call and follow-up: Not documented.",
+      "",
+      "Counselling / Consent",
+      "Adverse effects, off-label status, medication instructions, and patient consent: Not documented.",
+      "",
+      "Critical information missing / issues to address",
+      "Confirm ID/consent, ED versus PE versus combined presentation, duration/onset/severity, libido, prior treatment response, PMHx, medications/allergies, cardiovascular suitability, contraindications, and exact medication plan before signing."
     ].join("\n");
   }
   return `Consult type: ${type}\n\nClinical note:\n${raw}\n\nAssessment:\n[Draft assessment generated from input.]\n\nPlan:\n[Draft plan generated from input.]`;
@@ -754,6 +812,6 @@ function connectTranscriptSocket(){
 }
 </script>
 <script src="/static/js/transcription-live.js?v=20260707-1"></script>
-<script src="/static/js/local-fallback-notes.js?v=20260618-wa-mh-discharge"></script>
+<script src="/static/js/local-fallback-notes.js?v=20260707-ed-pe"></script>
 </body>
 </html>

@@ -929,6 +929,7 @@ CONSULT_TYPE_INSTRUCTIONS = {
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
     "wa mental health discharge summary": "Write a polished, comprehensive WA hospital psychiatry discharge summary using NACS-style psychiatric discharge headings. Synthesize multiple pasted admission notes into a coherent consultant-level narrative covering admission problems, psychiatric history, mental state, risk on admission and discharge, formulation, management, investigations, medications, adverse reactions, discharge advice, follow-up, and clear communication to GP/CMHT/patient or carer.",
     "men’s health consult": "Focus on men's health concerns, sexual/reproductive history, cardiovascular/metabolic risk, and shared plan.",
+    "premature ejaculation and erectile dysfunction": "Use Menova ED/PE assessment style. Determine whether the presentation is ED-predominant, PE-predominant, combined ED+PE, or unclear. Focus on ID/telehealth consent, symptom duration/onset/severity, libido, prior treatments, psychosexual contributors, cardiovascular/metabolic and medication safety, contraindications, suitability, off-label consent where relevant, and a management plan that is congruent with the documented history.",
     "dva allied health referral": "Use DVA referral framing including accepted conditions, referral rationale, renewal checks, and audit readiness.",
     "gp letter": "Format as a GP letter with reason for correspondence, summary, assessment, actions, and requested follow-up.",
     "patient instructions": "Write clear patient-facing instructions: diagnosis summary, medicines, self-care, warning signs, and when to seek help.",
@@ -1141,6 +1142,62 @@ WA_MENTAL_HEALTH_DISCHARGE_SUMMARY_STRUCTURE = (
     "- Do not provide legal advice, do not claim WA Health compliance is guaranteed, and do not invent dates, diagnoses, MHA status, risk assessments, follow-up appointments, allergies, medication supply, pathology, or collateral."
 )
 
+MENOVA_ED_PE_NOTE_STRUCTURE = (
+    "Use this exact practical note style for Menova Premature Ejaculation and Erectile Dysfunction consults. "
+    "Plain text only. Keep it copy-paste ready for the work platform. Do not use Markdown.\n"
+    "Heading/order:\n"
+    "ED / PE Assessment\n"
+    "Mode\n"
+    "ID Verification\n"
+    "Consent\n"
+    "Presenting Concern\n"
+    "History\n"
+    "ED History\n"
+    "PE History\n"
+    "Libido / orgasm / penile symptoms\n"
+    "Previous Treatments\n"
+    "Past Medical History\n"
+    "Current Medications / Allergies\n"
+    "Psychosexual / lifestyle factors\n"
+    "Safety / Suitability Screen\n"
+    "Impression\n"
+    "Plan\n"
+    "Counselling / Consent\n"
+    "Follow-up\n"
+    "Critical information missing / issues to address\n\n"
+    "Core history requirements:\n"
+    "- State whether the assessment is for ED, PE, or combined ED+PE based on the supplied history. If unclear, write 'predominant concern unclear from supplied history'.\n"
+    "- Include 3 points of ID confirmed and consent for phone/telehealth consult where documented. If absent, write 'Not documented'.\n"
+    "- Capture duration, onset pattern, progression, severity, triggers/contributors, patient goals, expectations, and whether symptoms are situational or consistent.\n"
+    "- ED history: erection initiation, maintenance, rigidity sufficient for intercourse, morning/nocturnal erections, libido, orgasm/ejaculation, penile pain, curvature/Peyronie's features, pelvic/prostate symptoms, trauma, pelvic surgery or radiotherapy if documented.\n"
+    "- PE history: lifelong vs acquired, approximate ejaculation latency if known, control, bother/distress, relationship impact, whether PE occurs before or soon after penetration, and whether PE appears secondary to ED/performance anxiety.\n"
+    "- Include previous treatments and response: PDE5 inhibitors, SSRIs/paroxetine/dapoxetine, topical therapy, behavioural strategies, PT141, intracavernosal injection therapy, supplements, counselling or allied health input.\n"
+    "- Include relevant PMHx: cardiovascular disease, angina, MI/stroke/TIA, hypertension, hypotension/syncope, arrhythmia, heart failure, diabetes, dyslipidaemia, renal/hepatic disease, endocrine/testosterone/thyroid/prolactin issues, neurological disease, prostate/pelvic surgery, priapism, sickle cell disease, leukaemia, multiple myeloma, bleeding disorder, penile deformity/Peyronie's disease.\n"
+    "- Include current medicines and allergies, especially nitrates, nicorandil, recreational nitrites/poppers, alpha blockers, antihypertensives, anticoagulants/antiplatelets, SSRIs/SNRIs/MAOIs, serotonergic medicines including tramadol/triptans/linezolid/St John's wort, antipsychotics, opioids, and existing ED/PE medicines.\n"
+    "- Include psychosexual/lifestyle contributors where documented: stress, anxiety/depression, relationship factors, sleep, alcohol, smoking/vaping, recreational drugs, exercise, weight/metabolic risk, and pornography/sexual habits only if clinically relevant and supplied.\n\n"
+    "Safety and suitability rules:\n"
+    "- If nitrate, nicorandil or recreational nitrite use is documented, do not recommend tadalafil/PDE5 inhibitor treatment; state treatment not indicated/deferred and why.\n"
+    "- If unstable cardiac symptoms, exertional chest pain, recent MI/stroke/TIA, uncontrolled hypertension, marked hypotension/syncope, decompensated heart failure, or uncertain cardiovascular fitness for sexual activity is documented or not adequately clarified in a higher-risk patient, defer prescribing pending review/clearance.\n"
+    "- For tadalafil/PDE5 inhibitors, mention alpha blocker/antihypertensive hypotension risk where relevant and do not invent BP or cardiac clearance.\n"
+    "- For paroxetine/SSRI treatment, screen for bipolar/mania, significant mental health risk or suicidality, serotonin-syndrome interaction risk, MAOI/serotonergic medicine interactions, significant hepatic impairment, and bleeding risk with anticoagulants/NSAIDs where relevant.\n"
+    "- For PT141/bremelanotide, record that Menova use is off-label for ED where relevant. Screen for uncontrolled hypertension/significant cardiovascular disease and counsel nausea, flushing, headache, palpitations and transient BP increase.\n"
+    "- For intracavernosal injection therapy, require training/instructions, priapism counselling, and screen for priapism predisposition, significant penile deformity/Peyronie's disease, anticoagulation/bleeding risk, penile pain, fibrosis, infection risk, and ability to follow emergency instructions.\n"
+    "- If the medication plan is unsafe, contraindicated, or key safety information is missing, write 'Treatment deferred / not indicated today' in the Plan and list the reason. Do not force a prescription.\n"
+    "- Where possible, note that My Health Record/medication/allergy check should be completed before scripting if not already documented.\n\n"
+    "Management logic:\n"
+    "- Impression should identify ED-predominant, PE-predominant, combined ED+PE, or unclear presentation and list likely contributors from the documented history only.\n"
+    "- If ED-predominant and safe/supported, align with the documented Menova ED pathway. Include exact medicine/dose only when documented or clearly selected in the input; otherwise write 'specific ED medication plan not documented'.\n"
+    "- If PE-predominant and safe/supported, align with the documented Menova PE pathway. Include exact paroxetine/tadalafil/adjunct dosing only when documented or clearly selected in the input; otherwise write 'specific PE medication plan not documented'.\n"
+    "- If combined ED+PE and safe/supported, choose the pathway matching the predominant issue and document reassessment in 4-6 weeks or as clinically indicated.\n"
+    "- If the supplied plan matches Menova combined protocol, the first-line options may include: ED-predominant tadalafil 10-15 mg + L-arginine 250 mg + P5P 10 mg every second/third day; PE-predominant tadalafil 10 mg + L-arginine 250 mg + ashwagandha 200 mg + paroxetine 10 mg every second day; escalation for persistent PE may include tadalafil 10-20 mg + L-arginine 250 mg + paroxetine 20 mg + ashwagandha 200 mg every second day. Do not include these unless clinically safe and supported by the input.\n"
+    "- PT141 instructions if selected/documented: 10,000 mcg/mL start 0.1 mL (1.0 mg) SC abdomen 45-60 minutes before sexual intercourse; if ineffective and no side effects, may increase to 0.175 mL (1.75 mg); max 8 doses/month. For 2,000 mcg/mL start 0.5 mL (1.0 mg) SC abdomen 45-60 minutes before sexual intercourse; if ineffective, may increase to 0.875 mL (1.75 mg); max 8 doses/month and max 1 dose/24 hours.\n"
+    "- Intracavernosal injection instructions if selected/documented: alprostadil 10 mcg + papaverine 15 mg + phentolamine 1 mg per mL, 5 mL; start test dose 0.05 mL into side of penis 15 minutes before intercourse as per instructions; increase by 0.05 mL until adequate dose achieved, max 0.3 mL; max 1 injection/24 hours and max 3 injections/week.\n"
+    "- Phenylephrine emergency injection should only be mentioned if documented as supplied/selected. Include the supplied instruction and also state that persistent, painful or prolonged erection requires urgent medical attention according to clinician protocol.\n"
+    "- Plan should include case manager welcome call when arranged, adverse effects and risks explained, patient understands/consents where documented, advice to contact Menova if medical conditions or medications change, and off-label compounded medication acknowledgement where relevant.\n"
+    "- Follow-up should include case manager contact in 24-48 hours and review/performance check around 4-6 weeks or monthly where documented/appropriate.\n"
+    "- Critical information missing / issues to address should be short and only list items that matter for safety, prescribing, consent, or medico-legal defensibility. If none, write 'No critical missing information identified from the supplied input.'"
+)
+
 
 def build_consult_prompt_context(consult_type: str) -> str:
     normalized = (consult_type or "").strip().lower()
@@ -1202,6 +1259,19 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "risk, advice, and follow-up language accordingly."
         )
 
+    if chosen_type == "premature ejaculation and erectile dysfunction":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n\n"
+            f"{MENOVA_ED_PE_NOTE_STRUCTURE}\n\n"
+            "Organisation workflow priority:\n"
+            "The final output is a Menova ED/PE assessment note, not a generic men's health note. "
+            "Keep it concise and clinically useful, with clear suitability logic. The note must be congruent with the "
+            "documented history: if medication is contraindicated, unsafe, or not supported by the supplied data, state "
+            "that treatment is deferred/not indicated and identify the reason. Do not invent ID confirmation, consent, "
+            "MHR checks, BP, comorbidities, medicines, allergies, contraindication screening, or prescribing details."
+        )
+
     if chosen_type == "emergency department note":
         return (
             f"Consult type selected: {chosen_type}.\n"
@@ -1232,6 +1302,8 @@ def consult_completion_budget(consult_type: str) -> int:
         return int(os.getenv("DEEPSEEK_WA_MH_DISCHARGE_MAX_TOKENS") or "6000")
     if normalized == "vapac weight loss application":
         return int(os.getenv("DEEPSEEK_LONG_FORM_MAX_TOKENS") or "3600")
+    if normalized == "premature ejaculation and erectile dysfunction":
+        return int(os.getenv("DEEPSEEK_ED_PE_MAX_TOKENS") or "2800")
     return int(os.getenv("DEEPSEEK_MAX_TOKENS") or "1800")
 
 
