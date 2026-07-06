@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="../static/vivid-medi-icon.svg" type="image/svg+xml">
-    <title>Vivid Medi • Secure Access</title>
+    <title>Vivid Medi &bull; Secure Access</title>
     <style>
         :root {
             --bg: #030712;
@@ -32,7 +32,7 @@
             min-height: 100vh;
         }
 
-        .shell { max-width: 1200px; margin: 0 auto; padding: 22px 24px 28px; }
+        .shell { max-width: 1120px; margin: 0 auto; padding: 18px 22px 24px; }
 
         .topbar {
             display: flex;
@@ -51,25 +51,56 @@
         .brand h2 { margin: 0; font-size: 24px; }
         .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 
-        .nav { display: flex; gap: 28px; color: #d2def8; font-size: 15px; }
-        .nav span::after { content: ""; display:block; width:5px; height:5px; margin:6px auto 0; border-radius:50%; background:#2983ff; }
+        .nav { display: flex; gap: 10px; color: #d2def8; font-size: 14px; }
+        .nav span {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 34px;
+            padding: 8px 12px;
+            border: 1px solid rgba(94, 147, 255, 0.24);
+            border-radius: 999px;
+            background: rgba(8, 20, 42, 0.58);
+            color: #e2ecff;
+            cursor: pointer;
+            font-weight: 650;
+            line-height: 1;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            transition: transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+            user-select: none;
+        }
+        .nav span::after {
+            content: "";
+            display: block;
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: linear-gradient(145deg, #16d6ff, #2e7bff);
+            box-shadow: 0 0 10px rgba(22, 214, 255, .52);
+        }
+        .nav span:hover {
+            transform: translateY(-1px);
+            border-color: rgba(22, 214, 255, 0.62);
+            background: rgba(16, 201, 255, 0.1);
+            color: #ffffff;
+        }
 
         .hero {
             display: grid;
             grid-template-columns: 1.05fr 1fr;
-            gap: 28px;
-            padding: 36px 0 24px;
+            gap: 24px;
+            padding: 28px 0 20px;
             border-bottom: 1px solid var(--line);
         }
 
-        .headline { font-size: clamp(38px, 5vw, 66px); margin: 0 0 12px; line-height: 1.02; }
+        .headline { font-size: clamp(34px, 4.4vw, 54px); margin: 0 0 10px; line-height: 1.04; }
         .headline .accent { color: var(--cyan); }
-        .lead { color: #c8d8f8; font-size: 20px; line-height: 1.45; max-width: 620px; }
+        .lead { color: #c8d8f8; font-size: 18px; line-height: 1.45; max-width: 580px; }
 
-        .bullets { margin: 24px 0; padding: 0; list-style: none; color: #d7e2fb; }
-        .bullets li { margin: 12px 0; padding-left: 26px; position: relative; }
+        .bullets { margin: 18px 0; padding: 0; list-style: none; color: #d7e2fb; }
+        .bullets li { margin: 9px 0; padding-left: 24px; position: relative; }
         .bullets li::before {
-            content: "✓";
+            content: "\2713";
             position: absolute; left: 0; top: -1px;
             color: var(--cyan); font-weight: 800;
         }
@@ -80,17 +111,17 @@
             color: #fff;
             border: 1px solid #55a5ff;
             border-radius: 12px;
-            padding: 14px 24px;
-            font-size: 20px;
+            padding: 12px 20px;
+            font-size: 18px;
             font-weight: 700;
             cursor: pointer;
             box-shadow: 0 10px 25px rgba(25, 108, 235, 0.45);
         }
-        .invite-only { color: #a6bcdf; font-size: 18px; }
+        .invite-only { color: #a6bcdf; font-size: 16px; }
 
         .logo-reveal {
             position: relative;
-            min-height: 396px;
+            min-height: 330px;
             border: 1px solid var(--panel-border);
             border-radius: 18px;
             background:
@@ -163,8 +194,8 @@
             z-index: 2;
             left: 50%;
             top: 44%;
-            width: 250px;
-            height: 118px;
+            width: 220px;
+            height: 104px;
             border: 1px solid rgba(36, 159, 255, .42);
             border-left-color: rgba(45, 240, 255, .95);
             border-right-color: rgba(45, 240, 255, .18);
@@ -176,8 +207,8 @@
         }
 
         .orbit.two {
-            width: 300px;
-            height: 92px;
+            width: 260px;
+            height: 80px;
             transform: translate(-50%, -50%) rotate(18deg);
             animation-delay: .08s;
         }
@@ -194,16 +225,16 @@
         }
 
         .hero-logo-lockup .vivid-mark {
-            width: 106px;
-            height: 106px;
-            border-radius: 28px;
+            width: 92px;
+            height: 92px;
+            border-radius: 24px;
             opacity: 0;
             transform: scale(.48);
             animation: markReveal 3s cubic-bezier(.2, .8, .2, 1) forwards;
         }
 
-        .hero-logo-lockup .vivid-mark::before { inset: 28px 25px 20px; }
-        .hero-logo-lockup .vivid-mark::after { border-radius: 24px; }
+        .hero-logo-lockup .vivid-mark::before { inset: 24px 22px 17px; }
+        .hero-logo-lockup .vivid-mark::after { border-radius: 22px; }
 
         .reveal-copy {
             text-align: center;
@@ -214,13 +245,13 @@
 
         .reveal-copy strong {
             display: block;
-            font-size: clamp(34px, 4vw, 52px);
+            font-size: clamp(30px, 3.4vw, 44px);
             line-height: 1;
             letter-spacing: 0;
         }
 
         .reveal-copy strong span { color: #16d6ff; text-shadow: 0 0 18px rgba(22, 214, 255, .64); }
-        .reveal-copy small { color: #c7d8f7; font-size: 18px; letter-spacing: 1px; }
+        .reveal-copy small { color: #c7d8f7; font-size: 16px; letter-spacing: 1px; }
 
         @keyframes particleGather {
             0% { opacity: 0; transform: translateX(-34px) translateY(10px) scale(.7); }
@@ -252,30 +283,30 @@
         }
 
         .access-wrap {
-            margin-top: 24px;
+            margin-top: 18px;
             border: 1px solid var(--panel-border);
             border-radius: 16px;
             background: var(--panel);
-            padding: 24px;
+            padding: 20px;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            gap: 20px;
         }
 
-        .access-wrap h3 { font-size: 34px; margin: 0 0 10px; }
-        .sub { color: #c4d5f3; font-size: 19px; line-height: 1.5; }
+        .access-wrap h3 { font-size: 28px; margin: 0 0 8px; }
+        .sub { color: #c4d5f3; font-size: 17px; line-height: 1.5; }
 
         .code-boxes { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin: 8px 0 14px; align-items: center; }
         .digit {
             user-select: none;
             text-align: center;
-            font-size: 36px;
+            font-size: 30px;
             border-radius: 10px;
             border: 1px solid rgba(101, 157, 255, 0.4);
             background: rgba(4, 11, 24, 0.85);
             color: #d9e8ff;
-            padding: 12px 0;
-            min-height: 72px;
+            padding: 9px 0;
+            min-height: 60px;
         }
 
         .sr-only {
@@ -299,12 +330,12 @@
         #msg { min-height: 24px; color: #ffb8bf; margin-top: 8px; }
 
         .reveal-btn {
-            height: 72px;
+            height: 60px;
             border-radius: 10px;
             border: 1px solid rgba(101, 157, 255, 0.45);
             background: rgba(4, 11, 24, 0.85);
             color: #bdddff;
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
         }
 
@@ -317,20 +348,25 @@
             border: 1px solid #4ba0ff;
             background: linear-gradient(180deg, #2d8dff, #1f66de);
             color: white;
-            font-size: 22px;
+            font-size: 19px;
             font-weight: 700;
             cursor: pointer;
         }
 
         @media (max-width: 980px) {
             .hero, .access-wrap { grid-template-columns: 1fr; }
+            .headline { font-size: 40px; }
+            .logo-reveal { min-height: 270px; }
+        }
+
+        @media (max-width: 760px) {
             .nav { display: none; }
-            .headline { font-size: 46px; }
-            .logo-reveal { min-height: 300px; }
         }
 
         @media (max-width: 620px) {
-            .logo-reveal { min-height: 230px; }
+            .shell { padding: 16px; }
+            .hero { padding: 24px 0 18px; }
+            .logo-reveal { min-height: 220px; }
             .hero-logo-lockup .vivid-mark { width: 76px; height: 76px; border-radius: 22px; }
             .hero-logo-lockup .vivid-mark::before { inset: 20px 18px 14px; }
             .reveal-copy strong { font-size: 30px; }
@@ -405,7 +441,7 @@
                 <label class="sr-only" for="code">Access code</label>
                 <input id="code" type="password" autocomplete="one-time-code" inputmode="numeric" maxlength="6">
                 <div class="code-boxes" id="codeBoxes" aria-hidden="true">
-                    <div class="digit">•</div><div class="digit">•</div><div class="digit">•</div><div class="digit">•</div><div class="digit">•</div><div class="digit">•</div>
+                    <div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div>
                     <button id="revealBtn" class="reveal-btn" type="button" aria-label="Show access code" title="Show access code"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 5c-5.7 0-9.7 4.9-10.9 6.7a.6.6 0 0 0 0 .6C2.3 14.1 6.3 19 12 19s9.7-4.9 10.9-6.7a.6.6 0 0 0 0-.6C21.7 9.9 17.7 5 12 5Zm0 12c-4.7 0-8.2-3.9-9.5-5 1.3-1.1 4.8-5 9.5-5s8.2 3.9 9.5 5c-1.3 1.1-4.8 5-9.5 5Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></button>
                 </div>
                 <button id="loginBtn" class="access-button">Continue to Vivid Medi</button>
@@ -426,7 +462,7 @@
             const raw = codeEl.value.replace(/\s+/g, "").slice(0, 6);
             codeEl.value = raw;
             boxes.forEach((box, i) => {
-                box.textContent = raw[i] ? (revealCode ? raw[i] : "*") : "•";
+                box.textContent = raw[i] ? (revealCode ? raw[i] : "*") : "\u2022";
             });
         }
 
