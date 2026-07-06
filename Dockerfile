@@ -34,4 +34,4 @@ RUN mkdir -p /var/cache/nginx /var/log/nginx && \
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
-CMD sh -c 'nginx -g "daemon off;" & exec gunicorn app:app --bind 127.0.0.1:5000 --workers 4 --threads 2 --worker-class gthread --timeout 200 --access-logfile - --error-logfile -'
+CMD sh -c 'nginx -g "daemon off;" & exec gunicorn app:app --bind 127.0.0.1:5000 --workers 1 --threads 4 --worker-class gthread --timeout 200 --access-logfile - --error-logfile -'
