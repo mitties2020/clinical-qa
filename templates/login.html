@@ -1,11 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="../static/vivid-medi-icon.svg" type="image/svg+xml">
-    <title>Vivid Medi &bull; Secure Access</title>
-    <style>
+!DOCTYPE html
+html lang="en"
+head
+    meta charset="UTF-8"
+    meta name="viewport" content="width=device-width, initial-scale=1.0"
+    link rel="icon" href="../static/vivid-medi-icon.svg" type="image/svg+xml"
+    titleVivid Medi bull; Secure Access/title
+    style
         :root {
             --bg: #030712;
             --bg-soft: #071425;
@@ -437,117 +437,117 @@
             .orbit { width: 190px; height: 88px; }
             .orbit.two { width: 220px; height: 70px; }
         }
-    </style>
-    <link rel="stylesheet" href="../static/vivid-medi-brand.css">
-</head>
-<body>
-    <div class="shell">
-        <header class="topbar">
-            <div class="brand">
-                <div class="logo-dot"></div>
-                <div>
-                    <h2>Vivid Medi</h2>
-                    <p>Clinical Documentation Aid</p>
-                </div>
-            </div>
-            <nav class="nav">
-                <a href="#features-info">Features</a>
-                <a href="#workflow-info">Workflow</a>
-                <a href="#privacy-info">Privacy</a>
-                <a href="#access-info">Access</a>
-            </nav>
-        </header>
+    /style
+    link rel="stylesheet" href="../static/vivid-medi-brand.css"
+/head
+body
+    div class="shell"
+        header class="topbar"
+            div class="brand"
+                div class="logo-dot"/div
+                div
+                    h2Vivid Medi/h2
+                    pClinical Documentation Aid/p
+                /div
+            /div
+            nav class="nav"
+                a href="#features-info"Features/a
+                a href="#workflow-info"Workflow/a
+                a href="#privacy-info"Privacy/a
+                a href="#access-info"Access/a
+            /nav
+        /header
 
-        <section class="hero">
-            <div>
-                <h1 class="headline">Clinical documentation,<br><span class="accent">reimagined.</span></h1>
-                <p class="lead">Vivid Medi is a confidential medical documentation aid with multimodal input, purpose-built for clinician workflows.</p>
-                <ul class="bullets">
-                    <li>For clinicians only</li>
-                    <li>Designed for patient confidentiality</li>
-                    <li>Streamlines documentation and enhances care</li>
-                </ul>
-                <div class="cta">
-                    <a class="btn-primary" href="#access-info">Request Access</a>
-                    <span class="invite-only">Currently only via invitation</span>
-                </div>
-            </div>
-            <div class="logo-reveal" aria-hidden="true">
-                <span class="particle"></span>
-                <span class="particle"></span>
-                <span class="particle"></span>
-                <span class="particle"></span>
-                <span class="particle"></span>
-                <span class="particle"></span>
-                <span class="particle"></span>
-                <span class="data-line"></span>
-                <span class="data-line"></span>
-                <span class="data-line"></span>
-                <span class="orbit"></span>
-                <span class="orbit two"></span>
-                <div class="hero-logo-lockup">
-                    <span class="vivid-mark"></span>
-                    <div class="reveal-copy">
-                        <strong>Vivid <span>Medi</span></strong>
-                        <small>Clinical Documentation Aid</small>
-                    </div>
-                </div>
-            </div>
-        </section>
+        section class="hero"
+            div
+                h1 class="headline"Clinical documentation,brspan class="accent"reimagined./span/h1
+                p class="lead"Vivid Medi is a confidential medical documentation aid with multimodal input, purpose-built for clinician workflows./p
+                ul class="bullets"
+                    liFor clinicians only/li
+                    liDesigned for patient confidentiality/li
+                    liStreamlines documentation and enhances care/li
+                /ul
+                div class="cta"
+                    a class="btn-primary" href="#access-info"Request Access/a
+                    span class="invite-only"Currently only via invitation/span
+                /div
+            /div
+            div class="logo-reveal" aria-hidden="true"
+                span class="particle"/span
+                span class="particle"/span
+                span class="particle"/span
+                span class="particle"/span
+                span class="particle"/span
+                span class="particle"/span
+                span class="particle"/span
+                span class="data-line"/span
+                span class="data-line"/span
+                span class="data-line"/span
+                span class="orbit"/span
+                span class="orbit two"/span
+                div class="hero-logo-lockup"
+                    span class="vivid-mark"/span
+                    div class="reveal-copy"
+                        strongVivid spanMedi/span/strong
+                        smallClinical Documentation Aid/small
+                    /div
+                /div
+            /div
+        /section
 
-        <section class="access-wrap">
-            <div>
-                <h3>Secure access to Vivid Medi</h3>
-                <p class="sub">Access is by invitation only. Verified users enter an access code to continue.</p>
-            </div>
-            <div>
-                <label class="sr-only" for="code">Access code</label>
-                <input id="code" type="password" autocomplete="one-time-code" inputmode="numeric" maxlength="6">
-                <div class="code-boxes" id="codeBoxes" aria-hidden="true">
-                    <div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div><div class="digit">&bull;</div>
-                    <button id="revealBtn" class="reveal-btn" type="button" aria-label="Show access code" title="Show access code"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 5c-5.7 0-9.7 4.9-10.9 6.7a.6.6 0 0 0 0 .6C2.3 14.1 6.3 19 12 19s9.7-4.9 10.9-6.7a.6.6 0 0 0 0-.6C21.7 9.9 17.7 5 12 5Zm0 12c-4.7 0-8.2-3.9-9.5-5 1.3-1.1 4.8-5 9.5-5s8.2 3.9 9.5 5c-1.3 1.1-4.8 5-9.5 5Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></button>
-                </div>
-                <button id="loginBtn" class="access-button">Continue to Vivid Medi</button>
-                <div id="msg"></div>
-            </div>
-        </section>
+        section class="access-wrap"
+            div
+                h3Secure access to Vivid Medi/h3
+                p class="sub"Access is by invitation only. Verified users enter an access code to continue./p
+            /div
+            div
+                label class="sr-only" for="code"Access code/label
+                input id="code" type="password" autocomplete="one-time-code" inputmode="numeric" maxlength="6"
+                div class="code-boxes" id="codeBoxes" aria-hidden="true"
+                    div class="digit"bull;/divdiv class="digit"bull;/divdiv class="digit"bull;/divdiv class="digit"bull;/divdiv class="digit"bull;/divdiv class="digit"bull;/div
+                    button id="revealBtn" class="reveal-btn" type="button" aria-label="Show access code" title="Show access code"svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"path fill="currentColor" d="M12 5c-5.7 0-9.7 4.9-10.9 6.7a.6.6 0 0 0 0 .6C2.3 14.1 6.3 19 12 19s9.7-4.9 10.9-6.7a.6.6 0 0 0 0-.6C21.7 9.9 17.7 5 12 5Zm0 12c-4.7 0-8.2-3.9-9.5-5 1.3-1.1 4.8-5 9.5-5s8.2 3.9 9.5 5c-1.3 1.1-4.8 5-9.5 5Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"//svg/button
+                /div
+                button id="loginBtn" class="access-button"Continue to Vivid Medi/button
+                div id="msg"/div
+            /div
+        /section
 
-        <section class="info-sections" aria-label="Vivid Medi information">
-            <article class="info-panel" id="features-info">
-                <h3>Features</h3>
-                <p>Vivid Medi turns messy clinical input into documentation that is structured, useful, and ready to refine. It is built for clinicians who need a precise draft quickly: notes, summaries, referrals, handovers, investigation summaries, review documentation, and supporting clinical correspondence.</p>
-                <div class="info-grid">
-                    <div class="info-note"><span>Structured output</span>Convert raw history, review notes, or dictated clinical data into clean documentation with the required shape.</div>
-                    <div class="info-note"><span>Purpose built</span>Select what you need produced, add the relevant clinical detail, and Vivid Medi prepares the draft around that task.</div>
-                </div>
-            </article>
+        section class="info-sections" aria-label="Vivid Medi information"
+            article class="info-panel" id="features-info"
+                h3Features/h3
+                pVivid Medi accepts clinical input and produces structured draft documentation. The system can generate consult notes, review notes, referral text, handover content, discharge summaries, investigation summaries, and other task-specific clinical documents./p
+                div class="info-grid"
+                    div class="info-note"spanInput/spanText, dictated content, copied notes, investigation information, and other relevant clinical data./div
+                    div class="info-note"spanOutput/spanA draft document matched to the selected task. The clinician reviews and edits before use./div
+                /div
+            /article
 
-            <article class="info-panel" id="workflow-info">
-                <h3>Workflow</h3>
-                <p>Use it around the way the work actually arrives: admission documentation, additional reviews, investigation updates, referral letters, handovers, discharge summaries, and whichever extra data helps the next clinician understand the case. Click the required output, provide the useful facts, and the platform prepares a focused draft for clinician review.</p>
-                <div class="info-grid">
-                    <div class="info-note"><span>From data to document</span>Capture the important clinical details once, then reshape them into the documentation needed for that moment.</div>
-                    <div class="info-note"><span>Personalised build</span>Member workflows differ, so the platform can be tuned around how you actually operate rather than forcing one generic template.</div>
-                </div>
-            </article>
+            article class="info-panel" id="workflow-info"
+                h3Workflow/h3
+                pThe workflow is selection based. Choose the required document type, enter the available clinical information, and generate a draft. Typical use cases include admission documentation, additional reviews, investigation updates, referrals, handovers, discharge summaries, and other supporting documentation./p
+                div class="info-grid"
+                    div class="info-note"spanProcess/spanSelect the output, provide the facts, generate the draft, then review and amend it./div
+                    div class="info-note"spanConfiguration/spanTemplates and workflows can be adjusted for the members usual documentation pattern./div
+                /div
+            /article
 
-            <article class="info-panel" id="privacy-info">
-                <h3>Privacy</h3>
-                <p>Patient consent is always required. Users are responsible for ensuring confidential information is handled appropriately, that workplace policy permits use of the platform, and that any clinical output is reviewed before use. Vivid Medi is not intended for real-time clinical decision-making and remains in a testing phase.</p>
-            </article>
+            article class="info-panel" id="privacy-info"
+                h3Privacy/h3
+                pPatient consent is required before use. Users are responsible for ensuring confidential information is handled appropriately, workplace policy permits use of the platform, and generated documents are checked before use. Vivid Medi is not intended for real-time clinical decision-making. The platform is still in a testing phase./p
+            /article
 
-            <article class="info-panel" id="access-info">
-                <h3>Access</h3>
-                <p>Access is limited to private invitation. New members receive an onboarding appointment tailored to their needs, usually between <strong>1 and 4 hours</strong>. 24-hour assistance is available during setup and early use, because every member's workflow is different and the most valuable version of the platform is the one shaped around how you work.</p>
-                <div class="info-grid">
-                    <div class="info-note"><span>Membership</span>Annual memberships range from <strong>$1,000 to $11,000</strong>, reflecting the value and level of personalisation provided.</div>
-                    <div class="info-note"><span>Current access</span>There are currently <strong>22 active members</strong> and a <strong>2 week build backlog</strong>. Refunds are offered where no substantial benefit can be built for the member.</div>
-                </div>
-            </article>
-        </section>
-    </div>
+            article class="info-panel" id="access-info"
+                h3Access/h3
+                pAccess is by private invitation. Onboarding is provided by appointment and usually takes strong1 to 4 hours/strong, depending on the requested workflow and configuration. Setup support is available because workflows, templates, and code changes may differ between members./p
+                div class="info-grid"
+                    div class="info-note"spanMembership/spanAnnual membership pricing ranges from strong$1,000 to $11,000/strong. Pricing depends on the requested build, configuration, and expected utility./div
+                    div class="info-note"spanCurrent access/spanCurrent status: strong22 active members/strong. Estimated build backlog: strong2 weeks/strong. Refunds are offered if no substantial member value can be produced./div
+                /div
+            /article
+        /section
+    /div
 
-    <script>
+    script
         const codeEl = document.getElementById("code");
         const msgEl = document.getElementById("msg");
         const loginBtn = document.getElementById("loginBtn");
@@ -558,7 +558,7 @@
         function syncBoxes() {
             const raw = codeEl.value.replace(/\s+/g, "").slice(0, 6);
             codeEl.value = raw;
-            boxes.forEach((box, i) => {
+            boxes.forEach((box, i) = {
                 box.textContent = raw[i] ? (revealCode ? raw[i] : "*") : "\u2022";
             });
         }
@@ -583,24 +583,24 @@
             window.location.href = "/";
         }
 
-        document.body.addEventListener("click", (e) => {
+        document.body.addEventListener("click", (e) = {
             if (e.target === revealBtn) return;
             codeEl.focus();
         });
 
-        revealBtn.addEventListener("click", () => {
+        revealBtn.addEventListener("click", () = {
             revealCode = !revealCode;
-            revealBtn.innerHTML = revealCode ? `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 4.3 1.9 5.4l3 3C3.4 9.7 2.2 11 1.4 11.7a.6.6 0 0 0 0 .6C2.6 14.1 6.6 19 12 19c2 0 3.8-.6 5.3-1.4l3.4 3.4 1.1-1.1L3 4.3Zm8.9 10.1-2.7-2.7a2 2 0 0 0 2.7 2.7Zm8.5-2.7C19.2 10 15.5 7 12 7c-.9 0-1.8.2-2.6.5l-1.7-1.7A10.9 10.9 0 0 1 12 5c5.7 0 9.7 4.9 10.9 6.7a.6.6 0 0 1 0 .6c-.4.6-1.3 1.8-2.5 3l-1.4-1.4c.7-.8 1.2-1.4 1.4-1.9Z"/></svg>` : `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 5c-5.7 0-9.7 4.9-10.9 6.7a.6.6 0 0 0 0 .6C2.3 14.1 6.3 19 12 19s9.7-4.9 10.9-6.7a.6.6 0 0 0 0-.6C21.7 9.9 17.7 5 12 5Zm0 12c-4.7 0-8.2-3.9-9.5-5 1.3-1.1 4.8-5 9.5-5s8.2 3.9 9.5 5c-1.3 1.1-4.8 5-9.5 5Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>`;
+            revealBtn.innerHTML = revealCode ? `svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"path fill="currentColor" d="M3 4.3 1.9 5.4l3 3C3.4 9.7 2.2 11 1.4 11.7a.6.6 0 0 0 0 .6C2.6 14.1 6.6 19 12 19c2 0 3.8-.6 5.3-1.4l3.4 3.4 1.1-1.1L3 4.3Zm8.9 10.1-2.7-2.7a2 2 0 0 0 2.7 2.7Zm8.5-2.7C19.2 10 15.5 7 12 7c-.9 0-1.8.2-2.6.5l-1.7-1.7A10.9 10.9 0 0 1 12 5c5.7 0 9.7 4.9 10.9 6.7a.6.6 0 0 1 0 .6c-.4.6-1.3 1.8-2.5 3l-1.4-1.4c.7-.8 1.2-1.4 1.4-1.9Z"//svg` : `svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"path fill="currentColor" d="M12 5c-5.7 0-9.7 4.9-10.9 6.7a.6.6 0 0 0 0 .6C2.3 14.1 6.3 19 12 19s9.7-4.9 10.9-6.7a.6.6 0 0 0 0-.6C21.7 9.9 17.7 5 12 5Zm0 12c-4.7 0-8.2-3.9-9.5-5 1.3-1.1 4.8-5 9.5-5s8.2 3.9 9.5 5c-1.3 1.1-4.8 5-9.5 5Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"//svg`;
             revealBtn.setAttribute("aria-label", revealCode ? "Hide access code" : "Show access code");
             revealBtn.setAttribute("title", revealCode ? "Hide access code" : "Show access code");
             syncBoxes();
         });
         codeEl.addEventListener("input", syncBoxes);
-        codeEl.addEventListener("keydown", (e) => {
+        codeEl.addEventListener("keydown", (e) = {
             if (e.key === "Enter") doLogin();
         });
         loginBtn.addEventListener("click", doLogin);
         codeEl.focus();
-    </script>
-</body>
-</html>
+    /script
+/body
+/html
