@@ -366,6 +366,72 @@ def call_patient():
         return jsonify({"ok": False, "error": f"Twilio request failed: {exc}"}), 502
 
 
+
+@app.post("/api/send-sms")
+@require_auth
+def send_sms():
+    account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
+    auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
+    twilio_number_raw = (os.getenv("TWILIO_NUMBER") or "").strip()
+    twilio_number = normalize_twilio_from_phone(twilio_number_raw)
+
+    missing = [
+        name for name, value in (
+            ("TWILIO_ACCOUNT_SID", account_sid),
+            ("TWILIO_AUTH_TOKEN", auth_token),
+            ("TWILIO_NUMBER", twilio_number_raw),
+        )
+        if not value
+    ]
+    if missing:
+        return jsonify({
+            "ok": False,
+            "error": f"SMS is not configured. Missing: {', '.join(missing)}."
+        }), 503
+    if not twilio_number:
+        return jsonify({
+            "ok": False,
+            "error": "TWILIO_NUMBER must be a valid E.164 phone number, e.g. +614XXXXXXXX."
+        }), 503
+
+    payload = request.get_json(silent=True) or {}
+    recipient = normalize_au_phone(str(payload.get("to") or "").strip())
+    message = str(payload.get("message") or "").strip()
+    if not recipient:
+        return jsonify({
+            "ok": False,
+            "error": "Invalid recipient. Use E.164 (e.g. +614XXXXXXXX) or AU mobile format."
+        }), 400
+    if not message:
+        return jsonify({"ok": False, "error": "Message is required."}), 400
+    if len(message) > 1600:
+        return jsonify({"ok": False, "error": "Message must be 1600 characters or fewer."}), 400
+
+    try:
+        twilio_res = http.post(
+            f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
+            auth=(account_sid, auth_token),
+            data={"To": recipient, "From": twilio_number, "Body": message},
+            timeout=20,
+        )
+        if twilio_res.status_code >= 400:
+            detail = twilio_response_error(twilio_res)
+            return jsonify({"ok": False, "error": f"Twilio SMS failed: {detail}"}), 502
+
+        result = twilio_res.json()
+        message_sid = result.get("sid")
+        app.logger.info("Twilio SMS queued: sid=%s to=%s", message_sid, recipient)
+        return jsonify({
+            "ok": True,
+            "sid": message_sid,
+            "status": result.get("status"),
+            "to": recipient,
+        }), 200
+    except requests.RequestException as exc:
+        app.logger.exception("Twilio SMS request failed")
+        return jsonify({"ok": False, "error": f"Twilio request failed: {exc}"}), 502
+
+
 @app.route("/twiml/connect-patient", methods=["GET", "POST"])
 def twiml_connect_patient():
     validation_error = twilio_validation_error_response()
