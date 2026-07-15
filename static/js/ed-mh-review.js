@@ -213,27 +213,21 @@
       help: "Choose a concise phrase or use Other / free type. Configure text only fills findings supported by the review."
     },
     {
-      id: "risk",
-      title: "Current risk formulation and management",
+      id: "assessment",
+      title: "ASSESSMENT",
+      help: "Spell check / organise identifies supported information from the review and places it in the correct field.",
       fields: [
-        { key: "suicide_self_harm", label: "Suicide / self-harm" },
-        { key: "violence_aggression", label: "Violence / aggression" },
-        { key: "self_neglect_physical", label: "Self-neglect / physical issues" },
-        { key: "awol_vulnerability", label: "AWOL / vulnerability / risk from others" },
-        { key: "dynamic_factors", label: "Changes in dynamic factors" },
-        { key: "protective_factors", label: "Protective factors" },
-        { key: "risk_formulation_management", label: "Current risk formulation and management", rows: 5 }
+        { key: "clinical_progress", label: "Clinical progress" },
+        { key: "working_diagnosis", label: "Working diagnosis" },
+        { key: "response_management", label: "Response to management" }
       ]
     },
     {
-      id: "assessment",
-      title: "ASSESSMENT",
-      help: "Configure text can formulate these fields from the review while preserving uncertainty.",
+      id: "risk",
+      title: "Current risk formulation and management",
+      help: "One concise formulation only. Include supported current risks, relevant factors and management without repeating the review.",
       fields: [
-        { key: "clinical_progress", label: "Clinical progress" },
-        { key: "working_diagnosis", label: "Working diagnosis / formulation" },
-        { key: "response_tolerability", label: "Response and tolerability" },
-        { key: "barriers_discharge", label: "Barriers to discharge" }
+        { key: "risk_formulation_management", label: "Risk formulation and management", rows: 7 }
       ]
     },
     {
@@ -268,17 +262,10 @@
     tosh: "TOSH",
     si: "SI",
     insight_judgement: "Insight / judgement",
-    suicide_self_harm: "Suicide / self-harm",
-    violence_aggression: "Violence / aggression",
-    self_neglect_physical: "Self-neglect / physical issues",
-    awol_vulnerability: "AWOL / vulnerability / risk from others",
-    dynamic_factors: "Changes in dynamic factors",
-    protective_factors: "Protective factors",
-    risk_formulation_management: "Current risk formulation and management",
+    risk_formulation_management: "Risk formulation and management",
     clinical_progress: "Clinical progress",
-    working_diagnosis: "Working diagnosis / formulation",
-    response_tolerability: "Response and tolerability",
-    barriers_discharge: "Barriers to discharge",
+    working_diagnosis: "Working diagnosis",
+    response_management: "Response to management",
     plan: "Plan"
   };
 
@@ -338,15 +325,32 @@
     SECTIONS.forEach((section) => {
       const incoming = raw.sections && raw.sections[section.id];
       if (!incoming || typeof incoming !== "object") return;
+      const incomingFields = incoming.fields && typeof incoming.fields === "object" ? incoming.fields : {};
       clean.sections[section.id].complete = Boolean(incoming.complete);
       clean.sections[section.id].narrative = String(incoming.narrative || "").slice(0, 30000);
       Object.keys(clean.sections[section.id].fields).forEach((key) => {
         if (key === "sources") {
-          clean.sections[section.id].fields[key] = Array.isArray(incoming.fields && incoming.fields[key])
-            ? incoming.fields[key].filter((item) => SOURCE_OPTIONS.includes(item)).slice(0, SOURCE_OPTIONS.length)
+          clean.sections[section.id].fields[key] = Array.isArray(incomingFields[key])
+            ? incomingFields[key].filter((item) => SOURCE_OPTIONS.includes(item)).slice(0, SOURCE_OPTIONS.length)
             : [];
         } else {
-          clean.sections[section.id].fields[key] = String((incoming.fields && incoming.fields[key]) || "").slice(0, 30000);
+          let value = incomingFields[key];
+          if (section.id === "assessment" && key === "response_management" && !value) {
+            value = incomingFields.response_tolerability;
+          }
+          if (section.id === "risk" && key === "risk_formulation_management" && !value) {
+            value = [
+              ["Suicide / self-harm", incomingFields.suicide_self_harm],
+              ["Violence / aggression", incomingFields.violence_aggression],
+              ["Self-neglect / physical issues", incomingFields.self_neglect_physical],
+              ["AWOL / vulnerability / risk from others", incomingFields.awol_vulnerability],
+              ["Changes in dynamic factors", incomingFields.dynamic_factors],
+              ["Protective factors", incomingFields.protective_factors]
+            ].filter((item) => String(item[1] || "").trim())
+              .map((item) => `${item[0]}: ${String(item[1]).trim()}`)
+              .join("\n");
+          }
+          clean.sections[section.id].fields[key] = String(value || "").slice(0, 30000);
         }
       });
     });
@@ -895,27 +899,22 @@
     return Object.values(data).some((value) => Array.isArray(value) ? value.length : String(value || "").trim());
   }
 
-  function appendStructuredSection(lines, heading, sectionId, keys, includeEmpty) {
-    lines.push("", heading);
+  function appendStructuredSection(lines, heading, sectionId, keys) {
     const sectionState = state.sections[sectionId];
+    const sectionLines = [];
     if (sectionState.narrative.trim()) {
-      lines.push(sectionId === "plan" ? numberPlan(sectionState.narrative) : sectionState.narrative.trim());
-      return;
+      sectionLines.push(sectionId === "plan" ? numberPlan(sectionState.narrative) : sectionState.narrative.trim());
+    } else {
+      keys.forEach((key) => {
+        const value = sectionState.fields[key];
+        const clean = Array.isArray(value) ? value.join(", ") : String(value || "").trim();
+        if (!clean) return;
+        if (key === "plan") sectionLines.push(numberPlan(clean));
+        else if (keys.length === 1) sectionLines.push(clean);
+        else sectionLines.push(`${FIELD_LABELS[key]}: ${clean}`);
+      });
     }
-    let added = false;
-    keys.forEach((key) => {
-      const value = sectionState.fields[key];
-      const clean = Array.isArray(value) ? value.join(", ") : String(value || "").trim();
-      if (clean) {
-        if (key === "plan") lines.push(numberPlan(clean));
-        else if (keys.length === 1 && FIELD_LABELS[key].toLowerCase() === heading.toLowerCase()) lines.push(clean);
-        else lines.push(`${FIELD_LABELS[key]}: ${clean}`);
-        added = true;
-      } else if (includeEmpty) {
-        lines.push(key === "plan" ? "Not documented" : `${FIELD_LABELS[key]}: Not documented`);
-      }
-    });
-    if (!added && !includeEmpty) lines.push("Not documented");
+    if (sectionLines.length) lines.push("", heading, ...sectionLines);
   }
 
   function numberPlan(value) {
@@ -925,29 +924,52 @@
     return items.map((item, index) => `${index + 1}. ${item}`).join("\n");
   }
 
-  function buildLocalNote(options) {
-    const includeEmpty = !options || options.includeEmpty !== false;
-    const lines = ["ED MH REVIEW", "", `Patient: ${state.patientIdentifier.trim() || "Not documented"}`];
+  function stripUndocumentedOutput(value) {
+    const headings = new Set([
+      "ED Review Psychiatry", "Current legal status", "Summary", "Review", "Progress",
+      "Patient's account of progress", "MSE", "ASSESSMENT",
+      "Current risk formulation and management", "PLAN"
+    ]);
+    const lines = String(value || "").split(/\r?\n/).filter((line) => {
+      const trimmed = line.trim().replace(/^[-*]\s*/, "");
+      const content = trimmed.includes(":") ? trimmed.slice(trimmed.indexOf(":") + 1).trim() : trimmed;
+      return !/^(?:not (?:formally )?(?:documented|assessed|recorded|provided|specified)|unknown|n\/?a|no (?:relevant )?(?:information|assessment|documentation|findings?|history) (?:is |was )?(?:available|provided|recorded|documented)|no evidence documented(?: in the supplied information)?)\.?$/i.test(content);
+    });
+    const withoutEmptyHeadings = lines.filter((line, index) => {
+      const heading = line.trim().replace(/:$/, "");
+      if (!headings.has(heading)) return true;
+      let next = index + 1;
+      while (next < lines.length && !lines[next].trim()) next += 1;
+      if (next >= lines.length) return false;
+      return !headings.has(lines[next].trim().replace(/:$/, ""));
+    });
+    return withoutEmptyHeadings.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function buildLocalNote() {
+    const lines = ["ED MH REVIEW"];
+    if (state.patientIdentifier.trim()) lines.push("", `Patient: ${state.patientIdentifier.trim()}`);
     const team = state.team.map(formatTeamMember).filter(Boolean);
-    lines.push("", "ED Review Psychiatry", team.length ? team.join(", ") : "Not documented");
-    lines.push("", "Current legal status", legalStatusText() || "Not documented");
-    if (state.legalStatus === "mha") {
-      lines.push(`MHA form: ${state.mhaForm || "Not documented"}`);
-      lines.push(`Expires: ${formatDateTime(state.mhaExpiry) || "Not documented"}`);
+    if (team.length) lines.push("", "ED Review Psychiatry", team.join(", "));
+    const legalStatus = legalStatusText();
+    if (legalStatus) {
+      lines.push("", "Current legal status", legalStatus);
+      if (state.legalStatus === "mha" && state.mhaForm) lines.push(`MHA form: ${state.mhaForm}`);
+      if (state.legalStatus === "mha" && state.mhaExpiry) lines.push(`Expires: ${formatDateTime(state.mhaExpiry)}`);
     }
     if (state.sections.review_details.narrative.trim()) {
       lines.push(`Additional review details: ${state.sections.review_details.narrative.trim()}`);
     }
 
-    appendStructuredSection(lines, "Summary", "summary", ["summary"], includeEmpty);
-    appendStructuredSection(lines, "Review", "review", ["sources", "updates"], includeEmpty);
-    appendStructuredSection(lines, "Progress", "progress", ["behaviour_events", "sleep_intake_adls", "medication", "engagement", "progress_notes"], includeEmpty);
-    appendStructuredSection(lines, "Patient's account of progress", "patient_account", ["current_symptoms", "concerns_goals", "understanding"], includeEmpty);
-    appendStructuredSection(lines, "MSE", "mse", Object.keys(MSE_OPTIONS), includeEmpty);
-    appendStructuredSection(lines, "Current risk formulation and management", "risk", ["suicide_self_harm", "violence_aggression", "self_neglect_physical", "awol_vulnerability", "dynamic_factors", "protective_factors", "risk_formulation_management"], includeEmpty);
-    appendStructuredSection(lines, "ASSESSMENT", "assessment", ["clinical_progress", "working_diagnosis", "response_tolerability", "barriers_discharge"], includeEmpty);
-    appendStructuredSection(lines, "PLAN", "plan", ["plan"], includeEmpty);
-    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    appendStructuredSection(lines, "Summary", "summary", ["summary"]);
+    appendStructuredSection(lines, "Review", "review", ["sources", "updates"]);
+    appendStructuredSection(lines, "Progress", "progress", ["behaviour_events", "sleep_intake_adls", "medication", "engagement", "progress_notes"]);
+    appendStructuredSection(lines, "Patient's account of progress", "patient_account", ["current_symptoms", "concerns_goals", "understanding"]);
+    appendStructuredSection(lines, "MSE", "mse", Object.keys(MSE_OPTIONS));
+    appendStructuredSection(lines, "ASSESSMENT", "assessment", ["clinical_progress", "working_diagnosis", "response_management"]);
+    appendStructuredSection(lines, "Current risk formulation and management", "risk", ["risk_formulation_management"]);
+    appendStructuredSection(lines, "PLAN", "plan", ["plan"]);
+    return stripUndocumentedOutput(lines.join("\n"));
   }
 
   function hasClinicalContent() {
@@ -976,7 +998,7 @@
           action,
           section: sectionId,
           section_data: sectionData(sectionId),
-          context: buildLocalNote({ includeEmpty: false })
+          context: buildLocalNote()
         })
       });
       const data = await response.json().catch(() => ({}));
@@ -986,10 +1008,18 @@
           const suggested = String(data.fields[key] || "").trim();
           if (suggested) state.sections[sectionId].fields[key] = suggested;
         });
-        setSectionMessage(sectionId, "Supported fields configured. Review each entry before completing the section.");
+        setSectionMessage(
+          sectionId,
+          action === "organise"
+            ? "Relevant supported information organised into the correct fields. Review before completing the section."
+            : "Supported fields configured. Review each entry before completing the section."
+        );
       } else if (data.text) {
         state.sections[sectionId].narrative = String(data.text).trim();
         setSectionMessage(sectionId, "Organised text added. Review it before completing the section.");
+      } else if (data.empty) {
+        setSectionMessage(sectionId, "No additional supported information was found, so nothing was added.");
+        return;
       } else {
         throw new Error("No configured text returned");
       }
@@ -1015,7 +1045,7 @@
     button.textContent = "Configuring...";
     output.readOnly = true;
     setOutputMessage("Configuring ED MH Review...");
-    const localNote = buildLocalNote({ includeEmpty: true });
+    const localNote = buildLocalNote();
     try {
       const response = await fetch("/convert-notes", {
         method: "POST",
@@ -1028,7 +1058,7 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `Configuration failed (${response.status})`);
-      output.value = data.clinical_notes || data.output || localNote;
+      output.value = stripUndocumentedOutput(data.clinical_notes || data.output || localNote) || localNote;
       state.savedAt = "";
       state.output = output.value;
       renderNotDocumentedRemovals();
@@ -1062,7 +1092,7 @@
     if (incomplete.length && !window.confirm(`${incomplete.length} section${incomplete.length === 1 ? " is" : "s are"} still marked Draft. Complete the consult anyway?`)) return;
     const output = document.getElementById("edMhOutput");
     if (!output.value.trim()) {
-      output.value = buildLocalNote({ includeEmpty: true });
+      output.value = buildLocalNote();
       state.output = output.value;
     }
     renderNotDocumentedRemovals();
@@ -1279,7 +1309,7 @@
   else init();
 
   window.VividMediEdMhReview = {
-    buildLocalNote: () => buildLocalNote({ includeEmpty: true }),
+    buildLocalNote,
     getState: () => JSON.parse(JSON.stringify(state)),
     loadState: (nextState) => { state = normaliseState(nextState); syncDomFromState(); },
     consultationType: CONSULT_TYPE
