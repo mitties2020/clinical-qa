@@ -12,16 +12,28 @@
     html,body{height:100%;margin:0;font-family:Inter,Segoe UI,sans-serif;background:radial-gradient(1200px 600px at 0% 0%,#1d2740 0%,var(--bg) 55%),linear-gradient(130deg,var(--bg),var(--bg2));color:var(--text)}
     .parent-container{overflow:visible}
     .container{display:flex;height:100%}
-    .saved-outputs-sidebar{width:260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px)}
-    .sidebar-header{padding:14px 16px;font-weight:700;border-bottom:1px solid var(--line)}
+    .saved-outputs-sidebar{position:relative;width:260px;flex:0 0 260px;border-right:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px);transition:width .2s ease,flex-basis .2s ease}
+    .saved-outputs-sidebar.is-collapsed{width:44px;flex-basis:44px;min-width:44px}
+    .saved-outputs-sidebar.is-collapsed .saved-outputs-section,.saved-outputs-sidebar.is-collapsed .appointments-section{display:none}
+    .sidebar-header{padding:10px 10px 10px 16px;font-weight:700;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .sidebar-toggle-btn{width:30px;height:30px;display:grid;place-items:center;flex:0 0 30px;border:1px solid #2da8df;border-radius:8px;background:#0e2037;color:#8ddcff;font-size:22px;line-height:1;cursor:pointer;transition:background .18s ease,border-color .18s ease,transform .18s ease}
+    .sidebar-toggle-btn:hover{background:#14304f;border-color:#62d1ff;transform:translateX(-1px)}
+    .sidebar-toggle-btn:focus-visible{outline:2px solid #7ddcff;outline-offset:2px}
+    .sidebar-expand-btn{position:absolute;top:12px;left:7px;z-index:4}
+    .sidebar-expand-btn:hover{transform:translateX(1px)}
+    .sidebar-expand-btn[hidden]{display:none}
     .saved-notes-list{padding:10px;overflow:auto;height:calc(100% - 55px)}
-    .saved-note-card{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#00000010}
-    .saved-note-header{padding:10px;display:flex;justify-content:space-between;cursor:pointer}
-    .saved-note-title{font-size:12px;color:var(--muted)} .saved-note-content{max-height:0;overflow:hidden;transition:.25s} .saved-note-content.open{max-height:420px}
+    .saved-note-card{border:1px solid #249fd5;border-radius:9px;margin-bottom:9px;background:linear-gradient(135deg,#102039,#142b47);box-shadow:0 4px 14px #00000024;overflow:hidden;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+    .saved-note-card:hover{border-color:#56c9f7;box-shadow:0 5px 17px #00000038}
+    .saved-note-card.open{border-color:#65d5ff;background:linear-gradient(135deg,#112641,#173552)}
+    .saved-note-header{width:100%;padding:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer}
+    .saved-note-header:focus-visible{outline:2px solid #7ddcff;outline-offset:-3px}
+    .saved-note-title{display:block;font-size:12px;font-weight:700;color:#55ccff}.saved-note-content{max-height:0;overflow:hidden;transition:.25s}.saved-note-content.open{max-height:420px}
+    .saved-note-chevron{width:22px;height:22px;display:grid;place-items:center;flex:0 0 22px;border:1px solid #2c8fb8;border-radius:6px;color:#8ddcff;font-size:15px;font-weight:700;background:#071627}
     .saved-note-text{font-size:12px;white-space:pre-wrap;padding:0 10px 10px;color:var(--text)} .saved-note-actions{display:flex;gap:6px;padding:0 10px 10px}
     .saved-note-btn{flex:1;border:1px solid var(--line);background:transparent;color:var(--muted);padding:6px;border-radius:8px}
-    .saved-note-card.open .saved-note-content{display:block;max-height:none}
-    .saved-note-content{display:none;border-top:1px solid var(--line)}
+    .saved-note-card.open .saved-note-content{display:block;max-height:460px;overflow:auto}
+    .saved-note-content{display:none;border-top:1px solid #247ea6;background:#091728}
     .saved-note-meta{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:3px}
     .saved-note-actions{display:grid;grid-template-columns:1fr 1fr 1fr 32px;gap:8px}
     .main-content{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -84,7 +96,11 @@
     html[data-stealth="on"] .page-title{font-size:12px}
     html[data-stealth="on"] .logo-main{display:none}
     html[data-stealth="on"] .saved-note-title, html[data-stealth="on"] .sidebar-header{color:#444}
-    @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px}}
+    html[data-stealth="on"] .saved-note-header{color:#222}
+    html[data-stealth="on"] .saved-note-content{background:#fafafa;border-top-color:#d0d0d0}
+    html[data-stealth="on"] .saved-note-chevron{background:#f3f3f3;color:#444;border-color:#c8c8c8}
+    html[data-stealth="on"] .sidebar-toggle-btn{background:#f3f3f3;color:#444;border-color:#c8c8c8}
+    @media (max-width:1100px){.input-output-grid,.qa-grid,.controls-row{grid-template-columns:1fr}.saved-outputs-sidebar{width:220px;flex-basis:220px}.saved-outputs-sidebar.is-collapsed{width:44px;flex-basis:44px}}
   </style>
   <link rel="stylesheet" href="/static/appointments.css">
   <link rel="stylesheet" href="/static/ed-mh-review.css?v=20260716-2">
@@ -92,9 +108,10 @@
 </head>
 <body>
 <div class="container">
-  <aside class="saved-outputs-sidebar">
+  <aside class="saved-outputs-sidebar" id="savedOutputsSidebar" aria-label="Saved outputs and appointments">
+    <button class="sidebar-toggle-btn sidebar-expand-btn" id="sidebarExpandBtn" type="button" aria-label="Expand saved outputs sidebar" title="Expand sidebar" hidden>&gt;</button>
     <section class="saved-outputs-section" aria-label="Saved Outputs">
-      <div class="sidebar-header">Saved Outputs</div>
+      <div class="sidebar-header"><span>Saved Outputs</span><button class="sidebar-toggle-btn" id="sidebarCollapseBtn" type="button" aria-label="Temporarily hide saved outputs sidebar" title="Hide sidebar">&lt;</button></div>
       <div class="saved-notes-list" id="savedNotesList"><div class="empty-state">No saved outputs yet</div></div>
     </section>
     <section class="appointments-section" id="appointmentsSection" aria-label="Appointments">
@@ -185,7 +202,9 @@ let micRecognition=null;
 let micFinalBase="";
 let micIsActive=false;
 let clinicalQuestionThread=[];
-function initApp(){populateConsultTypes();bindUIEvents();setTheme("night");setFocusMode(false);setMode("notes");renderSavedOutputs();initMicDictation();connectTranscriptSocket();}
+function initApp(){populateConsultTypes();bindUIEvents();bindSavedSidebarControls();setTheme("night");setFocusMode(false);setMode("notes");renderSavedOutputs();initMicDictation();connectTranscriptSocket();}
+function setSavedSidebarCollapsed(collapsed){const sidebar=document.getElementById("savedOutputsSidebar");const collapseBtn=document.getElementById("sidebarCollapseBtn");const expandBtn=document.getElementById("sidebarExpandBtn");if(!sidebar||!collapseBtn||!expandBtn)return;sidebar.classList.toggle("is-collapsed",collapsed);sidebar.setAttribute("aria-expanded",String(!collapsed));collapseBtn.hidden=collapsed;expandBtn.hidden=!collapsed;}
+function bindSavedSidebarControls(){const collapseBtn=document.getElementById("sidebarCollapseBtn");const expandBtn=document.getElementById("sidebarExpandBtn");if(collapseBtn)collapseBtn.addEventListener("click",()=>setSavedSidebarCollapsed(true));if(expandBtn)expandBtn.addEventListener("click",()=>setSavedSidebarCollapsed(false));setSavedSidebarCollapsed(false);}
 function populateConsultTypes(){const select=document.getElementById("consultType");if(!select){console.error("Missing #consultType select");return;}select.innerHTML="";for(const type of CONSULT_TYPES){const option=document.createElement("option");option.value=type;option.textContent=type;select.appendChild(option);}selectedConsultType=CONSULT_TYPES[0];select.value=selectedConsultType;}
 function bindUIEvents(){const convertBtn=document.getElementById("convertBtn");const clearBtn=document.getElementById("clearBtn");const clearInputBtn=document.getElementById("clearInputBtn");const copyBtn=document.getElementById("copyBtn");const completeBtn=document.getElementById("completeConsultBtn");const editBtn=document.getElementById("editOutputBtn");const clearOutputBtn=document.getElementById("clearOutputBtn");const input=document.getElementById("clinicalInput");const notesTab=document.getElementById("consultNotesTab");const questionsTab=document.getElementById("clinicalQuestionsTab");const themeSwitch=document.getElementById("themeSwitch");const stealthSwitch=document.getElementById("stealthSwitch");const askBtn=document.getElementById("askBtn");const clearQaBtn=document.getElementById("clearQaBtn");const copyAnswerBtn=document.getElementById("copyAnswerBtn");const consultType=document.getElementById("consultType");const callBtn=document.getElementById("callPatientBtn");const startConsultBtn=document.getElementById("startConsultBtn");if(convertBtn)convertBtn.addEventListener("click",()=>generateOutput(selectedConsultType));if(clearBtn)clearBtn.addEventListener("click",clearForm);if(clearInputBtn)clearInputBtn.addEventListener("click",clearForm);if(copyBtn)copyBtn.addEventListener("click",copyOutput);if(completeBtn)completeBtn.addEventListener("click",completeCurrentAppointmentConsult);if(editBtn)editBtn.addEventListener("click",editCurrentOutput);if(clearOutputBtn)clearOutputBtn.addEventListener("click",clearOutput);if(askBtn)askBtn.addEventListener("click",askQuestion);if(clearQaBtn)clearQaBtn.addEventListener("click",clearQuestion);if(copyAnswerBtn)copyAnswerBtn.addEventListener("click",copyAnswer);if(callBtn)callBtn.addEventListener("click",callPatient);if(startConsultBtn)startConsultBtn.addEventListener("click",startAppointmentConsult);if(consultType){consultType.addEventListener("change",e=>{selectedConsultType=e.target.value||CONSULT_TYPES[0];});}if(input){input.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();generateOutput(selectedConsultType);}});}const qInput=document.getElementById("clinicalQuestion");if(qInput){qInput.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askQuestion();}});}if(notesTab)notesTab.addEventListener("click",()=>setMode("notes"));if(questionsTab)questionsTab.addEventListener("click",()=>setMode("questions"));if(themeSwitch){themeSwitch.addEventListener("change",e=>setTheme(e.target.checked?"day":"night"));}if(stealthSwitch){stealthSwitch.addEventListener("change",e=>setFocusMode(e.target.checked));}const authBtn=document.getElementById("authBtn");if(authBtn){authBtn.addEventListener("click",async()=>{await fetch("/auth/logout",{method:"POST"});window.location.href="/login";});}}
 async function callPatient(){const phone=(document.getElementById("patientPhone")?.value||"").trim();const callStatus=document.getElementById("callStatus");const callBtn=document.getElementById("callPatientBtn");if(!phone){if(callStatus)callStatus.textContent="Enter a patient phone number first.";return;}if(callStatus)callStatus.textContent="Placing call...";if(callBtn)callBtn.disabled=true;try{const res=await fetch('/api/call-patient',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({patientPhone:phone})});const data=await res.json().catch(()=>({}));if(!res.ok){const fallback=res.status===401?"Please log in again before calling.":res.status===404?"Calling endpoint is not available in this preview. Use the live Flask app URL.":`Call failed (${res.status})`;throw new Error(data?.error||fallback);}if(callStatus)callStatus.textContent="Call started. Your phone and the patient phone should ring now.";}catch(err){if(callStatus)callStatus.textContent=`Call failed: ${err.message||'Unknown error'}`;}finally{if(callBtn)callBtn.disabled=false;}}
@@ -264,7 +283,7 @@ function completeCurrentAppointmentConsult(){const output=document.getElementByI
 function editCurrentOutput(){const output=document.getElementById("outputBox").textContent.trim();if(!output||output==="Output will appear here...")return;const input=document.getElementById("clinicalInput");input.value=output;input.focus();document.getElementById("outputBox").textContent="Output moved back to input for editing. Add further clinical information, then convert again.";}
 function clearOutput(){document.getElementById("outputBox").textContent="Output will appear here...";}
 function saveToSidebar(content,type){if(!content||content.includes("appear here"))return;const item={id:Date.now()+Math.random(),patientName:type==="question"?"Clinical question":"Existing patient",consultType:type==="question"?"Q&A":selectedConsultType,date:new Date().toLocaleString(),content,expanded:false};savedOutputs.unshift(item);savedOutputs=savedOutputs.slice(0,40);localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();}
-function renderSavedOutputs(){const list=document.getElementById("savedNotesList");if(!list)return;if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}list.innerHTML=savedOutputs.map((raw,idx)=>{const item=normaliseSavedOutput(raw);savedOutputs[idx]=item;return `<div class="saved-note-card ${item.expanded?"open":""}"><button class="saved-note-header" type="button" onclick="toggleSavedOutput(${idx})"><span><span class="saved-note-title">${escapeHtml(item.patientName)}</span><span class="saved-note-meta">${escapeHtml(item.consultType)} | ${escapeHtml(item.date)}</span></span><span>${item.expanded?"v":">"}</span></button><div class="saved-note-content"><div class="saved-note-text">${escapeHtml(item.content)}</div><div class="saved-note-actions"><button class="saved-note-btn" onclick="copySavedOutput(${idx})">Copy</button><button class="saved-note-btn" onclick="editSavedOutput(${idx})">Edit</button><button class="saved-note-btn" onclick="closeSavedOutput(${idx})">Close</button><button class="saved-note-btn" onclick="deleteSavedOutput(${idx})">x</button></div></div></div>`;}).join('');localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));}
+function renderSavedOutputs(){const list=document.getElementById("savedNotesList");if(!list)return;if(!savedOutputs.length){list.innerHTML='<div class="empty-state">No saved outputs yet</div>';return;}list.innerHTML=savedOutputs.map((raw,idx)=>{const item=normaliseSavedOutput(raw);savedOutputs[idx]=item;const contentId=`saved-note-content-${idx}`;return `<div class="saved-note-card ${item.expanded?"open":""}"><button class="saved-note-header" type="button" onclick="toggleSavedOutput(${idx})" aria-expanded="${item.expanded}" aria-controls="${contentId}"><span><span class="saved-note-title">${escapeHtml(item.patientName)}</span><span class="saved-note-meta">${escapeHtml(item.consultType)} | ${escapeHtml(item.date)}</span></span><span class="saved-note-chevron" aria-hidden="true">${item.expanded?"-":"+"}</span></button><div class="saved-note-content" id="${contentId}"><div class="saved-note-text">${escapeHtml(item.content)}</div><div class="saved-note-actions"><button class="saved-note-btn" onclick="copySavedOutput(${idx})">Copy</button><button class="saved-note-btn" onclick="editSavedOutput(${idx})">Edit</button><button class="saved-note-btn" onclick="closeSavedOutput(${idx})">Close</button><button class="saved-note-btn" onclick="deleteSavedOutput(${idx})">x</button></div></div></div>`;}).join('');localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));}
 function normaliseSavedOutput(item){return{id:item.id||String(Date.now()+Math.random()),patientName:item.patientName||item.title||"Existing patient",consultType:item.consultType||item.type||"Consult",date:item.date||new Date().toLocaleString(),content:item.content||"",expanded:Boolean(item.expanded),appointmentGuid:item.appointmentGuid||"",edMhDraft:item.edMhDraft||null};}
 window.toggleSavedOutput=function(idx){savedOutputs[idx].expanded=!savedOutputs[idx].expanded;localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();};
 window.closeSavedOutput=function(idx){savedOutputs[idx].expanded=false;localStorage.setItem("vivid_saved_outputs",JSON.stringify(savedOutputs));renderSavedOutputs();};

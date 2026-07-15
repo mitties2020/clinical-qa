@@ -112,6 +112,22 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn('/static/js/ed-mh-review.js?v=20260716-3', page)
         self.assertIn('edMhDraft:item.edMhDraft||null', page)
 
+    def test_saved_outputs_use_expandable_blue_tabs_and_collapsible_sidebar(self):
+        _app_module, client = self.authenticated_client()
+
+        response = client.get("/patient-list")
+        page = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="savedOutputsSidebar"', page)
+        self.assertIn('id="sidebarCollapseBtn"', page)
+        self.assertIn('id="sidebarExpandBtn"', page)
+        self.assertIn("bindSavedSidebarControls()", page)
+        self.assertIn('sidebar.classList.toggle("is-collapsed",collapsed)', page)
+        self.assertIn('class="saved-note-chevron"', page)
+        self.assertIn('aria-expanded="${item.expanded}"', page)
+        self.assertIn("border:1px solid #249fd5", page)
+
     def test_ed_mh_review_client_contains_requested_people_sections_and_mha_forms(self):
         script = (Path(__file__).parents[1] / "static" / "js" / "ed-mh-review.js").read_text(encoding="utf-8")
 
