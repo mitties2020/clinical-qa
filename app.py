@@ -1220,20 +1220,20 @@ ED_MH_REVIEW_NOTE_STRUCTURE = (
     "Progress\n"
     "Patient's account of progress\n"
     "MSE\n"
-    "Current risk formulation and management\n"
     "ASSESSMENT\n"
+    "Current risk formulation and management\n"
     "PLAN\n\n"
     "Required content and safeguards:\n"
     "- Preserve the recorded psychiatry team names and roles exactly.\n"
     "- State voluntary or Mental Health Act 2014 status exactly as supplied. If a form and expiry are supplied, include both. Never infer a form, legal status or expiry.\n"
     "- In Review, preserve whether information came from the patient, nursing, family, records, allied health or other collateral. Do not present collateral as the patient's own account.\n"
     "- In Progress, cover behaviour/significant events, sleep/intake/ADLs, medication adherence/PRNs/adverse effects and engagement with treatment when documented.\n"
-    "- Keep the Patient's account section clearly attributed to the patient. Current symptoms, concerns, requests and goals may be carried forward from earlier supplied material only when the timing clearly remains current. Otherwise write 'Not documented'.\n"
+    "- Keep the Patient's account section clearly attributed to the patient. Current symptoms, concerns, requests and goals may be carried forward from earlier supplied material only when the timing clearly remains current. Omit any unsupported item.\n"
     "- MSE headings are Appearance, Behaviour, Speech, Mood, Affect, Thought form, Thought content, Perception, Cognition, TOSH, SI and Insight/judgement. Use only observed or explicitly documented findings. Do not invent normal MSE findings or convert diagnosis, history or absence of comment into a normal finding.\n"
-    "- Risk headings are Suicide/self-harm, Violence/aggression, Self-neglect/physical issues, AWOL/vulnerability/risk from others, Changes in dynamic factors, Protective factors, and Current risk formulation and management. Use structured clinical judgement: link current evidence, dynamic factors, protective factors and concrete management. Do not claim that risk is absent or eliminated.\n"
-    "- ASSESSMENT headings are Clinical progress, Working diagnosis/formulation, Response and tolerability, and Barriers to discharge. Formulate from supplied information only and preserve uncertainty or differential diagnoses.\n"
+    "- ASSESSMENT has only three headings: Clinical progress, Working diagnosis, and Response to management. Formulate from supplied information only, preserve uncertainty or differential diagnoses, and avoid repeating the preceding review.\n"
+    "- Current risk formulation and management comes immediately after ASSESSMENT and is one concise integrated formulation, not a list of repeated risk domains. Link only documented current evidence, relevant dynamic or protective factors and concrete management. Do not claim that risk is absent or eliminated.\n"
     "- PLAN must be a numbered list. Retain medication names, doses, routes, frequencies, observations, review intervals, escalation instructions and responsible teams exactly when provided. Do not invent orders, medication changes, leave, legal decisions or follow-up.\n"
-    "- Omit empty filler where safe, but use 'Not documented' for a clinically important requested field that has no supplied information.\n"
+    "- Omit every field or section that was not formally documented or assessed. Never print placeholders such as 'Not documented', 'Not assessed', 'Unknown', 'N/A' or statements explaining that information is absent.\n"
     "- This is a clinician-authored review aid. The final wording must make uncertainties and information-source limits visible and must not claim WA Health compliance is guaranteed."
 )
 
@@ -1244,8 +1244,8 @@ ED_MH_REVIEW_SECTION_FIELDS = {
     "progress": ("behaviour_events", "sleep_intake_adls", "medication", "engagement", "progress_notes"),
     "patient_account": ("current_symptoms", "concerns_goals", "understanding"),
     "mse": ("appearance", "behaviour", "speech", "mood", "affect", "thought_form", "thought_content", "perception", "cognition", "tosh", "si", "insight_judgement"),
-    "risk": ("suicide_self_harm", "violence_aggression", "self_neglect_physical", "awol_vulnerability", "dynamic_factors", "protective_factors", "risk_formulation_management"),
-    "assessment": ("clinical_progress", "working_diagnosis", "response_tolerability", "barriers_discharge"),
+    "assessment": ("clinical_progress", "working_diagnosis", "response_management"),
+    "risk": ("risk_formulation_management",),
     "plan": ("plan",),
 }
 
@@ -1261,13 +1261,14 @@ ED_MH_REVIEW_SECTION_TITLES = {
     "plan": "PLAN",
 }
 
-ED_MH_REVIEW_STRUCTURED_ASSIST_SECTIONS = {"patient_account", "mse", "assessment"}
+ED_MH_REVIEW_STRUCTURED_ASSIST_SECTIONS = {"patient_account", "mse", "assessment", "risk"}
 
 ED_MH_REVIEW_ASSIST_SYSTEM_PROMPT = (
     "You assist a qualified clinician to edit an emergency department psychiatry review. "
     "Use only facts in the supplied section and review context. Never invent observations, denials, symptoms, risk levels, legal status, Mental Health Act forms, diagnoses, collateral, medication effects or plans. "
-    "Preserve source attribution, timing, uncertainty and negation. Keep language concise, neutral and clinically familiar in Western Australian psychiatry. "
-    "Do not make treatment decisions and do not claim risk is absent or eliminated. If information is unsupported, leave it blank or state 'Not documented' only when the requested output format requires text."
+    "Identify relevant supported information across the supplied review, place it only in the correct requested field, remove repetition, and preserve source attribution, timing, uncertainty and negation. "
+    "Keep language concise, neutral and clinically familiar in Western Australian psychiatry. Do not make treatment decisions and do not claim risk is absent or eliminated. "
+    "If information was not formally documented or assessed, leave the field blank and omit it entirely. Never output an absence placeholder or explain that information is missing."
 )
 
 MENOVA_ED_PE_NOTE_STRUCTURE = (
@@ -1514,6 +1515,23 @@ def clean_ed_mh_review_value(value, limit: int = 12000):
         }
     return str(value or "").strip()[:limit]
 
+
+def clean_ed_mh_review_assist_text(value, limit: int = 12000) -> str:
+    placeholder = re.compile(
+        r"^(?:not (?:formally )?(?:documented|assessed|recorded|provided|specified)|unknown|n/?a|"
+        r"no (?:relevant )?(?:information|assessment|documentation|findings?|history) "
+        r"(?:is |was )?(?:available|provided|recorded|documented)|"
+        r"no evidence documented(?: in the supplied information)?)\.?$",
+        flags=re.IGNORECASE,
+    )
+    kept = []
+    for raw_line in str(value or "").splitlines():
+        stripped = re.sub(r"^[-*]\s*", "", raw_line.strip())
+        content = stripped.split(":", 1)[1].strip() if ":" in stripped else stripped
+        if not placeholder.fullmatch(content):
+            kept.append(raw_line.rstrip())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()[:limit]
+
 @app.get("/", endpoint="index")
 def index():
     if session.get("authenticated") is True:
@@ -1675,14 +1693,20 @@ def ed_mh_review_assist():
     title = ED_MH_REVIEW_SECTION_TITLES[section]
     section_json = json.dumps(section_data, ensure_ascii=False, indent=2)
     try:
-        if action == "configure" and section in ED_MH_REVIEW_STRUCTURED_ASSIST_SECTIONS:
+        if section in ED_MH_REVIEW_STRUCTURED_ASSIST_SECTIONS:
             keys_json = json.dumps(list(allowed_keys), ensure_ascii=False)
+            structured_task = (
+                "Correct spelling and grammar in existing values, then identify any additional clearly supported information in the review context and place it in the correct field. Remove repetition and keep the wording concise."
+                if action == "organise"
+                else
+                "Populate or carefully improve the structured fields using only clearly supported information from the review context."
+            )
             user_content = (
                 f"ED MH Review section: {title}\n"
-                "Task: populate or carefully improve the structured fields from the supplied review context. "
+                f"Task: {structured_task} "
                 "Return one JSON object only, with exactly the requested keys and string values. "
                 "Do not include a code fence or explanatory text. Use an empty string where the context does not support a field. "
-                "Do not overwrite an explicit existing value with a conflicting inference.\n\n"
+                "Do not overwrite an explicit existing value with a conflicting inference. Do not return absence placeholders.\n\n"
                 f"Required keys: {keys_json}\n\n"
                 f"Existing section data:\n{section_json}\n\n"
                 f"Review context:\n{context}"
@@ -1695,15 +1719,16 @@ def ed_mh_review_assist():
             )
             parsed = parse_json_object(answer)
             if parsed is None:
-                return jsonify({"text": answer, "format": "narrative"})
+                cleaned_answer = clean_ed_mh_review_assist_text(answer)
+                return jsonify({"text": cleaned_answer, "format": "narrative", "empty": not bool(cleaned_answer)})
             fields = {
-                key: str(parsed.get(key) or "").strip()[:12000]
+                key: clean_ed_mh_review_assist_text(parsed.get(key))
                 for key in allowed_keys
             }
             return jsonify({"fields": fields, "format": "fields"})
 
         task = (
-            "Correct spelling and grammar, remove repetition, and make this section succinct while preserving every clinical fact, source, time reference, uncertainty and negation."
+            "Correct spelling and grammar, identify relevant supported information across the review context, remove repetition, and make this section succinct while preserving every clinical fact, source, time reference, uncertainty and negation. Omit unsupported or unassessed items entirely."
             if action == "organise"
             else
             "Configure this material into a polished section for an ED psychiatry review. Keep the requested section focus, preserve source attribution and uncertainty, and do not add unsupported normal findings or risk conclusions."
@@ -1721,7 +1746,8 @@ def ed_mh_review_assist():
             max_tokens=1800,
             timeout=90,
         )
-        return jsonify({"text": answer, "format": "narrative"})
+        cleaned_answer = clean_ed_mh_review_assist_text(answer)
+        return jsonify({"text": cleaned_answer, "format": "narrative", "empty": not bool(cleaned_answer)})
     except Exception as e:
         print("ED MH REVIEW ASSIST ERROR:", repr(e))
         return jsonify({"error": "ED MH Review writing assist failed"}), 502

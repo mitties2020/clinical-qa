@@ -69,13 +69,17 @@ class RouteRegistrationTests(unittest.TestCase):
             "Appearance",
             "Thought content",
             "Insight/judgement",
-            "Working diagnosis/formulation",
+            "Working diagnosis",
             "PLAN must be a numbered list",
         ]:
             self.assertIn(heading, prompt)
         self.assertIn("patient statements, collateral, observed MSE findings", prompt)
         self.assertIn("Never infer a form, legal status or expiry", prompt)
         self.assertIn("Do not invent normal MSE findings", prompt)
+        self.assertLess(prompt.index("ASSESSMENT"), prompt.index("Current risk formulation and management"))
+        self.assertNotIn("Barriers to discharge", prompt)
+        self.assertIn("Never print placeholders", prompt)
+        self.assertNotIn("use 'Not documented'", prompt)
 
     def test_ed_mh_review_gets_longer_completion_budget_and_timeout(self):
         import app as app_module
@@ -105,7 +109,7 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn('id="edMhReviewWorkspace"', page)
         self.assertIn('"ED MH Review"', page)
         self.assertIn('/static/ed-mh-review.css', page)
-        self.assertIn('/static/js/ed-mh-review.js', page)
+        self.assertIn('/static/js/ed-mh-review.js?v=20260716-2', page)
         self.assertIn('edMhDraft:item.edMhDraft||null', page)
 
     def test_ed_mh_review_client_contains_requested_people_sections_and_mha_forms(self):
@@ -132,6 +136,33 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn('data-edmh-action="remove-not-documented"', script)
         self.assertIn("function removeNotDocumentedLine", script)
         self.assertIn(".edmh-not-documented-row button", stylesheet)
+
+    def test_ed_mh_review_uses_simplified_assessment_and_single_risk_formulation(self):
+        import app as app_module
+
+        script = (Path(__file__).parents[1] / "static" / "js" / "ed-mh-review.js").read_text(encoding="utf-8")
+
+        self.assertEqual(
+            app_module.ED_MH_REVIEW_SECTION_FIELDS["assessment"],
+            ("clinical_progress", "working_diagnosis", "response_management"),
+        )
+        self.assertEqual(
+            app_module.ED_MH_REVIEW_SECTION_FIELDS["risk"],
+            ("risk_formulation_management",),
+        )
+        self.assertLess(script.index('id: "assessment"'), script.index('id: "risk"'))
+        self.assertIn('label: "Response to management"', script)
+        self.assertNotIn('label: "Barriers to discharge"', script)
+        self.assertNotIn("includeEmpty", script)
+        self.assertIn("function stripUndocumentedOutput", script)
+
+    def test_ed_mh_review_assist_removes_absence_placeholders(self):
+        import app as app_module
+
+        text = "Clinical progress: Not documented\nWorking diagnosis: Psychosis\nResponse to management: Not assessed"
+        cleaned = app_module.clean_ed_mh_review_assist_text(text)
+
+        self.assertEqual(cleaned, "Working diagnosis: Psychosis")
 
     def test_ed_mh_review_assist_requires_authentication(self):
         import app as app_module
@@ -166,6 +197,28 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertEqual(fields["behaviour"], "Guarded")
         self.assertNotIn("invented_key", fields)
         self.assertIn("Return one JSON object only", deepseek.call_args.args[1])
+
+    def test_ed_mh_review_organise_places_supported_assessment_information_in_fields(self):
+        app_module, client = self.authenticated_client()
+        answer = '{"clinical_progress":"Settling", "working_diagnosis":"Psychosis", "response_management":"Not assessed"}'
+        payload = {
+            "action": "organise",
+            "section": "assessment",
+            "section_data": {},
+            "context": "The patient is settling. Working diagnosis is psychosis.",
+        }
+
+        with patch.object(app_module, "DEEPSEEK_API_KEY", "test-key"), patch.object(
+            app_module, "call_deepseek", return_value=answer
+        ) as deepseek:
+            response = client.post("/api/ed-mh-review/assist", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        fields = response.get_json()["fields"]
+        self.assertEqual(fields["clinical_progress"], "Settling")
+        self.assertEqual(fields["working_diagnosis"], "Psychosis")
+        self.assertEqual(fields["response_management"], "")
+        self.assertIn("identify any additional clearly supported information", deepseek.call_args.args[1])
 
     def test_ed_mh_review_assist_rejects_unknown_section(self):
         app_module, client = self.authenticated_client()
