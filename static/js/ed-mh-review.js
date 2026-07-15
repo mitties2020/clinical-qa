@@ -568,6 +568,9 @@
           <div class="edmh-save-status" id="edmhSaveStatus" role="status"></div>
         </div>
         <div class="edmh-form-body">${SECTIONS.map(renderSection).join("")}</div>
+        <div class="edmh-form-footer">
+          <button class="edmh-action edmh-clear-review" type="button" data-edmh-action="clear-review">Clear all / start again</button>
+        </div>
       </div>
       <aside class="edmh-output-panel">
         <div class="edmh-output-heading">
@@ -1149,7 +1152,7 @@
   }
 
   function clearReview() {
-    if (!window.confirm("Clear this ED MH Review draft, including all sections and output?")) return;
+    if (!window.confirm("Clear all ED MH Review information and start again?")) return;
     try { localStorage.removeItem(activeDraftKey || currentDraftKey()); } catch { /* no-op */ }
     state = createDefaultState();
     const appointment = currentAppointment();
@@ -1207,6 +1210,8 @@
       editOutput();
     } else if (action === "delete-output") {
       deleteOutput();
+    } else if (action === "clear-review") {
+      clearReview();
     } else if (action === "remove-not-documented") {
       removeNotDocumentedLine(button.dataset.edmhLineIndex);
     }

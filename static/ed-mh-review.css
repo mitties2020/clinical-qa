@@ -81,6 +81,24 @@ body.edmh-active .controls-row label {
   scrollbar-color: var(--line) transparent;
 }
 
+.edmh-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.edmh-clear-review {
+  min-width: 190px;
+  color: var(--danger);
+  border-color: #f8717166;
+}
+
+.edmh-clear-review:hover {
+  background: #f8717114;
+}
+
 .edmh-section {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -503,5 +521,9 @@ html[data-theme="day"] .edmh-output-panel {
   .edmh-section-actions .edmh-action,
   .edmh-output-actions .edmh-action {
     flex: 1 1 100%;
+  }
+
+  .edmh-clear-review {
+    width: 100%;
   }
 }
