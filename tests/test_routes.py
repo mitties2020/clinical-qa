@@ -108,8 +108,8 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn('id="standardConsultWorkspace"', page)
         self.assertIn('id="edMhReviewWorkspace"', page)
         self.assertIn('"ED MH Review"', page)
-        self.assertIn('/static/ed-mh-review.css', page)
-        self.assertIn('/static/js/ed-mh-review.js?v=20260716-2', page)
+        self.assertIn('/static/ed-mh-review.css?v=20260716-2', page)
+        self.assertIn('/static/js/ed-mh-review.js?v=20260716-3', page)
         self.assertIn('edMhDraft:item.edMhDraft||null', page)
 
     def test_ed_mh_review_client_contains_requested_people_sections_and_mha_forms(self):
@@ -136,6 +136,15 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn('data-edmh-action="remove-not-documented"', script)
         self.assertIn("function removeNotDocumentedLine", script)
         self.assertIn(".edmh-not-documented-row button", stylesheet)
+
+    def test_ed_mh_review_has_bottom_clear_all_control(self):
+        script = (Path(__file__).parents[1] / "static" / "js" / "ed-mh-review.js").read_text(encoding="utf-8")
+        stylesheet = (Path(__file__).parents[1] / "static" / "ed-mh-review.css").read_text(encoding="utf-8")
+
+        self.assertIn('data-edmh-action="clear-review"', script)
+        self.assertIn("Clear all / start again", script)
+        self.assertIn('action === "clear-review"', script)
+        self.assertIn(".edmh-form-footer", stylesheet)
 
     def test_ed_mh_review_uses_simplified_assessment_and_single_risk_formulation(self):
         import app as app_module
