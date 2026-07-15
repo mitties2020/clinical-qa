@@ -993,6 +993,7 @@ CONSULT_TYPE_INSTRUCTIONS = {
     "medicinal cannabis / cbd / thc consult": "Focus on indication, prior therapies, contraindications, product rationale, risk counselling, and monitoring plan.",
     "chronic pain consult": "Focus on pain mechanism, function impact, multimodal strategy, opioid risk mitigation, and follow-up.",
     "mental health review": "Focus on mental state, risk assessment, functioning, diagnosis refinement, and safety plan.",
+    "ed mh review": "Use a structured Western Australian emergency department psychiatry review format. Preserve source attribution and time course, distinguish the patient's account from collateral and observation, document mental state and current risk without inventing findings, and finish with a clinically reasoned assessment and numbered plan.",
     "wa mental health discharge summary": "Write a polished, comprehensive WA hospital psychiatry discharge summary using NACS-style psychiatric discharge headings. Synthesize multiple pasted admission notes into a coherent consultant-level narrative covering admission problems, psychiatric history, mental state, risk on admission and discharge, formulation, management, investigations, medications, adverse reactions, discharge advice, follow-up, and clear communication to GP/CMHT/patient or carer.",
     "men’s health consult": "Focus on men's health concerns, sexual/reproductive history, cardiovascular/metabolic risk, and shared plan.",
     "premature ejaculation and erectile dysfunction": "Use Menova ED/PE assessment style. Determine whether the presentation is ED-predominant, PE-predominant, combined ED+PE, or unclear. Focus on ID/telehealth consent, symptom duration/onset/severity, libido, prior treatments, psychosexual contributors, cardiovascular/metabolic and medication safety, contraindications, suitability, off-label consent where relevant, and a management plan that is congruent with the documented history.",
@@ -1208,6 +1209,67 @@ WA_MENTAL_HEALTH_DISCHARGE_SUMMARY_STRUCTURE = (
     "- Do not provide legal advice, do not claim WA Health compliance is guaranteed, and do not invent dates, diagnoses, MHA status, risk assessments, follow-up appointments, allergies, medication supply, pathology, or collateral."
 )
 
+ED_MH_REVIEW_NOTE_STRUCTURE = (
+    "Use this exact practical note style for ED MH Review. Plain text only and copy-paste ready; do not use Markdown.\n"
+    "Heading/order:\n"
+    "Patient\n"
+    "ED Review Psychiatry\n"
+    "Current legal status\n"
+    "Summary\n"
+    "Review\n"
+    "Progress\n"
+    "Patient's account of progress\n"
+    "MSE\n"
+    "Current risk formulation and management\n"
+    "ASSESSMENT\n"
+    "PLAN\n\n"
+    "Required content and safeguards:\n"
+    "- Preserve the recorded psychiatry team names and roles exactly.\n"
+    "- State voluntary or Mental Health Act 2014 status exactly as supplied. If a form and expiry are supplied, include both. Never infer a form, legal status or expiry.\n"
+    "- In Review, preserve whether information came from the patient, nursing, family, records, allied health or other collateral. Do not present collateral as the patient's own account.\n"
+    "- In Progress, cover behaviour/significant events, sleep/intake/ADLs, medication adherence/PRNs/adverse effects and engagement with treatment when documented.\n"
+    "- Keep the Patient's account section clearly attributed to the patient. Current symptoms, concerns, requests and goals may be carried forward from earlier supplied material only when the timing clearly remains current. Otherwise write 'Not documented'.\n"
+    "- MSE headings are Appearance, Behaviour, Speech, Mood, Affect, Thought form, Thought content, Perception, Cognition, TOSH, SI and Insight/judgement. Use only observed or explicitly documented findings. Do not invent normal MSE findings or convert diagnosis, history or absence of comment into a normal finding.\n"
+    "- Risk headings are Suicide/self-harm, Violence/aggression, Self-neglect/physical issues, AWOL/vulnerability/risk from others, Changes in dynamic factors, Protective factors, and Current risk formulation and management. Use structured clinical judgement: link current evidence, dynamic factors, protective factors and concrete management. Do not claim that risk is absent or eliminated.\n"
+    "- ASSESSMENT headings are Clinical progress, Working diagnosis/formulation, Response and tolerability, and Barriers to discharge. Formulate from supplied information only and preserve uncertainty or differential diagnoses.\n"
+    "- PLAN must be a numbered list. Retain medication names, doses, routes, frequencies, observations, review intervals, escalation instructions and responsible teams exactly when provided. Do not invent orders, medication changes, leave, legal decisions or follow-up.\n"
+    "- Omit empty filler where safe, but use 'Not documented' for a clinically important requested field that has no supplied information.\n"
+    "- This is a clinician-authored review aid. The final wording must make uncertainties and information-source limits visible and must not claim WA Health compliance is guaranteed."
+)
+
+ED_MH_REVIEW_SECTION_FIELDS = {
+    "review_details": ("patient_identifier", "team", "legal_status", "mha_form", "mha_expiry"),
+    "summary": ("summary",),
+    "review": ("sources", "updates"),
+    "progress": ("behaviour_events", "sleep_intake_adls", "medication", "engagement", "progress_notes"),
+    "patient_account": ("current_symptoms", "concerns_goals", "understanding"),
+    "mse": ("appearance", "behaviour", "speech", "mood", "affect", "thought_form", "thought_content", "perception", "cognition", "tosh", "si", "insight_judgement"),
+    "risk": ("suicide_self_harm", "violence_aggression", "self_neglect_physical", "awol_vulnerability", "dynamic_factors", "protective_factors", "risk_formulation_management"),
+    "assessment": ("clinical_progress", "working_diagnosis", "response_tolerability", "barriers_discharge"),
+    "plan": ("plan",),
+}
+
+ED_MH_REVIEW_SECTION_TITLES = {
+    "review_details": "ED Review Psychiatry / Current legal status",
+    "summary": "Summary",
+    "review": "Review",
+    "progress": "Progress",
+    "patient_account": "Patient's account of progress",
+    "mse": "MSE",
+    "risk": "Current risk formulation and management",
+    "assessment": "ASSESSMENT",
+    "plan": "PLAN",
+}
+
+ED_MH_REVIEW_STRUCTURED_ASSIST_SECTIONS = {"patient_account", "mse", "assessment"}
+
+ED_MH_REVIEW_ASSIST_SYSTEM_PROMPT = (
+    "You assist a qualified clinician to edit an emergency department psychiatry review. "
+    "Use only facts in the supplied section and review context. Never invent observations, denials, symptoms, risk levels, legal status, Mental Health Act forms, diagnoses, collateral, medication effects or plans. "
+    "Preserve source attribution, timing, uncertainty and negation. Keep language concise, neutral and clinically familiar in Western Australian psychiatry. "
+    "Do not make treatment decisions and do not claim risk is absent or eliminated. If information is unsupported, leave it blank or state 'Not documented' only when the requested output format requires text."
+)
+
 MENOVA_ED_PE_NOTE_STRUCTURE = (
     "Use this exact practical note style for Menova Premature Ejaculation and Erectile Dysfunction consults. "
     "Plain text only. Keep it copy-paste ready for the work platform. Do not use Markdown.\n"
@@ -1309,6 +1371,18 @@ def build_consult_prompt_context(consult_type: str) -> str:
             "include a Critical information missing / issues to address section."
         )
 
+    if chosen_type == "ed mh review":
+        return (
+            f"Consult type selected: {chosen_type}.\n"
+            f"Structure emphasis: {guidance}\n\n"
+            f"{ED_MH_REVIEW_NOTE_STRUCTURE}\n\n"
+            "Organisation workflow priority:\n"
+            "The final output is an ED psychiatry review progress note, not a discharge summary or generic mental health assessment. "
+            "The structured form may contain both raw fields and clinician-edited section narratives; prefer the clinician-edited narrative where it is present, while retaining material safety-critical detail from the fields. "
+            "Keep patient statements, collateral, observed MSE findings and clinical formulation distinct. Carry earlier information into current symptoms or concerns only where the supplied timing supports that it remains current. "
+            "Use a concise registrar/consultant tone, preserve uncertainty, and make the risk-management link explicit without overstating predictive certainty."
+        )
+
     if chosen_type == "wa mental health discharge summary":
         return (
             f"Consult type selected: {chosen_type}.\n"
@@ -1364,6 +1438,8 @@ def build_consult_prompt_context(consult_type: str) -> str:
 
 def consult_completion_budget(consult_type: str) -> int:
     normalized = (consult_type or "").strip().lower()
+    if normalized == "ed mh review":
+        return int(os.getenv("DEEPSEEK_ED_MH_REVIEW_MAX_TOKENS") or "4200")
     if normalized == "wa mental health discharge summary":
         return int(os.getenv("DEEPSEEK_WA_MH_DISCHARGE_MAX_TOKENS") or "6000")
     if normalized == "vapac weight loss application":
@@ -1375,6 +1451,8 @@ def consult_completion_budget(consult_type: str) -> int:
 
 def consult_request_timeout(consult_type: str) -> int:
     normalized = (consult_type or "").strip().lower()
+    if normalized == "ed mh review":
+        return int(os.getenv("DEEPSEEK_ED_MH_REVIEW_TIMEOUT") or "120")
     if normalized == "wa mental health discharge summary":
         return int(os.getenv("DEEPSEEK_WA_MH_DISCHARGE_TIMEOUT") or "150")
     return int(os.getenv("DEEPSEEK_TIMEOUT") or "70")
@@ -1408,6 +1486,33 @@ def call_deepseek(system_prompt: str, user_content: str, max_tokens: int | None 
     out = resp.json()
     answer = (((out.get("choices") or [{}])[0]).get("message", {}) or {}).get("content", "").strip()
     return answer or "No response."
+
+
+def parse_json_object(text: str) -> dict | None:
+    candidate = (text or "").strip()
+    if candidate.startswith("```"):
+        candidate = re.sub(r"^```(?:json)?\s*", "", candidate, flags=re.IGNORECASE)
+        candidate = re.sub(r"\s*```$", "", candidate)
+    start = candidate.find("{")
+    end = candidate.rfind("}")
+    if start < 0 or end < start:
+        return None
+    try:
+        parsed = json.loads(candidate[start:end + 1])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def clean_ed_mh_review_value(value, limit: int = 12000):
+    if isinstance(value, list):
+        return [str(item).strip()[:500] for item in value[:20] if str(item).strip()]
+    if isinstance(value, dict):
+        return {
+            str(key).strip()[:100]: clean_ed_mh_review_value(item, limit=2000)
+            for key, item in list(value.items())[:30]
+        }
+    return str(value or "").strip()[:limit]
 
 @app.get("/", endpoint="index")
 def index():
@@ -1537,6 +1642,89 @@ def generate():
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
         return jsonify({"error": "AI request failed"}), 502
+
+
+@app.post("/api/ed-mh-review/assist")
+@require_auth
+def ed_mh_review_assist():
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
+
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    section = str(data.get("section") or "").strip().lower()
+    if action not in {"organise", "configure"}:
+        return jsonify({"error": "Invalid action"}), 400
+    if section not in ED_MH_REVIEW_SECTION_FIELDS:
+        return jsonify({"error": "Invalid ED MH Review section"}), 400
+
+    raw_section_data = data.get("section_data") or {}
+    if not isinstance(raw_section_data, dict):
+        return jsonify({"error": "section_data must be an object"}), 400
+
+    allowed_keys = ED_MH_REVIEW_SECTION_FIELDS[section]
+    section_data = {
+        key: clean_ed_mh_review_value(raw_section_data.get(key))
+        for key in allowed_keys
+        if key in raw_section_data
+    }
+    context = str(data.get("context") or "").strip()[:60000]
+    if not context and not any(section_data.values()):
+        return jsonify({"error": "Enter review information before using the writing assist"}), 400
+
+    title = ED_MH_REVIEW_SECTION_TITLES[section]
+    section_json = json.dumps(section_data, ensure_ascii=False, indent=2)
+    try:
+        if action == "configure" and section in ED_MH_REVIEW_STRUCTURED_ASSIST_SECTIONS:
+            keys_json = json.dumps(list(allowed_keys), ensure_ascii=False)
+            user_content = (
+                f"ED MH Review section: {title}\n"
+                "Task: populate or carefully improve the structured fields from the supplied review context. "
+                "Return one JSON object only, with exactly the requested keys and string values. "
+                "Do not include a code fence or explanatory text. Use an empty string where the context does not support a field. "
+                "Do not overwrite an explicit existing value with a conflicting inference.\n\n"
+                f"Required keys: {keys_json}\n\n"
+                f"Existing section data:\n{section_json}\n\n"
+                f"Review context:\n{context}"
+            )
+            answer = call_deepseek(
+                ED_MH_REVIEW_ASSIST_SYSTEM_PROMPT,
+                user_content,
+                max_tokens=2200,
+                timeout=90,
+            )
+            parsed = parse_json_object(answer)
+            if parsed is None:
+                return jsonify({"text": answer, "format": "narrative"})
+            fields = {
+                key: str(parsed.get(key) or "").strip()[:12000]
+                for key in allowed_keys
+            }
+            return jsonify({"fields": fields, "format": "fields"})
+
+        task = (
+            "Correct spelling and grammar, remove repetition, and make this section succinct while preserving every clinical fact, source, time reference, uncertainty and negation."
+            if action == "organise"
+            else
+            "Configure this material into a polished section for an ED psychiatry review. Keep the requested section focus, preserve source attribution and uncertainty, and do not add unsupported normal findings or risk conclusions."
+        )
+        user_content = (
+            f"ED MH Review section: {title}\n"
+            f"Task: {task}\n"
+            "Return only the finished section text in plain text. Do not add the section heading.\n\n"
+            f"Section data:\n{section_json}\n\n"
+            f"Relevant review context:\n{context}"
+        )
+        answer = call_deepseek(
+            ED_MH_REVIEW_ASSIST_SYSTEM_PROMPT,
+            user_content,
+            max_tokens=1800,
+            timeout=90,
+        )
+        return jsonify({"text": answer, "format": "narrative"})
+    except Exception as e:
+        print("ED MH REVIEW ASSIST ERROR:", repr(e))
+        return jsonify({"error": "ED MH Review writing assist failed"}), 502
 
 
 @app.post("/ask")
