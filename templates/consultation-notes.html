@@ -575,7 +575,9 @@ function normalizeSavedOutput(item){
     consultType:item.consultType||item.type||"Consult",
     date:item.date||new Date().toLocaleString(),
     content:item.content||"",
-    expanded:Boolean(item.expanded)
+    expanded:Boolean(item.expanded),
+    appointmentGuid:item.appointmentGuid||"",
+    edMhDraft:item.edMhDraft||null
   };
 }
 function completeCurrentConsult(){

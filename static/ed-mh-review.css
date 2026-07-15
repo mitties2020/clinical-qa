@@ -1,0 +1,507 @@
+.edmh-workspace,
+.edmh-workspace * {
+  box-sizing: border-box;
+}
+
+.edmh-workspace[hidden] {
+  display: none;
+}
+
+.edmh-workspace {
+  display: grid;
+  grid-template-columns: minmax(620px, 1.35fr) minmax(360px, .65fr);
+  gap: 16px;
+  align-items: start;
+}
+
+body.edmh-active .work-area {
+  padding-top: 16px;
+}
+
+body.edmh-active .section-title {
+  margin: 2px 0 7px;
+  font-size: 16px;
+}
+
+body.edmh-active .active-consult-panel,
+body.edmh-active .call-patient-panel {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+body.edmh-active .active-consult-meta,
+body.edmh-active .call-patient-panel label,
+body.edmh-active .controls-row label {
+  margin-bottom: 3px;
+}
+
+.edmh-form-panel,
+.edmh-output-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  min-width: 0;
+}
+
+.edmh-form-panel {
+  padding: 14px;
+}
+
+.edmh-form-heading,
+.edmh-output-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.edmh-title {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.edmh-help,
+.edmh-field-help,
+.edmh-section-status,
+.edmh-save-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.edmh-form-body {
+  display: grid;
+  gap: 12px;
+  max-height: max(700px, calc(100vh - 210px));
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-color: var(--line) transparent;
+}
+
+.edmh-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #00000012;
+  overflow: hidden;
+}
+
+.edmh-section.is-complete {
+  border-color: #35c9a088;
+  box-shadow: inset 3px 0 0 var(--ok);
+}
+
+.edmh-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #00000012;
+}
+
+.edmh-section-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.edmh-section.is-complete .edmh-section-status {
+  color: var(--ok);
+  font-weight: 800;
+}
+
+.edmh-section-body {
+  display: grid;
+  gap: 11px;
+  padding: 12px;
+}
+
+.edmh-field,
+.edmh-legal-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.edmh-field > label,
+.edmh-group-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.edmh-workspace input,
+.edmh-workspace select,
+.edmh-workspace textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: #0000001c;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.edmh-workspace select,
+.edmh-workspace select option,
+.edmh-workspace select optgroup {
+  background: #111827;
+  color: #fff;
+}
+
+html[data-theme="day"] .edmh-workspace select,
+html[data-theme="day"] .edmh-workspace select option,
+html[data-theme="day"] .edmh-workspace select optgroup,
+html[data-stealth="on"] .edmh-workspace select,
+html[data-stealth="on"] .edmh-workspace select option,
+html[data-stealth="on"] .edmh-workspace select optgroup {
+  background: #fff;
+  color: #111;
+}
+
+.edmh-workspace textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.edmh-workspace textarea.edmh-compact-textarea {
+  min-height: 62px;
+}
+
+.edmh-workspace input:focus,
+.edmh-workspace select:focus,
+.edmh-workspace textarea:focus,
+.edmh-workspace button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.edmh-workspace [disabled] {
+  opacity: .72;
+  cursor: not-allowed;
+}
+
+.edmh-team-toolbar,
+.edmh-section-actions,
+.edmh-output-actions,
+.edmh-source-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.edmh-team-list {
+  display: grid;
+  gap: 8px;
+}
+
+.edmh-team-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(140px, .72fr) 32px;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #00000010;
+}
+
+.edmh-team-name-control {
+  display: grid;
+  gap: 6px;
+}
+
+.edmh-team-name-control[hidden] {
+  display: none;
+}
+
+.edmh-remove-team {
+  width: 32px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #f8717155;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.edmh-team-row:hover .edmh-remove-team,
+.edmh-team-row:focus-within .edmh-remove-team {
+  opacity: 1;
+}
+
+.edmh-source-option {
+  position: relative;
+}
+
+.edmh-source-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.edmh-source-option span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.edmh-source-option input:checked + span {
+  color: var(--text);
+  border-color: var(--accent);
+  background: #25aee421;
+}
+
+.edmh-mha-fields[hidden] {
+  display: none;
+}
+
+.edmh-mha-fields,
+.edmh-legal-grid {
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, .65fr);
+  gap: 10px;
+}
+
+.edmh-mse-row {
+  display: grid;
+  grid-template-columns: 145px minmax(190px, .7fr) minmax(240px, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.edmh-mse-label {
+  padding-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.edmh-mse-row textarea {
+  min-height: 42px;
+}
+
+.edmh-narrative-wrap {
+  display: none;
+  padding-top: 2px;
+}
+
+.edmh-narrative-wrap.has-content,
+.edmh-narrative-wrap:focus-within {
+  display: grid;
+  gap: 6px;
+}
+
+.edmh-section-narrative {
+  border-color: #35c9a077 !important;
+  background: #35c9a00c !important;
+}
+
+.edmh-section-actions {
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.edmh-action {
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid #8ea3bf55;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.edmh-action:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.edmh-action.is-busy {
+  pointer-events: none;
+  opacity: .7;
+}
+
+.edmh-complete-section,
+.edmh-complete-consult {
+  background: linear-gradient(120deg, #1ea97c, #168a67);
+  border-color: #52d6ad;
+  color: #fff;
+}
+
+.edmh-section.is-complete .edmh-complete-section {
+  background: transparent;
+  border-color: #35c9a088;
+  color: var(--ok);
+}
+
+.edmh-delete-section,
+.edmh-delete-output {
+  color: var(--danger);
+  border-color: #f8717144;
+}
+
+.edmh-section-message {
+  min-height: 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.edmh-section-message.is-error {
+  color: var(--danger);
+}
+
+.edmh-output-panel {
+  position: sticky;
+  top: 0;
+  padding: 14px;
+}
+
+.edmh-output-area {
+  min-height: 650px !important;
+  height: min(720px, calc(100vh - 220px));
+  resize: vertical;
+  white-space: pre-wrap;
+  line-height: 1.55 !important;
+}
+
+.edmh-output-area[readonly] {
+  background: #00000012;
+}
+
+.edmh-not-documented-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #f2b84b55;
+  border-radius: 10px;
+  background: #f2b84b0d;
+}
+
+.edmh-not-documented-panel[hidden] {
+  display: none;
+}
+
+.edmh-not-documented-heading {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.edmh-not-documented-list {
+  display: grid;
+  gap: 5px;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.edmh-not-documented-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 6px 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.edmh-not-documented-row button {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #f8717166;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--danger);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.edmh-not-documented-row button:hover {
+  background: #f871711a;
+}
+
+.edmh-output-actions {
+  margin-top: 10px;
+}
+
+.edmh-output-actions .edmh-action {
+  flex: 1 1 130px;
+}
+
+.edmh-output-message {
+  min-height: 18px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+html[data-stealth="on"] .edmh-form-panel,
+html[data-stealth="on"] .edmh-output-panel,
+html[data-stealth="on"] .edmh-section,
+html[data-theme="day"] .edmh-form-panel,
+html[data-theme="day"] .edmh-output-panel {
+  box-shadow: none;
+}
+
+@media (max-width: 1280px) {
+  .edmh-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .edmh-form-body {
+    max-height: none;
+  }
+
+  .edmh-output-panel {
+    position: static;
+  }
+
+  .edmh-output-area {
+    height: 520px;
+    min-height: 520px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .edmh-team-row,
+  .edmh-mha-fields,
+  .edmh-legal-grid,
+  .edmh-mse-row {
+    grid-template-columns: 1fr;
+  }
+
+  .edmh-mse-label {
+    padding-top: 0;
+  }
+
+  .edmh-remove-team {
+    opacity: 1;
+  }
+
+  .edmh-section-actions .edmh-action,
+  .edmh-output-actions .edmh-action {
+    flex: 1 1 100%;
+  }
+}

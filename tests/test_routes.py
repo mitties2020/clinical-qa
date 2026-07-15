@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import unittest
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -56,6 +57,132 @@ class RouteRegistrationTests(unittest.TestCase):
         self.assertGreaterEqual(app_module.consult_completion_budget("WA mental health discharge summary"), 6000)
         self.assertGreaterEqual(app_module.consult_request_timeout("WA mental health discharge summary"), 150)
         self.assertEqual(app_module.consult_completion_budget("General consultation note"), 1800)
+
+    def test_ed_mh_review_prompt_uses_requested_psychiatry_structure_and_safeguards(self):
+        import app as app_module
+
+        prompt = app_module.build_consult_prompt_context("ED MH Review")
+
+        for heading in [
+            "Patient's account of progress",
+            "Current risk formulation and management",
+            "Appearance",
+            "Thought content",
+            "Insight/judgement",
+            "Working diagnosis/formulation",
+            "PLAN must be a numbered list",
+        ]:
+            self.assertIn(heading, prompt)
+        self.assertIn("patient statements, collateral, observed MSE findings", prompt)
+        self.assertIn("Never infer a form, legal status or expiry", prompt)
+        self.assertIn("Do not invent normal MSE findings", prompt)
+
+    def test_ed_mh_review_gets_longer_completion_budget_and_timeout(self):
+        import app as app_module
+
+        self.assertGreaterEqual(app_module.consult_completion_budget("ED MH Review"), 4200)
+        self.assertGreaterEqual(app_module.consult_request_timeout("ED MH Review"), 120)
+
+
+class EdMhReviewTests(unittest.TestCase):
+    def authenticated_client(self):
+        import app as app_module
+
+        app_module.app.config.update(TESTING=True)
+        client = app_module.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return app_module, client
+
+    def test_patient_list_loads_isolated_ed_mh_review_assets(self):
+        _app_module, client = self.authenticated_client()
+
+        response = client.get("/patient-list")
+        page = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="standardConsultWorkspace"', page)
+        self.assertIn('id="edMhReviewWorkspace"', page)
+        self.assertIn('"ED MH Review"', page)
+        self.assertIn('/static/ed-mh-review.css', page)
+        self.assertIn('/static/js/ed-mh-review.js', page)
+        self.assertIn('edMhDraft:item.edMhDraft||null', page)
+
+    def test_ed_mh_review_client_contains_requested_people_sections_and_mha_forms(self):
+        script = (Path(__file__).parents[1] / "static" / "js" / "ed-mh-review.js").read_text(encoding="utf-8")
+
+        for name in [
+            "Dr Munib", "Dr Garside", "Dr Dias", "Dr Hussein", "Dr Claasen", "Dr Burrows",
+            "Dr Addis", "Dr Sullivan", "Dr Greenall", "Dr Tone", "Dr Lockhart", "Dr Vasani",
+            "Dr Waltman", "Dr Sivakumar", "Dr Lau", "Dr Chong", "Dr Maddams", "Dr Warlow",
+            "Dr Tudori", "Anna-Jade", "Tressa", "Tendai", "Victoria",
+        ]:
+            self.assertIn(name, script)
+        for form in ["Form 1A", "Form 3E", "Form 4A", "Form 5F", "Form 6D", "Form 7D", "Form 8B", "Form 9B", "Form 10I", "Form 11G", "Form 12C", "Form 13"]:
+            self.assertIn(form, script)
+        for section in ["Patient's account of progress", "MSE", "Current risk formulation and management", "ASSESSMENT", "PLAN"]:
+            self.assertIn(section, script)
+
+    def test_ed_mh_review_can_remove_undocumented_output_and_reuse_round_team(self):
+        script = (Path(__file__).parents[1] / "static" / "js" / "ed-mh-review.js").read_text(encoding="utf-8")
+        stylesheet = (Path(__file__).parents[1] / "static" / "ed-mh-review.css").read_text(encoding="utf-8")
+
+        self.assertIn('const LAST_TEAM_KEY = "vivid_ed_mh_review_last_team"', script)
+        self.assertIn("if (!loaded) state.team = loadLastTeam()", script)
+        self.assertIn('data-edmh-action="remove-not-documented"', script)
+        self.assertIn("function removeNotDocumentedLine", script)
+        self.assertIn(".edmh-not-documented-row button", stylesheet)
+
+    def test_ed_mh_review_assist_requires_authentication(self):
+        import app as app_module
+
+        app_module.app.config.update(TESTING=True)
+        client = app_module.app.test_client()
+        response = client.post("/api/ed-mh-review/assist", json={})
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_ed_mh_review_structured_assist_filters_to_allowed_fields(self):
+        app_module, client = self.authenticated_client()
+        answer = (
+            '```json\n{"appearance":"Dishevelled",'
+            '"behaviour":"Guarded","invented_key":"must not pass"}\n```'
+        )
+        payload = {
+            "action": "configure",
+            "section": "mse",
+            "section_data": {"appearance": "", "behaviour": ""},
+            "context": "Patient was documented as dishevelled and guarded during review.",
+        }
+
+        with patch.object(app_module, "DEEPSEEK_API_KEY", "test-key"), patch.object(
+            app_module, "call_deepseek", return_value=answer
+        ) as deepseek:
+            response = client.post("/api/ed-mh-review/assist", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        fields = response.get_json()["fields"]
+        self.assertEqual(fields["appearance"], "Dishevelled")
+        self.assertEqual(fields["behaviour"], "Guarded")
+        self.assertNotIn("invented_key", fields)
+        self.assertIn("Return one JSON object only", deepseek.call_args.args[1])
+
+    def test_ed_mh_review_assist_rejects_unknown_section(self):
+        app_module, client = self.authenticated_client()
+
+        with patch.object(app_module, "DEEPSEEK_API_KEY", "test-key"):
+            response = client.post(
+                "/api/ed-mh-review/assist",
+                json={"action": "configure", "section": "unknown", "context": "test"},
+            )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_parse_json_object_accepts_fenced_json_and_rejects_non_json(self):
+        import app as app_module
+
+        self.assertEqual(app_module.parse_json_object('```json\n{"mood":"Anxious"}\n```'), {"mood": "Anxious"})
+        self.assertIsNone(app_module.parse_json_object("no structured output"))
 
 
 class AuthenticationTests(unittest.TestCase):
