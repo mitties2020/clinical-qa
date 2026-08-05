@@ -206,8 +206,38 @@
           <button type="button" class="edmh-action" data-edmh-action="complete-consult">Save to Vivid Medi outputs</button>
           <button type="button" class="edmh-action" data-edmh-action="delete-output">Clear output</button>
         </div>
-        <p class="edmh-clinical-note">Review and verify all chronology, medications, allergies, MSE, risk wording and plan before signing.</p>
+        <p class="edmh-clinical-note">The AI may reorganise and rephrase source material. Review and verify all chronology, medications, allergies, MSE, risk wording and plan before signing.</p>
       </section>`;
+  }
+
+  function generationSafetyMessage(safety) {
+    if (!safety || safety.source_check_completed !== true) {
+      return {
+        message: "The review was created, but the automated source-fidelity check did not complete. Treat it as unverified and regenerate before clinical use.",
+        isError: true
+      };
+    }
+
+    const unverifiedNumbers = Array.isArray(safety.unverified_numeric_details)
+      ? safety.unverified_numeric_details.filter(Boolean)
+      : [];
+    if (unverifiedNumbers.length) {
+      return {
+        message: `Source check completed, but verify these numeric details against the originals: ${unverifiedNumbers.join(", ")}. Clinician verification is still required.`,
+        isError: true
+      };
+    }
+
+    const blankSections = Array.isArray(safety.blank_sections)
+      ? safety.blank_sections.filter(Boolean)
+      : [];
+    const blankMessage = blankSections.length
+      ? ` Blank because no supported content was found: ${blankSections.join(", ")}.`
+      : "";
+    return {
+      message: `Review created and an automated source-fidelity pass completed.${blankMessage} Verify clinically before signing or copying to the record.`,
+      isError: false
+    };
   }
 
   function noteSizeLabel(content) {
@@ -336,9 +366,9 @@
     const output = document.getElementById("edMhOutput");
     const originalText = button.textContent;
     button.disabled = true;
-    button.textContent = "Creating review...";
+    button.textContent = "Creating + source checking...";
     output.readOnly = true;
-    setMessage(`Integrating the current review with ${selectedNotes.length} selected note${selectedNotes.length === 1 ? "" : "s"}...`);
+    setMessage(`Integrating and source-checking the current review with ${selectedNotes.length} selected note${selectedNotes.length === 1 ? "" : "s"}...`);
 
     try {
       const response = await fetch("/api/ed-mh-review/generate", {
@@ -361,7 +391,8 @@
       state.output = finished;
       state.savedAt = "";
       output.value = finished;
-      setMessage("Review created. Verify it clinically, edit if needed, then copy it into OneNote or the clinical record.");
+      const safetyStatus = generationSafetyMessage(data.safety);
+      setMessage(safetyStatus.message, safetyStatus.isError);
       saveNow();
     } catch (error) {
       setMessage(error.message || "The review could not be generated. Your source notes are unchanged.", true);

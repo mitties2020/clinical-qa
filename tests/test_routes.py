@@ -86,6 +86,8 @@ class RouteRegistrationTests(unittest.TestCase):
         self.assertIn("no additional headings", prompt)
         self.assertIn("Never print placeholders", prompt)
         self.assertNotIn("use 'Not documented'", prompt)
+        self.assertIn("closed-world extraction", app_module.ED_MH_REVIEW_SYSTEM_PROMPT)
+        self.assertIn("sentence by sentence", app_module.ED_MH_REVIEW_SOURCE_CHECK_SYSTEM_PROMPT)
 
     def test_ed_mh_review_gets_longer_completion_budget_and_timeout(self):
         import app as app_module
@@ -115,7 +117,7 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn('id="edMhReviewWorkspace"', page)
         self.assertIn('"ED MH Review"', page)
         self.assertIn('/static/ed-mh-review.css?v=20260806-1', page)
-        self.assertIn('/static/js/ed-mh-review.js?v=20260806-1', page)
+        self.assertIn('/static/js/ed-mh-review.js?v=20260806-2', page)
         self.assertIn('edMhDraft:item.edMhDraft||null', page)
 
     def test_saved_outputs_use_expandable_blue_tabs_and_collapsible_sidebar(self):
@@ -140,6 +142,9 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertEqual(script.count('id="edmhReviewText"'), 1)
         self.assertIn("This is the only clinical entry box", script)
         self.assertIn("Create psychiatry review", script)
+        self.assertIn("Creating + source checking", script)
+        self.assertIn("automated source-fidelity pass completed", script)
+        self.assertIn("did not complete. Treat it as unverified", script)
         self.assertIn("Add current notes", script)
         self.assertIn("Add previous notes", script)
         self.assertNotIn("MHA_FORMS", script)
@@ -179,6 +184,27 @@ class EdMhReviewTests(unittest.TestCase):
         self.assertIn("Low mood", output)
         self.assertIn("Guarded", output)
         self.assertNotIn("Not documented", output)
+
+    def test_ed_mh_review_safety_report_flags_blank_sections_and_new_quantities(self):
+        import app as app_module
+
+        note = app_module.normalise_ed_mh_review_note(
+            "Presenting Complaint\nLow mood for 3 days\n\n"
+            "Medications\nOlanzapine 10 mg nocte\n\n"
+            "Plan\nReview in 48 hours"
+        )
+        report = app_module.ed_mh_review_safety_report(
+            note,
+            "Low mood for 3 days. Olanzapine 5 mg nocte.",
+            source_check_completed=True,
+        )
+
+        self.assertTrue(report["source_check_completed"])
+        self.assertTrue(report["clinician_verification_required"])
+        self.assertIn("Allergies", report["blank_sections"])
+        self.assertIn("10 mg", report["unverified_numeric_details"])
+        self.assertIn("48 hours", report["unverified_numeric_details"])
+        self.assertNotIn("3 days", report["unverified_numeric_details"])
 
     def test_ed_mh_review_assist_removes_absence_placeholders(self):
         import app as app_module
@@ -229,14 +255,23 @@ class EdMhReviewTests(unittest.TestCase):
             response = client.post("/api/ed-mh-review/generate", json=payload)
 
         self.assertEqual(response.status_code, 200)
-        output = response.get_json()["clinical_notes"]
+        response_data = response.get_json()
+        output = response_data["clinical_notes"]
         self.assertIn("Acute distress", output)
         self.assertIn("Formulation / Summary", output)
-        model_input = deepseek.call_args.args[1]
+        self.assertTrue(response_data["safety"]["source_check_completed"])
+        self.assertTrue(response_data["safety"]["clinician_verification_required"])
+        self.assertEqual(deepseek.call_count, 2)
+        model_input = deepseek.call_args_list[0].args[1]
         self.assertIn("CURRENT REVIEW - clinician free text", model_input)
         self.assertIn("SELECTED CURRENT RECORD 1", model_input)
         self.assertIn("SELECTED PREVIOUS RECORD 1", model_input)
         self.assertIn("--- BEGIN CLINICAL SOURCES ---", model_input)
+        self.assertEqual(deepseek.call_args_list[0].args[0], app_module.ED_MH_REVIEW_SYSTEM_PROMPT)
+        self.assertEqual(deepseek.call_args_list[0].kwargs["temperature"], 0.05)
+        self.assertEqual(deepseek.call_args_list[1].args[0], app_module.ED_MH_REVIEW_SOURCE_CHECK_SYSTEM_PROMPT)
+        self.assertEqual(deepseek.call_args_list[1].kwargs["temperature"], 0.0)
+        self.assertIn("ONLY FACTUAL AUTHORITY", deepseek.call_args_list[1].args[1])
 
     def test_ed_mh_review_generate_requires_authentication_and_rejects_oversized_input(self):
         import app as app_module
@@ -252,6 +287,25 @@ class EdMhReviewTests(unittest.TestCase):
                 json={"current_review": "x" * (app_module.ED_MH_REVIEW_MAX_SOURCE_CHARS + 1)},
             )
         self.assertEqual(response.status_code, 413)
+
+    def test_ed_mh_review_fails_closed_when_independent_source_check_is_unavailable(self):
+        app_module, client = self.authenticated_client()
+        model_output = "Presenting Complaint\nDistress\n\nMSE\nAnxious"
+
+        with patch.object(app_module, "DEEPSEEK_API_KEY", "test-key"), patch.object(
+            app_module,
+            "call_deepseek",
+            side_effect=[model_output, RuntimeError("audit unavailable")],
+        ), patch.object(app_module, "save_history"):
+            response = client.post(
+                "/api/ed-mh-review/generate",
+                json={"current_review": "Patient described distress and appeared anxious."},
+            )
+
+        self.assertEqual(response.status_code, 502)
+        data = response.get_json()
+        self.assertNotIn("clinical_notes", data)
+        self.assertIn("no review was returned", data["error"])
 
     def test_ed_mh_review_structured_assist_filters_to_allowed_fields(self):
         app_module, client = self.authenticated_client()
