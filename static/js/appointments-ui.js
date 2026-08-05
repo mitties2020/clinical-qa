@@ -295,7 +295,17 @@
 
   function selectMatchingConsultType(appointment) {
     const select = document.getElementById("consultType");
-    if (!select || !appointment.appointmentType) return;
+    if (!select) return;
+    const requestedConsult = new URLSearchParams(window.location.search).get("consult");
+    if (requestedConsult === "ed-mh-review") {
+      const edReview = Array.from(select.options).find((option) => option.value.toLowerCase() === "ed mh review");
+      if (edReview) {
+        select.value = edReview.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      return;
+    }
+    if (!appointment.appointmentType) return;
     const match = Array.from(select.options).find((option) => (
       option.value.toLowerCase() === String(appointment.appointmentType).toLowerCase()
     ));
@@ -353,6 +363,55 @@
       "Additional clinical notes:",
       raw
     ].join("\n");
+  }
+
+  function patientIdentityMatches(appointment, activeAppointment) {
+    if (!appointment || !activeAppointment) return false;
+    const patientGuid = String(appointment.patientGuid || "").trim();
+    const activePatientGuid = String(activeAppointment.patientGuid || "").trim();
+    if (patientGuid && activePatientGuid) return patientGuid === activePatientGuid;
+    const name = String(appointment.patientName || "").trim().toLowerCase();
+    const activeName = String(activeAppointment.patientName || "").trim().toLowerCase();
+    return Boolean(name && activeName && name === activeName);
+  }
+
+  function getNotesForActivePatient() {
+    const activeAppointment = getActiveAppointment();
+    if (!activeAppointment) return [];
+
+    const notes = [];
+    appointments
+      .filter((appointment) => (!appointment.isDeleted || appointment.isDone) && patientIdentityMatches(appointment, activeAppointment))
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.startTimeUtc || left.startTimeOriginal || "") || 0;
+        const rightTime = Date.parse(right.startTimeUtc || right.startTimeOriginal || "") || 0;
+        return rightTime - leftTime;
+      })
+      .forEach((appointment) => {
+        const isCurrent = appointment.appointmentGuid === activeAppointment.appointmentGuid;
+        const dateLabel = appointment.startTimeWA || appointment.startTimeOriginal || "Date not supplied";
+        const candidates = [
+          { kind: "appointment", label: "MediRecords appointment note", content: appointment.appointmentNote },
+          { kind: "consult", label: "Saved Vivid Medi consult note", content: appointment.consultNote }
+        ];
+
+        candidates.forEach((candidate) => {
+          const content = String(candidate.content || "").trim();
+          if (!content) return;
+          if (notes.some((note) => note.content === content)) return;
+          notes.push({
+            id: `synced:${appointment.appointmentGuid}:${candidate.kind}`,
+            label: `${candidate.label} - ${dateLabel}`,
+            content,
+            timing: isCurrent ? "current" : "previous",
+            source: "Synced patient record",
+            appointmentGuid: appointment.appointmentGuid,
+            selected: isCurrent
+          });
+        });
+      });
+
+    return notes;
   }
 
   function refreshActiveAppointmentContext(forceInput) {
@@ -704,6 +763,7 @@
     getActiveAppointment,
     completeAppointment,
     refreshActiveAppointmentContext,
-    buildAppointmentClinicalPayload
+    buildAppointmentClinicalPayload,
+    getNotesForActivePatient
   };
 })();
