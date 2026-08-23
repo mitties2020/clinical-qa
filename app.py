@@ -217,7 +217,63 @@ def extension_sync_authorized(payload=None) -> bool:
         token = request.headers.get("X-VividMedi-Sync-Token", "").strip()
     if not token and isinstance(payload, dict):
         token = str(payload.get("syncToken") or payload.get("token") or "").strip()
-    return token == EXTENSION_SYNC_TOKEN
+    if hmac.compare_digest(token, EXTENSION_SYNC_TOKEN):
+        return True
+    return verify_extension_pair_token(token)
+
+
+EXTENSION_ID_RE = re.compile(r"^[a-p]{32}$")
+DEFAULT_EXTENSION_PAIR_IDS = {"aebndijhjccfmoofnfkepjnaimpifmdk"}
+
+
+def extension_pair_allowed(extension_id: str) -> bool:
+    configured = {
+        value.strip().lower()
+        for value in str(os.getenv("EXTENSION_PAIR_ALLOWED_IDS") or "").split(",")
+        if value.strip()
+    }
+    return extension_id in (configured or DEFAULT_EXTENSION_PAIR_IDS)
+
+
+def issue_extension_pair_token(extension_id: str, ttl_seconds: int | None = None) -> str:
+    extension_id = str(extension_id or "").strip().lower()
+    if not EXTENSION_SYNC_TOKEN:
+        raise RuntimeError("EXTENSION_SYNC_TOKEN is not configured")
+    if not EXTENSION_ID_RE.fullmatch(extension_id):
+        raise ValueError("Invalid Chrome extension ID")
+    configured_ttl = int(os.getenv("EXTENSION_PAIR_TTL_SECONDS") or str(30 * 24 * 60 * 60))
+    ttl = min(90 * 24 * 60 * 60, max(60, int(ttl_seconds or configured_ttl)))
+    expires_at = int(time.time()) + ttl
+    nonce = uuid4().hex
+    unsigned = f"v1.{expires_at}.{extension_id}.{nonce}"
+    signature = hmac.new(
+        EXTENSION_SYNC_TOKEN.encode("utf-8"),
+        unsigned.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{unsigned}.{signature}"
+
+
+def verify_extension_pair_token(token: str, now: int | None = None) -> bool:
+    if not EXTENSION_SYNC_TOKEN:
+        return False
+    parts = str(token or "").strip().split(".")
+    if len(parts) != 5 or parts[0] != "v1" or not EXTENSION_ID_RE.fullmatch(parts[2]):
+        return False
+    try:
+        expires_at = int(parts[1])
+    except (TypeError, ValueError):
+        return False
+    current_time = int(time.time()) if now is None else int(now)
+    if expires_at < current_time:
+        return False
+    unsigned = ".".join(parts[:4])
+    expected = hmac.new(
+        EXTENSION_SYNC_TOKEN.encode("utf-8"),
+        unsigned.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(parts[4], expected)
 
 
 def save_medirecords_sync(payload: dict, source: str = "extension"):
@@ -1794,6 +1850,29 @@ def consultation_notes():
 @require_auth
 def patient_list():
     return render_template("patient-list.html")
+
+
+@app.get("/extension-pair")
+@require_auth
+def extension_pair():
+    extension_id = str(request.args.get("extensionId") or "").strip().lower()
+    if not EXTENSION_ID_RE.fullmatch(extension_id):
+        return make_response("Invalid Chrome extension ID", 400)
+    if not extension_pair_allowed(extension_id):
+        return make_response("This Chrome extension is not approved for pairing", 403)
+    if not EXTENSION_SYNC_TOKEN:
+        return make_response("VividMedi extension pairing is not configured", 503)
+    pair_token = issue_extension_pair_token(extension_id)
+    response = make_response(render_template(
+        "extension-pair.html",
+        extension_id=extension_id,
+        pair_token=pair_token,
+    ))
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
 
 
 @app.get("/dashboard")

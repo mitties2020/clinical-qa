@@ -485,6 +485,52 @@ class MediRecordsPatientBatchSyncTests(unittest.TestCase):
         self.assertEqual(invalid.status_code, 400)
         self.assertIn("patients must be an array", invalid.get_json()["error"])
 
+    def test_time_limited_pair_token_is_accepted_and_tamper_resistant(self):
+        app_module, client = self.authenticated_client()
+        extension_id = "a" * 32
+
+        with patch.object(app_module, "EXTENSION_SYNC_TOKEN", "server-master-secret"):
+            token = app_module.issue_extension_pair_token(extension_id, ttl_seconds=120)
+            accepted = client.post("/api/medirecords-sync/status", json={"syncToken": token})
+            tampered = f"{token[:-1]}{'0' if token[-1] != '0' else '1'}"
+            expiry = int(token.split(".")[1])
+
+            self.assertTrue(app_module.verify_extension_pair_token(token))
+            self.assertFalse(app_module.verify_extension_pair_token(tampered))
+            self.assertFalse(app_module.verify_extension_pair_token(token, now=expiry + 1))
+
+        self.assertTrue(accepted.get_json()["tokenAccepted"])
+        self.assertNotIn("server-master-secret", token)
+
+    def test_pairing_page_requires_login_and_never_exposes_master_token(self):
+        import app as app_module
+
+        app_module.app.config.update(TESTING=True)
+        anonymous = app_module.app.test_client()
+        extension_id = "aebndijhjccfmoofnfkepjnaimpifmdk"
+        self.assertEqual(
+            anonymous.get(f"/extension-pair?extensionId={extension_id}").status_code,
+            302,
+        )
+
+        _app_module, client = self.authenticated_client()
+        with patch.object(app_module, "EXTENSION_SYNC_TOKEN", "server-master-secret"):
+            response = client.get(f"/extension-pair?extensionId={extension_id}")
+            invalid = client.get("/extension-pair?extensionId=not-an-extension")
+
+        page = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("VIVIDMEDI_STATE_PAIR_TOKEN_V1", page)
+        self.assertIn(extension_id, page)
+        self.assertNotIn("server-master-secret", page)
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(
+            client.get(f"/extension-pair?extensionId={'b' * 32}").status_code,
+            403,
+        )
+
 
 class FakeTwilioResponse:
     def __init__(self, status_code=201, body=None):
