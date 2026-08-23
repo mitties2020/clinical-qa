@@ -232,6 +232,94 @@ def save_medirecords_sync(payload: dict, source: str = "extension"):
         conn.commit()
 
 
+def medirecords_patient_identity(patient) -> str:
+    if not isinstance(patient, dict):
+        return ""
+    for key in ("patientGuid", "patientGUID", "patientId", "patientID", "id"):
+        value = str(patient.get(key) or "").strip()
+        if value:
+            return f"{key.lower()}:{value.lower()}"
+    return ""
+
+
+def medirecords_batch_int(value) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def assemble_medirecords_patient_batch_run(conn, latest_row, latest_payload: dict) -> dict:
+    batch = latest_payload.get("batch") if isinstance(latest_payload.get("batch"), dict) else {}
+    run_id = str(batch.get("runId") or "").strip()
+    if not latest_payload.get("batchMode") or not run_id or not isinstance(latest_payload.get("patients"), list):
+        return latest_payload
+
+    rows = conn.execute(
+        """
+        SELECT id, payload, source, created_at
+        FROM medirecords_sync_entries
+        WHERE user_key = ? AND id <= ?
+        ORDER BY id DESC
+        LIMIT 2000
+        """,
+        ("extension", latest_row["id"]),
+    ).fetchall()
+
+    matching = []
+    for row in reversed(rows):
+        try:
+            payload = json.loads(row["payload"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        candidate_batch = payload.get("batch") if isinstance(payload, dict) else None
+        if (
+            isinstance(candidate_batch, dict)
+            and str(candidate_batch.get("runId") or "").strip() == run_id
+            and isinstance(payload.get("patients"), list)
+        ):
+            matching.append((row, payload))
+
+    if not matching:
+        return latest_payload
+
+    patients = []
+    seen = set()
+    for _row, payload in matching:
+        for patient in payload.get("patients") or []:
+            if not isinstance(patient, dict):
+                continue
+            identity = medirecords_patient_identity(patient)
+            if not identity:
+                try:
+                    identity = f"json:{json.dumps(patient, sort_keys=True, separators=(',', ':'))}"
+                except (TypeError, ValueError):
+                    identity = f"row:{len(patients)}"
+            if identity in seen:
+                continue
+            seen.add(identity)
+            patients.append(patient)
+
+    expected_total = max([
+        medirecords_batch_int(payload.get("batch", {}).get("totalPatients"))
+        for _row, payload in matching
+    ] or [0])
+    first_seen = any(bool(payload.get("batch", {}).get("isFirst")) for _row, payload in matching)
+    last_seen = any(bool(payload.get("batch", {}).get("isLast")) for _row, payload in matching)
+    complete = first_seen and last_seen and (not expected_total or len(patients) >= expected_total)
+
+    assembled = dict(latest_payload)
+    assembled["patients"] = patients
+    assembled["batch"] = {
+        **batch,
+        "receivedRequests": len(matching),
+        "receivedPatients": len(patients),
+        "expectedPatients": expected_total or len(patients),
+        "complete": complete,
+    }
+    return assembled
+
+
 def latest_medirecords_sync():
     with db_conn() as conn:
         row = conn.execute(
@@ -244,14 +332,17 @@ def latest_medirecords_sync():
             """,
             ("extension",),
         ).fetchone()
-    if not row:
-        return None
-    return {
-        "id": row["id"],
-        "payload": json.loads(row["payload"]),
-        "source": row["source"],
-        "created_at": row["created_at"],
-    }
+        if not row:
+            return None
+        payload = json.loads(row["payload"])
+        if isinstance(payload, dict):
+            payload = assemble_medirecords_patient_batch_run(conn, row, payload)
+        return {
+            "id": row["id"],
+            "payload": payload,
+            "source": row["source"],
+            "created_at": row["created_at"],
+        }
 
 
 init_history_db()
@@ -2234,13 +2325,23 @@ def api_medirecords_sync_save():
 
     if appointments is not None and not isinstance(appointments, list):
         return jsonify({"ok": False, "error": "appointments must be an array"}), 400
+    patients = payload.get("patients")
+    if patients is not None and not isinstance(patients, list):
+        return jsonify({"ok": False, "error": "patients must be an array"}), 400
+    batch = payload.get("batch") if isinstance(payload.get("batch"), dict) else {}
+    if payload.get("batchMode"):
+        run_id = str(batch.get("runId") or "").strip()
+        if not run_id or len(run_id) > 160:
+            return jsonify({"ok": False, "error": "A valid batch.runId is required for batch uploads"}), 400
 
     source = str(payload.get("source") or "extension")[:80]
     save_medirecords_sync(payload, source=source)
     return jsonify({
         "ok": True,
         "appointments": len(appointments or []),
-        "patients": len(payload.get("patients") or []),
+        "patients": len(patients or []),
+        "runId": str(batch.get("runId") or ""),
+        "batchIndex": medirecords_batch_int(batch.get("index")),
     })
 
 
