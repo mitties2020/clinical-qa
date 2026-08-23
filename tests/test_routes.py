@@ -409,6 +409,83 @@ class AuthenticationTests(unittest.TestCase):
             app_module.AUTH_CODE = old_auth_code
 
 
+class MediRecordsPatientBatchSyncTests(unittest.TestCase):
+    def setUp(self):
+        import app as app_module
+
+        with app_module.db_conn() as conn:
+            conn.execute("DELETE FROM medirecords_sync_entries WHERE user_key = ?", ("extension",))
+            conn.commit()
+
+    def authenticated_client(self):
+        import app as app_module
+
+        app_module.app.config.update(TESTING=True)
+        client = app_module.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return app_module, client
+
+    def test_patient_batches_are_reassembled_for_latest_sync(self):
+        app_module, client = self.authenticated_client()
+        headers = {"Authorization": "Bearer sync-secret"}
+        common = {
+            "source": "browser-extension",
+            "mode": "state-veterans",
+            "batchMode": True,
+            "selectedState": "WA",
+        }
+        batches = [
+            {
+                **common,
+                "batch": {
+                    "runId": "run-complete-1", "index": 1, "total": 2,
+                    "totalPatients": 3, "isFirst": True, "isLast": False,
+                },
+                "patients": [{"patientGuid": "patient-a"}, {"patientGuid": "patient-b"}],
+            },
+            {
+                **common,
+                "batch": {
+                    "runId": "run-complete-1", "index": 2, "total": 2,
+                    "totalPatients": 3, "isFirst": False, "isLast": True,
+                },
+                "patients": [{"patientGuid": "patient-c"}],
+            },
+        ]
+
+        with patch.object(app_module, "EXTENSION_SYNC_TOKEN", "sync-secret"):
+            responses = [client.post("/api/medirecords-sync", json=batch, headers=headers) for batch in batches]
+
+        self.assertTrue(all(response.status_code == 200 for response in responses))
+        latest = client.get("/api/medirecords-sync/latest")
+        self.assertEqual(latest.status_code, 200)
+        payload = latest.get_json()["payload"]
+        self.assertEqual(
+            [patient["patientGuid"] for patient in payload["patients"]],
+            ["patient-a", "patient-b", "patient-c"],
+        )
+        self.assertTrue(payload["batch"]["complete"])
+        self.assertEqual(payload["batch"]["receivedPatients"], 3)
+        self.assertEqual(payload["batch"]["receivedRequests"], 2)
+
+    def test_batch_sync_requires_token_array_and_run_id(self):
+        app_module, client = self.authenticated_client()
+        payload = {"batchMode": True, "batch": {}, "patients": {"not": "an array"}}
+
+        with patch.object(app_module, "EXTENSION_SYNC_TOKEN", "sync-secret"):
+            unauthorized = client.post("/api/medirecords-sync", json=payload)
+            invalid = client.post(
+                "/api/medirecords-sync",
+                json=payload,
+                headers={"X-VividMedi-Sync-Token": "sync-secret"},
+            )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(invalid.status_code, 400)
+        self.assertIn("patients must be an array", invalid.get_json()["error"])
+
+
 class FakeTwilioResponse:
     def __init__(self, status_code=201, body=None):
         self.status_code = status_code
