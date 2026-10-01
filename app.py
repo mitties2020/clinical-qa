@@ -1069,13 +1069,51 @@ def get_whisper_model():
                 _whisper_model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
     return _whisper_model
 
+WA_CLINICAL_ACCESS_PATHWAYS = (
+    "WA clinical access and support pathways knowledge (reviewed 02/10/2026; details can change, so tell the clinician to verify current criteria/contact details before acting):\n"
+    "- Use this knowledge when answering clinical questions about mental-health or medical assessment, investigation, management, escalation, discharge planning, access barriers, costs, transport, disability, aged care, carers, family violence, homelessness, alcohol/drug issues, Aboriginal health, culturally safe care, or community follow-up.\n"
+    "- Be broad and practical, but do not claim the list is exhaustive. When local postcode, catchment, age, concession, Medicare, Aboriginal/Torres Strait Islander status, disability, aged-care status, DVA/workcover/insurance, or risk level changes access, explicitly say what needs checking.\n"
+    "- Always separate urgent/emergency pathways from routine/community options. For life-threatening symptoms, acute chest pain, severe breathlessness, stroke symptoms, severe bleeding, overdose, imminent suicide/violence risk, serious self-neglect, or unsafe home situation: advise Triple Zero (000) / nearest ED.\n"
+    "- For non-life-threatening urgent physical health issues in WA: consider Access Health WA, 1800MEDICARE (1800 633 422, 24/7 nurse advice), healthdirect (1800 022 222), Medicare Urgent Care Clinics (bulk billed for Medicare-eligible patients), GP/after-hours GP, pharmacy, and WA Virtual Emergency Department (WAVED) when offered through 1800MEDICARE/healthdirect for patients who would otherwise be advised to attend ED.\n"
+    "- For specialist public outpatient referral: use WA Central Referral Service and WA Referral Access Criteria. RAC can specify mandatory history, examination, investigations, and triage information; missing mandatory information may delay/non-accept referral unless justified. Mention GP ASK for WA GP-to-specialist advice for non-urgent conditions where appropriate.\n"
+    "- Mental health crisis in WA: adult Mental Health Emergency Response Line (MHERL) numbers are Metro 1300 555 788, Peel 1800 676 822, and Country/Rurallink 1800 552 002; CAMHS Crisis Connect for children/young people is 1800 048 636. Add Lifeline 13 11 14, Suicide Call Back Service 1300 659 467, Samaritans WA 135 247, and Kids Helpline 1800 551 800 when relevant. These do not replace 000/ED for immediate danger.\n"
+    "- Adult public community mental health: consider local Assessment and Treatment Teams, Community Treatment Teams, Intensive Clinical Outreach Teams, older adult mental health, perinatal mental health, consultation-liaison/ED psychiatry, and public inpatient services. Typical fit is severe, complex, persistent mental illness, significant risk, marked functional impairment, or need for specialist multidisciplinary public mental-health care; access is usually via catchment, GP/ED/hospital referral, MHERL/crisis triage, or existing public mental-health team.\n"
+    "- CAMHS: Community CAMHS is for people under 18 with severe, complex, persistent symptoms causing psychosocial impairment and/or significant risk. CAMHS Crisis Connect provides 24/7 advice/support and can guide urgent referral; acute care response teams can provide short-term mobile/home/clinic/community support in metro areas.\n"
+    "- Free/low-cost stepped mental-health care: Medicare Mental Health phone service 1800 595 212 and Medicare Mental Health Centres are free entry points, usually no referral or diagnosis needed; Medicare Mental Health Kids Hubs support children 0-12 and families/carers. Also consider GP Mental Health Treatment Plan/Better Access psychology, headspace for ages 12-25, eheadspace, school psychology, university/TAFE counselling, Employee Assistance Programs, and private psychiatry/psychology where affordable/insured.\n"
+    "- Psychosocial and community recovery supports: use Mental Health Commission My Services directory, Access Health WA mental health pages, WAAMH/support directories, MIFWA, HelpingMinds, Ruah, Richmond Wellbeing, Neami, Rise, Chorus, AnglicareWA, UnitingWA and local NGOs where relevant. Eligibility is service-specific; many support recovery, peer support, family/carer support, groups, housing-related support, and navigation rather than acute clinical treatment.\n"
+    "- Community mental-health step up/step down: consider short-term residential support as an alternative to admission or transition after admission for suitable voluntary consumers; referral pathways and criteria are service-specific and often involve public mental-health services/case managers.\n"
+    "- Alcohol and other drug pathways: Alcohol and Drug Support Line 08 9442 5000 / 1800 198 024, Parent and Family Drug Support Line 08 9442 5050 / 1800 653 203, Here For You 1800 437 348, Next Step Drug and Alcohol Services, Community Alcohol and Drug Services, integrated Drug and Alcohol Youth Service, inpatient withdrawal, outpatient withdrawal, counselling/case management, pharmacotherapy, and WANADA GreenBook service directory. People may self-refer to some AOD services; others need GP/service referral.\n"
+    "- Aboriginal and Torres Strait Islander pathways: offer culturally secure options such as Aboriginal Community Controlled Health Services through AHCWA, Derbarl Yerrigan in metro Perth, regional Aboriginal medical services, Aboriginal mental-health workers, Aboriginal liaison officers in hospitals, Aboriginal-specific mental-health/service directories, and CTG PBS co-payment support when eligible. Ask permission before involving Aboriginal-specific services.\n"
+    "- Culturally and linguistically diverse access: use TIS 131 450, National Relay Service where needed, culturally safe services, migrant/refugee health services, and interpreter use for consent, risk, medication, and safety planning.\n"
+    "- Pathology access: a GP/specialist request is usually required. PathWest accepts all pathology request forms and generally bulk bills Medicare-eligible tests when Medicare assignment is completed; not every test is Medicare rebatable. Collection centres are the usual route. PathWest metropolitan domiciliary/home collections are only for specific cases and require eligibility enquiry (published number 6457 3281); regional PathWest domiciliary collections may be unavailable. Private pathology providers may offer home/domiciliary collection depending on area, medical need, request form and fees.\n"
+    "- ECG and cardiac investigations: for acute chest pain, collapse, severe dyspnoea, suspected ACS/arrhythmia or unstable symptoms use 000/ED. For non-acute ECG, consider GP clinic ECG, urgent care if clinically appropriate, private cardiology/diagnostic providers, or public cardiology referral using RAC. Home ECG is provider-specific and should not be assumed; ask the GP/provider what mobile/home options exist for housebound patients.\n"
+    "- Imaging and other investigations: GP/specialist referral to radiology/pathology is typical; check Medicare rebate and out-of-pocket costs. Medicare Urgent Care Clinics may access pathology/radiology for suitable urgent non-life-threatening issues. Public outpatient referrals often need baseline investigations specified by RAC. If housebound, ask about domiciliary pathology, mobile radiology providers, home visiting GP/nurse services, WAVED/1800MEDICARE triage, or hospital-in-the-home/community nursing referral where clinically appropriate.\n"
+    "- Hospital in the Home / community nursing / palliative care: consider Silverchain or local community nursing, public hospital-in-the-home programs, palliative care services, wound care, continence, catheter care, injections, post-discharge nursing, and allied-health home visits. Access is referral- and region-specific, often via GP, hospital discharge team, outpatient clinic, or My Aged Care/NDIS depending on age/disability.\n"
+    "- Older-person pathways: My Aged Care 1800 200 422 for CHSP entry-level supports, Support at Home / Home Care Packages, ACAT/aged-care assessments, respite, domestic assistance, personal care, nursing, allied health, transport, meals, social support, home modifications, residential respite/permanent care, and carer supports. CHSP generally requires 65+ or Aboriginal/Torres Strait Islander 50+ or homelessness-risk 50+ with assessed need.\n"
+    "- Disability and psychosocial disability: NDIS may support functional impairment from psychosocial disability or other disability where access criteria are met; NDIS funds non-clinical disability supports, not acute clinical mental-health treatment. Consider Local Area Coordinator/Early Childhood Partner, psychosocial recovery coach, support coordination, support workers, OT functional assessment, behaviour support, transport/community access, and assistive technology. If not eligible, ask for community connectors and mainstream supports.\n"
+    "- Carer pathways: Carer Gateway 1800 422 737, Carers WA 1300 227 377, respite, counselling, peer support, emergency respite, carer coaching, young carer supports, and Centrelink Carer Payment/Carer Allowance/Carer Supplement where eligible.\n"
+    "- Transport: PATS for eligible permanent country WA residents needing to travel more than 100 km one way to the nearest eligible specialist service, with Medicare eligibility and other criteria; limited 70-100 km support for renal/cancer treatment. Community patient transport may support travel to/from medical facilities where clinical supervision/monitoring/care is needed during transport and documentation supports this. Consider Passenger Transport Subsidy Scheme for eligible people with disability using taxi/on-demand transport, St John/non-emergency patient transport, local council/CHSP community transport, NDIS transport, aged-care transport, hospital social work, volunteer transport, and ambulance/private cover where relevant.\n"
+    "- Medication cost and safety supports: PBS, PBS Safety Net, Health Care Card/Pensioner Concession Card/DVA cards, Low Income Health Care Card, Closing the Gap PBS co-payment registration for eligible First Nations patients, 60-day dispensing for eligible stable PBS medicines, generic substitution, pharmacy price comparison, staged supply, dose administration aids/Webster-paks, MedsCheck, Home Medicines Review via GP referral to pharmacist, Residential Medication Management Review, opioid pharmacotherapy programs, clozapine/lithium/valproate monitoring pathways, and pharmacist-delivered programs where available.\n"
+    "- Dental, optical and other concessions: WA public dental clinics/OHCWA for eligible Health Care Card or Pensioner Concession Card holders and some priority groups; school dental services for children; ask about spectacles/optical subsidies, Centrelink concessions, public transport concessions, ambulance cover, and local emergency relief.\n"
+    "- Housing, family violence, food and financial stress: Entrypoint Perth 1800 124 684 for homelessness/accommodation referral, Crisis Care 1800 199 008 for urgent after-hours child-safety/homelessness/crisis support, Ask Izzy for local food/housing/money/violence/mental-health services, 1800RESPECT 1800 737 732, WA Women's Domestic Violence Helpline 1800 007 339, Men's Domestic Violence Helpline 1800 000 599, Legal Aid WA, National Debt Helpline 1800 007 007, emergency relief providers, and hospital social work.\n"
+    "- Directories to cite when needing local/current services: Access Health WA, healthdirect Service Finder/NHSD, WA Mental Health Commission My Services, WANADA GreenBook, WA Referral Access Criteria and Central Referral Service, My Aged Care provider finder, NDIS, Ask Izzy, AHCWA/Aboriginal health service directories, local council community directories, and hospital health-service pages.\n"
+)
+
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
+    "TASK:\n"
+    "Answer clinical questions with diagnostic reasoning, red-flag recognition, investigation pathways, management options, and practical WA access pathways where relevant. "
+    "Your answer should help a clinician identify likely mental and medical issues, what information is missing, what investigations are appropriate, and how the patient could practically access care/support in Western Australia.\n\n"
     "OUTPUT FORMAT (MANDATORY):\n"
     "Summary\nAssessment\nDiagnosis\nInvestigations\nTreatment\nMonitoring\nFollow-up & Safety Netting\nRed Flags\nReferences\n\n"
     "STYLE:\n"
     "Plain text only. Registrar-level depth. Australian practice framing.\n"
     "If the user pastes mixed notes/results, organise them cleanly under the correct headings.\n"
+    "When pathways/supports are relevant, include a practical subsection under Treatment or Follow-up & Safety Netting titled 'WA access pathways and supports'. "
+    "In that subsection, list concrete options, likely eligibility, how to access, what referral/request is needed, and what to verify. "
+    "Do not invent local eligibility or availability; if uncertain, say to check the live directory/service. "
+    "Avoid generic advice when a WA pathway exists.\n\n"
+    f"{WA_CLINICAL_ACCESS_PATHWAYS}\n"
 )
 
 DVA_SYSTEM_PROMPT = (
@@ -1703,6 +1741,14 @@ def consult_request_timeout(consult_type: str) -> int:
     return int(os.getenv("DEEPSEEK_TIMEOUT") or "70")
 
 
+def clinical_qa_completion_budget() -> int:
+    return int(os.getenv("DEEPSEEK_CLINICAL_QA_MAX_TOKENS") or "3600")
+
+
+def clinical_qa_request_timeout() -> int:
+    return int(os.getenv("DEEPSEEK_CLINICAL_QA_TIMEOUT") or "120")
+
+
 def call_deepseek(
     system_prompt: str,
     user_content: str,
@@ -2027,7 +2073,13 @@ def generate():
             answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
         else:
             user_content = f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
-            answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+            answer = call_deepseek(
+                CLINICAL_SYSTEM_PROMPT,
+                user_content,
+                max_tokens=clinical_qa_completion_budget(),
+                timeout=clinical_qa_request_timeout(),
+                temperature=0.15,
+            )
 
         return jsonify({"answer": answer})
 
@@ -2265,7 +2317,13 @@ def ask_legacy():
         if context:
             user_content += f"\n\nRecent context:\n{context}"
         user_content += "\n\nIf pasted data is included, sort it into the correct headings."
-        answer = call_deepseek(CLINICAL_SYSTEM_PROMPT, user_content)
+        answer = call_deepseek(
+            CLINICAL_SYSTEM_PROMPT,
+            user_content,
+            max_tokens=clinical_qa_completion_budget(),
+            timeout=clinical_qa_request_timeout(),
+            temperature=0.15,
+        )
         save_history("question", answer)
         return jsonify({"answer": answer})
     except Exception as e:

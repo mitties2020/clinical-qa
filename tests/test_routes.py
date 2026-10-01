@@ -35,6 +35,32 @@ class RouteRegistrationTests(unittest.TestCase):
             self.assertIn(path, by_path)
             self.assertEqual(len(by_path[path]), 1, f"{path} should be registered once")
 
+    def test_clinical_question_prompt_includes_wa_access_pathways(self):
+        import app as app_module
+
+        prompt = app_module.CLINICAL_SYSTEM_PROMPT
+
+        self.assertIn("WA clinical access and support pathways", prompt)
+        self.assertIn("WA access pathways and supports", prompt)
+        self.assertIn("Access Health WA", prompt)
+        self.assertIn("1800MEDICARE", prompt)
+        self.assertIn("WA Virtual Emergency Department", prompt)
+        self.assertIn("Referral Access Criteria", prompt)
+        self.assertIn("Central Referral Service", prompt)
+        self.assertIn("Mental Health Emergency Response Line", prompt)
+        self.assertIn("CAMHS Crisis Connect", prompt)
+        self.assertIn("Medicare Mental Health", prompt)
+        self.assertIn("My Services", prompt)
+        self.assertIn("WANADA GreenBook", prompt)
+        self.assertIn("PathWest metropolitan domiciliary/home collections", prompt)
+        self.assertIn("Home Medicines Review", prompt)
+        self.assertIn("PATS", prompt)
+        self.assertIn("Carer Gateway", prompt)
+        self.assertIn("NDIS", prompt)
+        self.assertIn("Ask Izzy", prompt)
+        self.assertGreaterEqual(app_module.clinical_qa_completion_budget(), 3600)
+        self.assertGreaterEqual(app_module.clinical_qa_request_timeout(), 120)
+
     def test_wa_mental_health_discharge_summary_prompt_uses_psychiatry_structure(self):
         import app as app_module
 
