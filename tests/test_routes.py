@@ -60,6 +60,20 @@ class RouteRegistrationTests(unittest.TestCase):
         self.assertIn("Ask Izzy", prompt)
         self.assertGreaterEqual(app_module.clinical_qa_completion_budget(), 3600)
         self.assertGreaterEqual(app_module.clinical_qa_request_timeout(), 120)
+        self.assertTrue(app_module.should_include_wa_access_pathways("WA home pathology ECG transport medication discount services"))
+        self.assertTrue(app_module.should_include_wa_access_pathways("What supports and services is this patient eligible for?"))
+        appended = app_module.ensure_wa_access_pathways(
+            "Summary\nConsider supported access.",
+            "home pathology ECG transport medication discount services in WA",
+        )
+        self.assertIn("WA access pathways and supports", appended)
+        self.assertIn("PathWest metropolitan domiciliary/home collection", appended)
+        self.assertIn("PATS", appended)
+        fallback = app_module.clinical_qa_fallback_answer("What services can this patient access?", reason="timeout")
+        self.assertIn("live AI provider did not return", fallback)
+        self.assertIn("WA access pathways and supports", fallback)
+        self.assertIn("1800MEDICARE", fallback)
+        self.assertIn("Ask Izzy", fallback)
 
     def test_wa_mental_health_discharge_summary_prompt_uses_psychiatry_structure(self):
         import app as app_module

@@ -1099,6 +1099,54 @@ WA_CLINICAL_ACCESS_PATHWAYS = (
     "- Directories to cite when needing local/current services: Access Health WA, healthdirect Service Finder/NHSD, WA Mental Health Commission My Services, WANADA GreenBook, WA Referral Access Criteria and Central Referral Service, My Aged Care provider finder, NDIS, Ask Izzy, AHCWA/Aboriginal health service directories, local council community directories, and hospital health-service pages.\n"
 )
 
+WA_PATHWAY_TRIGGER_RE = re.compile(
+    r"\b("
+    r"wa|western\s+australia|access|pathways?|services?|supports?|programs?|eligib\w*|criteria|"
+    r"referr?\w*|community|mental\s+health|mherl|camhs|crisis|step\s+up|step[-\s]?down|"
+    r"drug|alcohol|aod|patholog\w*|blood\s+tests?|home\s+collections?|domiciliary|ecg|"
+    r"investigations?|imaging|radiology|transport|pats|taxi|ptss|ndis|aged\s+care|"
+    r"my\s+aged\s+care|carers?|medications?|pbs|discounts?|concessions?|housing|homeless\w*|"
+    r"family\s+violence|domestic\s+violence|aboriginal"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+
+WA_ACCESS_PATHWAYS_DIRECTORY = (
+    "WA access pathways and supports\n"
+    "Use this as a practical option map, then verify live eligibility/catchment before referral.\n\n"
+    "Immediate / urgent care\n"
+    "- 000 or ED: life-threatening symptoms, imminent suicide/violence risk, overdose, severe self-neglect, acute chest pain, stroke symptoms, severe breathlessness, major injury or unsafe home situation.\n"
+    "- 1800MEDICARE 1800 633 422 or healthdirect 1800 022 222: 24/7 nurse triage, after-hours advice, local service finding and possible WAVED referral.\n"
+    "- Medicare Urgent Care Clinics: bulk-billed urgent non-life-threatening care for Medicare-eligible patients; may access pathology/radiology depending on site.\n"
+    "- WA Virtual Emergency Department: offered via 1800MEDICARE/healthdirect when suitable for patients who would otherwise be advised to attend ED.\n\n"
+    "Mental health\n"
+    "- MHERL: Metro 1300 555 788, Peel 1800 676 822, Country/Rurallink 1800 552 002 for adult mental-health crisis advice/triage.\n"
+    "- CAMHS Crisis Connect: 1800 048 636 for children/young people; Community CAMHS suits severe, complex, persistent symptoms and/or significant risk under 18.\n"
+    "- Medicare Mental Health: 1800 595 212 and Medicare Mental Health Centres/Kids Hubs for free navigation and low/no-barrier support.\n"
+    "- Public community mental health: ATT/CTT/ICOT/older adult/perinatal teams depending on age, catchment, severity, risk and functional impairment.\n"
+    "- Directories: Mental Health Commission My Services, Access Health WA, healthdirect Service Finder and WAAMH/community directories.\n\n"
+    "Investigations and outpatient referral\n"
+    "- WA Referral Access Criteria and Central Referral Service: check mandatory history, examination and investigation requirements before public specialist referral.\n"
+    "- Pathology: GP/specialist request usually required. PathWest accepts all request forms and generally bulk bills Medicare-eligible tests when assignment is completed; not all tests are rebatable.\n"
+    "- Home pathology: PathWest metropolitan domiciliary/home collection is only for specific cases; eligibility enquiry is required. Private providers may offer home collection depending on area, request and fees.\n"
+    "- ECG: acute cardiac symptoms need 000/ED. Non-acute ECG can be via GP clinic, urgent care if clinically appropriate, private diagnostics/cardiology, or public cardiology referral with RAC requirements. Home ECG is provider-specific; do not assume availability.\n"
+    "- Imaging: GP/specialist referral; check Medicare rebate/gap fees. For housebound patients ask about mobile imaging, community nursing, hospital-in-the-home or WAVED/urgent triage.\n\n"
+    "Transport and practical access\n"
+    "- PATS: eligible permanent country WA residents travelling generally more than 100 km one way to the nearest eligible specialist service; limited 70-100 km support for renal/cancer treatment.\n"
+    "- Community patient transport: for travel to/from medical facilities where clinical supervision/monitoring/care is needed and documentation supports this.\n"
+    "- Other transport: Passenger Transport Subsidy Scheme for eligible disability-related taxi/on-demand transport, St John/non-emergency patient transport, CHSP/My Aged Care transport, NDIS transport, local council/volunteer transport, hospital social work.\n\n"
+    "Medicines and cost supports\n"
+    "- PBS and PBS Safety Net; Health Care Card/Pensioner Concession Card/DVA cards; Low Income Health Care Card; CTG PBS co-payment registration for eligible First Nations patients.\n"
+    "- Ask about 60-day dispensing for eligible stable PBS medicines, generic substitution, pharmacy price comparison, staged supply, dose administration aids/Webster-paks, MedsCheck and GP-referred Home Medicines Review.\n\n"
+    "Broader community supports\n"
+    "- Alcohol/drugs: Alcohol and Drug Support Line 08 9442 5000 / 1800 198 024, Parent and Family Drug Support Line 08 9442 5050 / 1800 653 203, Here For You 1800 437 348, Next Step, CADS and WANADA GreenBook.\n"
+    "- Aged care: My Aged Care 1800 200 422 for CHSP, ACAT, Support at Home/Home Care Packages, nursing, allied health, meals, social support, home modifications, transport and respite.\n"
+    "- Disability: NDIS for eligible lifelong functional impairment including psychosocial disability; funds non-clinical supports, not acute clinical treatment.\n"
+    "- Carers: Carer Gateway 1800 422 737 and Carers WA 1300 227 377 for respite, counselling, coaching, peer support and emergency planning.\n"
+    "- Aboriginal health: AHCWA member services, Derbarl Yerrigan in metro Perth, regional Aboriginal Medical Services, Aboriginal liaison/mental-health workers and culturally secure care pathways.\n"
+    "- Housing/food/FDV/financial stress: Entrypoint Perth 1800 124 684, Crisis Care 1800 199 008, Ask Izzy, 1800RESPECT 1800 737 732, WA Women's DV Helpline 1800 007 339, Men's DV Helpline 1800 000 599, Legal Aid WA and National Debt Helpline 1800 007 007."
+)
+
 CLINICAL_SYSTEM_PROMPT = (
     "You are an Australian clinical education assistant for qualified medical doctors.\n\n"
     "TASK:\n"
@@ -1749,6 +1797,53 @@ def clinical_qa_request_timeout() -> int:
     return int(os.getenv("DEEPSEEK_CLINICAL_QA_TIMEOUT") or "120")
 
 
+def should_include_wa_access_pathways(text: str) -> bool:
+    return bool(WA_PATHWAY_TRIGGER_RE.search(text or ""))
+
+
+def ensure_wa_access_pathways(answer: str, source_text: str) -> str:
+    answer = (answer or "").strip()
+    if not should_include_wa_access_pathways(source_text):
+        return answer
+    if "WA access pathways and supports" in answer:
+        return answer
+    separator = "\n\n" if answer else ""
+    return f"{answer}{separator}{WA_ACCESS_PATHWAYS_DIRECTORY}".strip()
+
+
+def clinical_qa_fallback_answer(question: str, reason: str = "") -> str:
+    reason_line = (
+        "The live AI provider did not return a full answer in time, so this is a built-in WA pathway scaffold for clinician verification."
+        if reason
+        else "Built-in WA pathway scaffold for clinician verification."
+    )
+    return (
+        "Summary\n"
+        f"{reason_line} Use it to identify practical access routes, then verify eligibility, catchment, opening hours and current criteria before acting.\n\n"
+        "Assessment\n"
+        "A full patient-specific assessment still requires the clinical history, risk assessment, examination, medications, comorbidities, location, Medicare/concession status, Aboriginal or Torres Strait Islander status, age, disability/aged-care status, transport barriers and urgency.\n\n"
+        "Diagnosis\n"
+        "Not enough information to assign a diagnosis from the fallback pathway response alone. Use the clinical question details and red flags to decide whether the issue is medical, psychiatric, substance-related, functional/disability-related, social, or mixed.\n\n"
+        "Investigations\n"
+        "- For acute instability or red flags, use 000/ED rather than community investigation pathways.\n"
+        "- For planned public specialist referral, check WA Referral Access Criteria and include mandatory baseline investigations in the Central Referral Service referral.\n"
+        "- For blood tests, use a GP/specialist pathology request; ask PathWest or the private provider about bulk billing, Medicare assignment, home collection eligibility and out-of-pocket costs.\n"
+        "- For ECG/cardiac concerns, use ED/000 for acute symptoms; otherwise consider GP ECG, urgent care, private diagnostics/cardiology, or public cardiology referral with RAC requirements.\n\n"
+        "Treatment\n"
+        f"{WA_ACCESS_PATHWAYS_DIRECTORY}\n\n"
+        "Monitoring\n"
+        "- Recheck risk, symptoms, medication access/adherence, appointment attendance and practical barriers.\n"
+        "- Document who is responsible for each action: patient/carer, GP, public mental-health team, specialist clinic, hospital social work, pharmacist, aged-care/NDIS provider or community agency.\n\n"
+        "Follow-up & Safety Netting\n"
+        "- Confirm the patient's suburb/catchment, age, Medicare/concession status, transport access, carer availability, phone/internet access and safety at home.\n"
+        "- If the service declines or criteria are unclear, use Access Health WA, My Services, healthdirect Service Finder, WANADA GreenBook, Ask Izzy, My Aged Care, NDIS, or hospital social work to find the next suitable pathway.\n\n"
+        "Red Flags\n"
+        "Call 000 or attend ED for immediate danger, suicidal intent with means, violence risk, overdose, delirium/acute confusion, chest pain, severe breathlessness, stroke symptoms, sepsis concern, severe withdrawal, inability to care for self, unsafe discharge environment, or child/vulnerable adult safety concern.\n\n"
+        "References\n"
+        "Access Health WA; WA Mental Health Commission helplines and My Services; WA Referral Access Criteria / Central Referral Service; PathWest; PATS; PBS / Services Australia; My Aged Care; NDIS; Carer Gateway; Ask Izzy; WANADA GreenBook."
+    )
+
+
 def call_deepseek(
     system_prompt: str,
     user_content: str,
@@ -2052,9 +2147,6 @@ def auth_logout():
 @app.post("/api/generate")
 @require_auth
 def generate():
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
     data = request.get_json(silent=True) or {}
     query = (data.get("query") or "").strip()
     mode = (data.get("mode") or "clinical").strip().lower()
@@ -2064,6 +2156,8 @@ def generate():
 
     try:
         if mode.startswith("dva"):
+            if not DEEPSEEK_API_KEY:
+                return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
             referral_intent = "D0904 new" if mode == "dva_new" else "D0904 renewal" if mode == "dva_renew" else "D0904 (unspecified)"
             user_content = (
                 f"Referral intent: {referral_intent}\n\n"
@@ -2072,6 +2166,9 @@ def generate():
             )
             answer = call_deepseek(DVA_SYSTEM_PROMPT, user_content)
         else:
+            if not DEEPSEEK_API_KEY:
+                answer = clinical_qa_fallback_answer(query, reason="missing-api-key")
+                return jsonify({"answer": answer, "fallback": True})
             user_content = f"Clinical question:\n{query}\n\nIf pasted data is included, sort it into the correct headings."
             answer = call_deepseek(
                 CLINICAL_SYSTEM_PROMPT,
@@ -2080,11 +2177,15 @@ def generate():
                 timeout=clinical_qa_request_timeout(),
                 temperature=0.15,
             )
+            answer = ensure_wa_access_pathways(answer, query)
 
         return jsonify({"answer": answer})
 
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
+        if not mode.startswith("dva"):
+            answer = clinical_qa_fallback_answer(query, reason=repr(e))
+            return jsonify({"answer": answer, "fallback": True})
         return jsonify({"error": "AI request failed"}), 502
 
 
@@ -2303,9 +2404,6 @@ def ed_mh_review_assist():
 @require_auth
 def ask_legacy():
     """Backward-compatible endpoint used by consultation-notes.html."""
-    if not DEEPSEEK_API_KEY:
-        return jsonify({"error": "Server misconfigured: missing DEEPSEEK_API_KEY"}), 500
-
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
     context = (data.get("context") or "").strip()
@@ -2313,6 +2411,10 @@ def ask_legacy():
         return jsonify({"error": "Empty question"}), 400
 
     try:
+        if not DEEPSEEK_API_KEY:
+            answer = clinical_qa_fallback_answer(question, reason="missing-api-key")
+            save_history("question", answer)
+            return jsonify({"answer": answer, "fallback": True})
         user_content = f"Clinical question:\n{question}"
         if context:
             user_content += f"\n\nRecent context:\n{context}"
@@ -2324,11 +2426,14 @@ def ask_legacy():
             timeout=clinical_qa_request_timeout(),
             temperature=0.15,
         )
+        answer = ensure_wa_access_pathways(answer, f"{question}\n{context}")
         save_history("question", answer)
         return jsonify({"answer": answer})
     except Exception as e:
         print("DEEPSEEK ERROR:", repr(e))
-        return jsonify({"error": "AI request failed"}), 502
+        answer = clinical_qa_fallback_answer(question, reason=repr(e))
+        save_history("question", answer)
+        return jsonify({"answer": answer, "fallback": True})
 
 @app.post("/api/consult")
 @require_auth
