@@ -731,8 +731,8 @@
             <label class="code-label" for="accessCode">Enter six-digit access code</label>
             <input class="code-input" id="accessCode" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
             <div class="code-row" id="codeRow">
-              <span class="code-cell" aria-hidden="true">•</span><span class="code-cell" aria-hidden="true">•</span><span class="code-cell" aria-hidden="true">•</span>
-              <span class="code-cell" aria-hidden="true">•</span><span class="code-cell" aria-hidden="true">•</span><span class="code-cell" aria-hidden="true">•</span>
+              <span class="code-cell" aria-hidden="true">*</span><span class="code-cell" aria-hidden="true">*</span><span class="code-cell" aria-hidden="true">*</span>
+              <span class="code-cell" aria-hidden="true">*</span><span class="code-cell" aria-hidden="true">*</span><span class="code-cell" aria-hidden="true">*</span>
               <button class="reveal" id="reveal" type="button" aria-label="Show access code" title="Show access code">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" d="M2.4 12s3.4-5.2 9.6-5.2 9.6 5.2 9.6 5.2-3.4 5.2-9.6 5.2S2.4 12 2.4 12Z"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
               </button>
@@ -799,7 +799,7 @@
       const value = input.value.replace(/\D/g, '').slice(0, 6);
       input.value = value;
       cells.forEach((cell, index) => {
-        cell.textContent = value[index] ? (isRevealed ? value[index] : '*') : '•';
+        cell.textContent = value[index] ? (isRevealed ? value[index] : '•') : '*';
         cell.classList.toggle('filled', Boolean(value[index]));
       });
     }
